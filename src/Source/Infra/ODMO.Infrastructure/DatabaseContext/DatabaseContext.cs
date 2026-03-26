@@ -31,9 +31,13 @@ namespace ODMO.Infrastructure
                 string connectionString;
 
                 // Priority order: Environment Variable > Configuration > Default
-                if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DMOX_CONNECTION_STRING")))
+                string envConnectionString = Environment.GetEnvironmentVariable("ODMO_CONNECTION_STRING") ?? 
+                                         Environment.GetEnvironmentVariable("DMO_CONNECTION_STRING") ??
+                                         Environment.GetEnvironmentVariable("DMOX_CONNECTION_STRING");
+
+                if (!string.IsNullOrEmpty(envConnectionString))
                 {
-                    connectionString = Environment.GetEnvironmentVariable("DMOX_CONNECTION_STRING")!;
+                    connectionString = envConnectionString;
                     LogConnectionStringSource("? Using connection string from environment variable");
                 }
                 else if (_configuration != null && !string.IsNullOrEmpty(_configuration[DatabaseConnectionString]))
