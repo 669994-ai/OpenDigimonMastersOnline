@@ -1,303 +1,311 @@
-# 🎮 OpenDigimonMastersOnline (ODMO)
-
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
-[![SQL Server](https://img.shields.io/badge/Database-SQL%20Server-red.svg)](https://www.microsoft.com/en-us/sql-server)
-
-OpenDigimonMastersOnline is an open-source server implementation for the popular MMORPG Digimon Masters Online. This project provides a complete server infrastructure including authentication, character management, game world, and administrative tools.
-
-## 🌟 Features
-
-- **Complete Server Infrastructure**: Authentication, Character, Game, and Admin servers
-- **Web-based Administration Panel**: Modern Blazor-based admin interface
-- **Database Management**: Entity Framework Core with SQL Server support
-- **Real-time Game World**: Multi-threaded game server with event handling
-- **Player Management**: Character creation, progression, and inventory systems
-- **Digimon System**: Complete Digimon management, evolution, and battle mechanics
-- **Event System**: Configurable in-game events and raids
-- **Security**: Hash-based authentication and anti-cheat measures
-
-## 🏗️ Architecture
-
-The project follows a clean architecture pattern with multiple layers:
-
-```
-├── Distribution Layer (Servers)
-│   ├── Authentication Server (Port 7606)
-│   ├── Character Server (Port 7050)
-│   ├── Game Server (Port 7607)
-│   ├── Admin Web Server (Port 5001/5002)
-│   └── Gateway Server (Port 8074)
-├── Application Layer (Business Logic)
-├── Domain Layer (Core Models)
-└── Infrastructure Layer (Database & External Services)
-```
-
-## 📋 Prerequisites
-
-Before setting up ODMO, ensure you have the following installed:
-
-- **[.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)** or later
-- **[SQL Server](https://www.microsoft.com/en-us/sql-server/sql-server-downloads)** (Express, Developer, or Standard)
-- **[Visual Studio 2022](https://visualstudio.microsoft.com/)** or **[Visual Studio Code](https://code.visualstudio.com/)** (recommended)
-- **Windows 10/11** or **Linux** (with SQL Server support)
-
-### Verify Prerequisites
-
-```powershell
-# Check .NET SDK version
-dotnet --version
-# Should show 8.x.x or later
-
-# Check SQL Server connectivity
-sqlcmd -S "localhost\SQLEXPRESS" -E -Q "SELECT @@VERSION"
-```
-
-## 🚀 Quick Start
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/your-repo/OpenDigimonMastersOnline.git
-cd OpenDigimonMastersOnline
-```
-
-### 2. Database Setup
-
-#### Option A: Environment Configuration (Recommended)
-
-1. Copy the environment template:
-```powershell
-copy .env.example .env
-```
-
-2. Edit `.env` with your database settings:
-```bash
-# Windows Authentication (Recommended for development)
-DMOX_CONNECTION_STRING=Server=localhost\SQLEXPRESS;Database=DMOX;Integrated Security=true;TrustServerCertificate=True
-
-# Or SQL Server Authentication
-# DMOX_CONNECTION_STRING=Server=localhost\SQLEXPRESS;Database=DMOX;User Id=sa;Password=YOUR_PASSWORD;TrustServerCertificate=True
-```
-
-#### Option B: User Secrets (Alternative)
-
-```powershell
-dotnet user-secrets set "ConnectionStrings:Digimon" "Server=localhost\SQLEXPRESS;Database=DMOX;Integrated Security=true;TrustServerCertificate=True"
-```
-
-### 3. Build the Solution
-
-```powershell
-# Clean and restore packages
-dotnet clean
-dotnet restore
-
-# Build the entire solution
-dotnet build --configuration Release
-```
-
-### 4. Database Migration
-
-The database will be automatically created and migrated when you start the Authentication Server for the first time. Alternatively, you can run migrations manually:
-
-```powershell
-# Navigate to any project with DatabaseContext
-cd "src\Source\Distribution\ODMO.Account.Host"
-
-# Run migrations
-dotnet ef database update
-```
-
-### 5. Start the Servers
-
-#### Option A: All Servers in One Window
-```powershell
-.\StartAllServers.ps1
-```
-
-#### Option B: Separate Windows for Each Server
-```powershell
-.\StartServers-Separate Windows.ps1
-```
-
-#### Option C: Individual Server Management
-```powershell
-.\ServerManager.ps1
-```
-
-### 6. Start the Web Admin Panel (Optional)
-
-```powershell
-.\StartWebServer.ps1
-```
-
-## 🎯 Default Access Information
-
-### Game Client Connection
-- **Server Address**: `localhost` or `127.0.0.1`
-- **Port**: `7607`
-
-### Default Login Credentials
-- **Username**: `Tenshimaru`
-- **Password**: `123456`
-
-### Admin Panel Access
-- **URL**: `https://localhost:5001` or `https://localhost:5002`
-- **Swagger API**: `https://localhost:5001/swagger`
-
-## 🗄️ Database Schema
-
-The project uses Entity Framework Core with SQL Server and includes:
-
-- **Account Management**: User accounts, authentication, and security
-- **Character System**: Player characters, stats, and progression
-- **Digimon System**: Digimon data, evolution trees, and abilities
-- **Game World**: Maps, NPCs, items, and quests
-- **Configuration**: Server settings, events, and game parameters
-
-## 🔧 Configuration
-
-### Server Ports
-
-| Server | Default Port | Purpose |
-|--------|-------------|---------|
-| Authentication | 7606 | Player login and account management |
-| Character | 7050 | Character selection and creation |
-| Game | 7607 | Main game world and gameplay |
-| Admin Web | 5001/5002 | Web-based administration |
-| Gateway | 8074 | Server communication gateway |
-
-### Environment Variables
-
-Key environment variables for configuration:
-
-```bash
-# Database
-DMOX_CONNECTION_STRING=<your_connection_string>
-
-# Game Server
-GAME_SERVER_ADDRESS=0.0.0.0          # Server binding address
-GAME_SERVER_PORT=7607
-GAME_SERVER_PUBLIC_ADDRESS=127.0.0.1  # Client connection address
-
-# Authentication Server
-AUTH_SERVER_ADDRESS=0.0.0.0          # Server binding address
-AUTH_SERVER_PORT=7606
-
-# Character Server
-CHARACTER_SERVER_ADDRESS=0.0.0.0     # Server binding address
-CHARACTER_SERVER_PORT=7608
-```
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-OpenDigimonMastersOnline/
-├── src/Source/
-│   ├── Distribution/          # Server applications
-│   │   ├── ODMO.Account.Host/
-│   │   ├── ODMO.Character.Host/
-│   │   ├── ODMO.Game.Host/
-│   │   ├── ODMO.Admin/
-│   │   └── ODMO.Gateway/
-│   ├── Application/           # Business logic layer
-│   ├── Domain/               # Core domain models
-│   └── Infra/               # Infrastructure layer
-├── docs/                    # Documentation
-├── logs/                    # Server logs
-└── scripts/                 # Utility scripts
-```
-
-### Building from Source
-
-```powershell
-# Debug build
-dotnet build --configuration Debug
-
-# Release build
-dotnet build --configuration Release
-
-# Clean build
-dotnet clean && dotnet restore && dotnet build
-```
-
-### Running Tests
-
-```powershell
-# Run all tests
-dotnet test
-
-# Run tests with coverage
-dotnet test --collect:"XPlat Code Coverage"
-```
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-#### Build Errors
-```powershell
-# Clean and rebuild
-dotnet clean
-dotnet restore
-dotnet build
-```
-
-#### Database Connection Issues
-1. Verify SQL Server is running
-2. Check connection string in `.env` file
-3. Ensure database permissions are correct
-4. Test connection: `sqlcmd -S "localhost\SQLEXPRESS" -E -Q "SELECT 1"`
-
-#### Server Won't Start
-1. Check if ports are available (7606-7608, 5001-5002)
-2. Verify all executables exist in `bin/Release/net8.0/`
-3. Check logs in `logs/` directory
-4. Ensure environment variables are loaded
-
-#### Client Connection Issues
-1. Verify game server is running on port 7607
-2. Check firewall settings
-3. Ensure client is configured to connect to correct IP/port
-
-### Log Files
-
-Server logs are stored in the `logs/` directory:
-- `logs/Account/` - Authentication server logs
-- `logs/Character/` - Character server logs  
-- `logs/Game/` - Game server logs
-- `logs/Debug/` - Debug information
-- `logs/Error/` - Error logs
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE.txt](LICENSE.txt) file for details.
-
-## 🙏 Acknowledgments
-
-- Original Digimon Masters Online developers
-- The open-source gaming community
-- Contributors and testers
-
-## 📞 Support
-
-- **Discord**: [Join our Discord](https://discord.gg/VcNuqrW3WH)
-- **Issues**: [GitHub Issues](https://github.com/your-repo/OpenDigimonMastersOnline/issues)
-- **Documentation**: [Wiki](https://github.com/your-repo/OpenDigimonMastersOnline/wiki)
+<div align="center">
+  <img src="img/ODMO.png" alt="ODMO logo" width="100%" />
+
+  <h1>Open Digimon Masters Online</h1>
+  <p><strong>A new Rust server stack for the ODMO 2.0 client ecosystem.</strong></p>
+
+  <p>
+    <a href="https://odmo.dev">Website</a> ·
+    <a href="http://discord.gg/VcNuqrW3WH">Discord</a> ·
+    <a href="README.md">English</a> ·
+    <a href="READMEs/README.pt-BR.md">Português</a> ·
+    <a href="READMEs/README.es-ES.md">Español</a>
+  </p>
+
+  <p>
+    <img src="https://img.shields.io/badge/Rust-Workspace-orange?logo=rust" alt="Rust Workspace" />
+    <img src="https://img.shields.io/badge/Architecture-Multi--Service-2563eb" alt="Multi-Service" />
+    <img src="https://img.shields.io/badge/Persistence-JSON%20%2B%20PostgreSQL-16a34a" alt="Persistence" />
+    <img src="https://img.shields.io/badge/License-GPL--3.0--or--later-8b5cf6" alt="License GPL-3.0-or-later" />
+  </p>
+</div>
 
 ---
 
-**Note**: This is an unofficial open-source implementation. All Digimon-related trademarks and copyrights belong to their respective owners.
+### Overview
+
+ODMO is a new server implementation written in Rust for use with the **2.0 client source** of this project.
+
+The goal is to deliver a cleaner, more maintainable, and more protocol-faithful online stack while moving toward compatibility with modern client families such as **GDMO**, **LDMO**, and **KDMO**. That gives communities a path to receive updates and backend improvements in real time instead of staying tied to an older server shape.
+
+The project is developed by the **ODMO - Open Digimon Masters Online** community and is primarily maintained by **Tenshimaru**.
+
+### At a glance
+
+| Area | Current status |
+|---|---|
+| Rust workspace | Active |
+| Core crates | 4 |
+| Runtime services | 3 |
+| Account flow | Implemented |
+| Character flow | Implemented |
+| Initial game bootstrap | Implemented |
+| JSON persistence | Implemented |
+| PostgreSQL path | Implemented and expanding |
+| Real-time service handoff | Implemented |
+
+### Visual preview
+
+| Character flow | Progression | Client UI |
+|---|---|---|
+| ![Character screen preview](img/CharacterScreen.png) | ![Level progression preview](img/Levels.png) | ![Classic UI preview](img/OldUI.png) |
+
+### Why this repository matters
+
+This is not just a skeleton. The workspace already contains a real three-service path:
+
+1. **Account service** authenticates and routes the player.
+2. **Character service** handles character selection/creation/deletion.
+3. **Game service** performs the first in-game bootstrap.
+
+That current stack is visible directly in the server code:
+
+- [Cargo.toml](Cargo.toml)
+- [services/README.md](services/README.md)
+- [crates/odmo-protocol/src](crates/odmo-protocol/src)
+- [crates/odmo-application/src](crates/odmo-application/src)
+- [crates/odmo-persistence/src/lib.rs](crates/odmo-persistence/src/lib.rs)
+
+### Workspace architecture
+
+#### Core crates
+
+- `odmo-types` — shared identifiers and domain value types
+- `odmo-protocol` — packet models, opcodes, packet reader, packet writer, protocol errors
+- `odmo-application` — account, character, game, and portal application flows
+- `odmo-persistence` — JSON repository, PostgreSQL repository path, migrations
+
+#### Runtime services
+
+- `odmo-account-service` — login/auth bootstrap
+- `odmo-character-service` — character flow and game handoff
+- `odmo-game-service` — initial world bootstrap
+
+### Implemented functionality
+
+#### Protocol layer
+
+Confirmed in the workspace:
+
+- length-prefixed frame reading in all three runtime services
+- packet decoding via `PacketReader`
+- packet encoding via `PacketWriter`
+- explicit request/response models for account, character, and game flows
+- explicit opcode mapping
+- dedicated protocol error handling
+
+Evidence: [crates/odmo-protocol/src/lib.rs](crates/odmo-protocol/src/lib.rs), [crates/odmo-protocol/src/reader.rs](crates/odmo-protocol/src/reader.rs), [crates/odmo-protocol/src/writer.rs](crates/odmo-protocol/src/writer.rs)
+
+#### Account service
+
+Confirmed in the workspace:
+
+- TCP listener with asynchronous session handling
+- account connection handshake
+- login request parsing
+- login success/failure response path
+- suspended account response path
+- secondary password register/check/change flow
+- server list response
+- character-server redirect response
+- resource hash response support
+- transfer-ticket issuance for the next hop
+- per-session authentication state with primary and secondary verification gates
+- optional client resource-hash capture for session tracking
+- JSON mode and PostgreSQL mode at startup
+
+Evidence: [services/odmo-account-service/src/main.rs](services/odmo-account-service/src/main.rs), [crates/odmo-application/src/account.rs](crates/odmo-application/src/account.rs)
+
+#### Character service
+
+Confirmed in the workspace:
+
+- proactive handshake on connect
+- transfer-ticket-gated flow
+- character list request/response
+- name availability checks
+- character creation flow
+- character deletion flow
+- redirect to the game service after selection
+- transfer-ticket authorization before character access
+- character-position normalization to the configured modern start map when legacy map ids are detected
+- game-session ticket issuance for the game host handoff
+- shared portal-state directory for service handoff
+- JSON mode and PostgreSQL mode at startup
+
+Evidence: [services/odmo-character-service/src/main.rs](services/odmo-character-service/src/main.rs), [crates/odmo-application/src/character.rs](crates/odmo-application/src/character.rs)
+
+#### Game service
+
+Confirmed in the workspace:
+
+- proactive game handshake on connect
+- selected-character ticket consumption
+- initial world bootstrap response set
+- complementary bootstrap packets for:
+  - seals
+  - inventory
+  - warehouse
+  - account warehouse
+  - extra inventory
+  - server experience
+  - membership
+  - cash coins
+  - time reward
+  - relations
+  - attendance
+  - channel list
+  - guild information and guild historic
+  - guild rank when available
+  - XAI info and XAI resources when equipped
+- account warehouse delivery when present
+- visible tamer spawn/unload flow
+- buff loading on visible appearance
+- static mob load/unload flow
+- static drop load/unload flow
+- first live drop loop with bits/item pickup and map removal after collect
+- item consumption with inventory mutation and failure paths
+- map portal handling, NPC shop handling, item split/move flows, and movement packet support in the game application layer
+- status and movement-speed updates
+- in-memory broadcast registration for authenticated sessions
+- disconnect cleanup
+
+Evidence: [services/odmo-game-service/src/main.rs](services/odmo-game-service/src/main.rs), [crates/odmo-application/src/game.rs](crates/odmo-application/src/game.rs)
+
+#### Shared online state
+
+Confirmed in the workspace:
+
+- map presence tracking by `(map_id, channel)`
+- social notification inbox per character
+- transfer ticket storage/consumption
+- game session ticket storage/consumption
+- broadcast abstraction for per-player and nearby-player packet delivery
+
+Evidence: [crates/odmo-application/src/lib.rs](crates/odmo-application/src/lib.rs)
+
+#### Persistence
+
+Confirmed in the workspace:
+
+- JSON repository creation and seeding
+- account lookup by username and id
+- secondary password persistence
+- server list persistence
+- resource hash persistence
+- character listing, lookup, availability check, creation, and deletion in the JSON repository
+- character map, position, partner position, and inventory update hooks in the repository contract
+- PostgreSQL repository path already wired in the services
+- SQL migrations for accounts, servers, characters, and world data
+
+Evidence: [crates/odmo-persistence/src/lib.rs](crates/odmo-persistence/src/lib.rs), [crates/odmo-application/src/character.rs](crates/odmo-application/src/character.rs), [crates/odmo-application/src/game.rs](crates/odmo-application/src/game.rs)
+
+### What is not complete yet
+
+Important gaps still remaining:
+
+- full gameplay parity
+- authoritative combat and skills
+- complete movement synchronization
+- mature visibility reconciliation
+- complete mob AI and combat state
+- broader event, raid, and quest runtime coverage
+- broader administration and support tooling
+- full protocol fixtures and broader automated test coverage in [tests](tests/README.md)
+- fully documented production runtime story
+
+### Honest roadmap
+
+Current maturity, without overstating what is finished:
+
+| Area | Current state |
+|---|---|
+| Account login and authentication | Implemented |
+| Character list, creation, deletion, selection | Implemented |
+| Account -> character -> game service handoff | Implemented |
+| Initial world bootstrap packets | Implemented |
+| Shared online state and player visibility base | Implemented first stage |
+| Repository-backed server state | Implemented first stage |
+| PostgreSQL-backed runtime path | Implemented, still expanding |
+| Full world simulation | Partial |
+| Inventory/gameplay depth | Partial |
+| Combat, skills, AI, advanced systems | Early |
+| Broader admin/support tooling | Not implemented yet |
+| Automated compatibility coverage | Planned |
+
+#### Priority roadmap
+
+**Near term**
+
+1. Stabilize the three-service bootstrap path further.
+2. Replace temporary handoff/state bridges with stronger shared state.
+3. Expand repository-backed inventories, currency, channels, and complementary game data.
+4. Improve map presence, movement visibility, and live world-state transitions.
+5. Add protocol fixtures and integration tests for the real client contract.
+
+**Mid term**
+
+1. Expand gameplay persistence depth.
+2. Port more world, quest, item, and combat rules.
+3. Strengthen observability, diagnostics, and deterministic local startup.
+4. Improve operational consistency on Windows and Linux.
+
+**Long term**
+
+1. Reach broader parity across gameplay systems and support services.
+2. Consolidate modern-client compatibility behavior.
+3. Add mature administration and support tooling around the Rust stack.
+
+### Quick start
+
+#### Requirements
+
+- Rust toolchain compatible with [rust-toolchain.toml](rust-toolchain.toml)
+- Windows or Linux
+- optional PostgreSQL for database-backed runs
+
+#### Build
+
+```bash
+cargo build
+```
+
+#### Run with local JSON persistence
+
+```powershell
+$env:ODMO_PORTAL_STATE_DIR = ".odmo-portal"
+$env:ODMO_REPOSITORY_PATH = ".odmo-data\world.json"
+
+cargo run -p odmo-account-service
+cargo run -p odmo-character-service
+cargo run -p odmo-game-service
+```
+
+#### Run with PostgreSQL
+
+```powershell
+$env:ODMO_DATABASE_URL = "postgres://user:password@localhost/odmo"
+cargo run -p odmo-account-service
+cargo run -p odmo-character-service
+cargo run -p odmo-game-service
+```
+
+### Repository layout
+
+```text
+crates/
+  odmo-types/
+  odmo-protocol/
+  odmo-application/
+  odmo-persistence/
+services/
+  odmo-account-service/
+  odmo-character-service/
+  odmo-game-service/
+READMEs/
+tests/
+```
+
+## License
+
+This project is licensed under **GPL-3.0-or-later**, as declared in [Cargo.toml](Cargo.toml) and [LICENSE.txt](LICENSE.txt).
