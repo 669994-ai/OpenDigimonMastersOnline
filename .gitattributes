@@ -1,0 +1,5 @@
+target/** linguist-vendored
+reference/** linguist-vendored
+refactor/** linguist-vendored
+.agents/** linguist-vendored
+.odmo-portal/** linguist-vendored
