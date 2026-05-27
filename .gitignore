@@ -55,6 +55,10 @@ reference/
 .agents/
 refactor/
 
+# Runtime data (portal bridge JSON, dev-mode database)
+.odmo-data/
+.odmo-portal/
+
 # Database
 *.db
 *.db-shm

@@ -3,6 +3,7 @@ mod character_repo;
 mod drop_repo;
 mod mob_repo;
 mod npc_shop_repo;
+mod portal_bridge;
 mod portal_repo;
 
 use std::future::Future;
@@ -106,11 +107,13 @@ impl PgRepository {
 
         // Characters
         let default_inv = serde_json::json!({"bits": 0, "size": 30, "items": []});
+        let default_warehouse = serde_json::json!({"bits": 0, "size": 21, "items": []});
+        let default_account_warehouse = serde_json::json!({"bits": 0, "size": 14, "items": []});
         let default_seals = serde_json::json!({"seal_leader_id": 0, "seals": []});
         let default_channels = serde_json::json!([{"channel": 0, "load": 1}]);
 
         sqlx::query(
-            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, seal_list, available_channels) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)",
+            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, account_warehouse, seal_list, available_channels) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)",
         )
         .bind(100i64)
         .bind(1i64)
@@ -129,15 +132,16 @@ impl PgRepository {
         .bind(DEFAULT_PARTNER_MODEL_ID)
         .bind(0i64)
         .bind(&default_inv)
+        .bind(&default_warehouse)
         .bind(&default_inv)
-        .bind(&default_inv)
+        .bind(&default_account_warehouse)
         .bind(&default_seals)
         .bind(&default_channels)
         .execute(&self.pool)
         .await?;
 
         sqlx::query(
-            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, seal_list, available_channels) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)",
+            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, account_warehouse, seal_list, available_channels) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)",
         )
         .bind(200i64)
         .bind(2i64)
@@ -156,8 +160,9 @@ impl PgRepository {
         .bind(DEFAULT_GM_PARTNER_MODEL_ID)
         .bind(0i64)
         .bind(&default_inv)
+        .bind(&default_warehouse)
         .bind(&default_inv)
-        .bind(&default_inv)
+        .bind(&default_account_warehouse)
         .bind(&default_seals)
         .bind(&default_channels)
         .execute(&self.pool)
@@ -259,18 +264,11 @@ impl PgRepository {
     }
 
     /// Bridge sync trait methods to async sqlx calls.
-    /// Works when called from inside a tokio runtime (which all services do).
-    pub(crate) fn block_on<F>(&self, f: F) -> F::Output
-    where
-        F: Future,
-    {
-        match tokio::runtime::Handle::try_current() {
-            Ok(handle) => handle.block_on(f),
-            Err(_) => {
-                let rt = tokio::runtime::Runtime::new()
-                    .expect("failed to create fallback tokio runtime");
-                rt.block_on(f)
-            }
-        }
+    /// Uses `tokio::task::block_in_place` to safely block inside a tokio runtime.
+    pub(crate) fn block_on<F: Future>(&self, f: F) -> F::Output {
+        tokio::task::block_in_place(move || {
+            let handle = tokio::runtime::Handle::current();
+            handle.block_on(f)
+        })
     }
 }

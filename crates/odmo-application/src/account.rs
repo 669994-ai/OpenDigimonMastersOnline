@@ -77,7 +77,7 @@ struct AccountState {
 
 impl AccountApplication {
     pub fn new(config: AccountServiceConfig, repository: Arc<dyn AccountRepository>) -> Self {
-        let portal_bridge = PortalBridge::new(config.portal_state_dir.clone())
+        let portal_bridge = PortalBridge::from_json(config.portal_state_dir.clone())
             .expect("portal bridge should initialize");
         Self {
             config,

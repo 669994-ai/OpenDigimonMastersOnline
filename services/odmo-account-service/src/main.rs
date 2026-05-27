@@ -6,9 +6,8 @@ use tokio::{
 use tracing::{error, info, warn};
 
 use odmo_application::account::{
-    AccountApplication, AccountFlowError, AccountRepository, AccountServiceConfig, SessionFactory,
+    AccountApplication, AccountFlowError, AccountServiceConfig, SessionFactory,
 };
-use odmo_persistence::JsonRepository;
 use odmo_protocol::{AccountRequest, PacketReader};
 use odmo_types::CharacterServerTarget;
 
@@ -31,26 +30,8 @@ async fn main() -> anyhow::Result<()> {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir().join("odmo-portal"));
 
-    // Use PostgreSQL if ODMO_DATABASE_URL is set, otherwise fall back to JSON file
-    let repository: std::sync::Arc<dyn AccountRepository> =
-        if let Ok(database_url) = std::env::var("ODMO_DATABASE_URL") {
-            info!("using PostgreSQL persistence");
-            let pg = odmo_persistence::pg::PgRepository::open(&database_url)
-                .await
-                .context("failed to connect to PostgreSQL")?;
-            pg.migrate().await.context("failed to run migrations")?;
-            pg.seed_demo().await.context("failed to seed demo data")?;
-            std::sync::Arc::new(pg)
-        } else {
-            info!("using JSON file persistence");
-            let repository_path = std::env::var("ODMO_REPOSITORY_PATH")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|_| std::env::temp_dir().join("odmo-data").join("world.json"));
-            std::sync::Arc::new(
-                JsonRepository::open_or_create(repository_path)
-                    .context("failed to initialize account repository")?,
-            )
-        };
+    let backend = std::sync::Arc::new(odmo_persistence::initialize_backend().await?);
+    let repository = backend.account_repository();
 
     let app = AccountApplication::new(
         AccountServiceConfig {

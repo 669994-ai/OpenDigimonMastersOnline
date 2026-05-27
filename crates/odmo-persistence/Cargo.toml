@@ -12,5 +12,6 @@ serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 odmo-application = { path = "../odmo-application" }
 odmo-types = { path = "../odmo-types" }

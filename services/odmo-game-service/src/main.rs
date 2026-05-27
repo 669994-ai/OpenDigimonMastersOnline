@@ -93,74 +93,31 @@ async fn main() -> anyhow::Result<()> {
 
     let broadcast = Arc::new(SessionBroadcast::new());
 
-    // Use PostgreSQL if ODMO_DATABASE_URL is set, otherwise fall back to JSON file
-    if let Ok(database_url) = std::env::var("ODMO_DATABASE_URL") {
-        info!("using PostgreSQL persistence");
-        let pg = odmo_persistence::pg::PgRepository::open(&database_url)
-            .await
-            .context("failed to connect to PostgreSQL")?;
-        pg.migrate().await.context("failed to run migrations")?;
-        pg.seed_demo().await.context("failed to seed demo data")?;
+    let backend = Arc::new(odmo_persistence::initialize_backend().await?);
+    let repository = backend.game_repository();
 
-        let app = GameApplication::new(
-            GameServiceConfig { portal_state_dir },
-            std::sync::Arc::new(pg),
-        )
+    let app = GameApplication::new(GameServiceConfig { portal_state_dir }, repository)
         .with_broadcast(broadcast.clone())
         .with_game_server(game_server_address, game_server_port);
 
-        let session_factory = GameSessionFactory::new();
-        let listener = TcpListener::bind(&bind)
-            .await
-            .with_context(|| format!("failed to bind game service on {bind}"))?;
+    let session_factory = GameSessionFactory::new();
+    let listener = TcpListener::bind(&bind)
+        .await
+        .with_context(|| format!("failed to bind game service on {bind}"))?;
 
-        info!("game service listening on {bind}");
+    info!("game service listening on {bind}");
 
-        loop {
-            let (socket, address) = listener.accept().await?;
-            info!("accepted game connection from {address}");
-            let app = app.clone();
-            let broadcast = broadcast.clone();
-            let mut session = session_factory.create();
-            tokio::spawn(async move {
-                if let Err(error) = serve_client(socket, &app, &mut session, &broadcast).await {
-                    error!("game session ended with error: {error:#}");
-                }
-            });
-        }
-    } else {
-        info!("using JSON file persistence");
-        let repository_path = std::env::var("ODMO_REPOSITORY_PATH")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| std::env::temp_dir().join("odmo-data").join("world.json"));
-        let repository = std::sync::Arc::new(
-            odmo_persistence::JsonRepository::open_or_create(repository_path)
-                .context("failed to initialize game repository")?,
-        );
-
-        let app = GameApplication::new(GameServiceConfig { portal_state_dir }, repository)
-            .with_broadcast(broadcast.clone())
-            .with_game_server(game_server_address, game_server_port);
-
-        let session_factory = GameSessionFactory::new();
-        let listener = TcpListener::bind(&bind)
-            .await
-            .with_context(|| format!("failed to bind game service on {bind}"))?;
-
-        info!("game service listening on {bind}");
-
-        loop {
-            let (socket, address) = listener.accept().await?;
-            info!("accepted game connection from {address}");
-            let app = app.clone();
-            let broadcast = broadcast.clone();
-            let mut session = session_factory.create();
-            tokio::spawn(async move {
-                if let Err(error) = serve_client(socket, &app, &mut session, &broadcast).await {
-                    error!("game session ended with error: {error:#}");
-                }
-            });
-        }
+    loop {
+        let (socket, address) = listener.accept().await?;
+        info!("accepted game connection from {address}");
+        let app = app.clone();
+        let broadcast = broadcast.clone();
+        let mut session = session_factory.create();
+        tokio::spawn(async move {
+            if let Err(error) = serve_client(socket, &app, &mut session, &broadcast).await {
+                error!("game session ended with error: {error:#}");
+            }
+        });
     }
 }
 

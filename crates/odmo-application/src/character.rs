@@ -95,6 +95,21 @@ pub trait CharacterRepository: Send + Sync {
         character_id: u64,
         inventory: odmo_types::InventorySnapshot,
     ) -> anyhow::Result<()>;
+    fn update_extra_inventory(
+        &self,
+        character_id: u64,
+        extra_inventory: odmo_types::InventorySnapshot,
+    ) -> anyhow::Result<()>;
+    fn update_warehouse(
+        &self,
+        character_id: u64,
+        warehouse: odmo_types::InventorySnapshot,
+    ) -> anyhow::Result<()>;
+    fn update_account_warehouse(
+        &self,
+        character_id: u64,
+        account_warehouse: odmo_types::InventorySnapshot,
+    ) -> anyhow::Result<()>;
 }
 
 pub trait CharacterAccountRepository: Send + Sync {
@@ -121,7 +136,7 @@ impl CharacterApplication {
         repository: Arc<dyn CharacterRepository>,
         account_repository: Arc<dyn CharacterAccountRepository>,
     ) -> Self {
-        let portal_bridge = PortalBridge::new(config.portal_state_dir.clone())
+        let portal_bridge = PortalBridge::from_json(config.portal_state_dir.clone())
             .expect("portal bridge should initialize");
         Self {
             portal_bridge,
@@ -555,6 +570,27 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
+        fn update_extra_inventory(
+            &self,
+            _character_id: u64,
+            _extra_inventory: odmo_types::InventorySnapshot,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn update_warehouse(
+            &self,
+            _character_id: u64,
+            _warehouse: odmo_types::InventorySnapshot,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn update_account_warehouse(
+            &self,
+            _character_id: u64,
+            _account_warehouse: odmo_types::InventorySnapshot,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     #[derive(Debug)]
@@ -630,7 +666,7 @@ mod tests {
     #[test]
     fn request_characters_consumes_transfer_ticket_and_returns_list() {
         let portal_state_dir = unique_test_dir("character-with-ticket");
-        let bridge = PortalBridge::new(portal_state_dir.clone()).expect("bridge should initialize");
+        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge should initialize");
         bridge
             .store_transfer_ticket(&TransferTicket {
                 token: "demo".to_string(),
@@ -663,7 +699,7 @@ mod tests {
     #[test]
     fn create_character_returns_created_packet() {
         let portal_state_dir = unique_test_dir("character-create");
-        let bridge = PortalBridge::new(portal_state_dir.clone()).expect("bridge should initialize");
+        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge should initialize");
         bridge
             .store_transfer_ticket(&TransferTicket {
                 token: "demo".to_string(),

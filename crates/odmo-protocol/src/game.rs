@@ -66,6 +66,425 @@ pub enum GameRequest {
     LootItem {
         drop_handler: u32,
     },
+    DigiSummonSyncRequest,
+    ChannelInfo,
+    Membership,
+    Emoticon {
+        emoticon_type: i32,
+        value: i32,
+    },
+    FriendlyInfo {
+        target_handler: u32,
+    },
+    FriendlyMark,
+    ExtraInventoryMove {
+        category: u16,
+        extra_slot: u16,
+        inventory_slot: u16,
+    },
+    ExtraInventoryBatchMove {
+        category: u8,
+    },
+    ExtraInventorySort {
+        category: u8,
+    },
+    ExtraInventoryUse {
+        category: u8,
+        extra_slot: u16,
+    },
+    ChatMessage {
+        message: String,
+    },
+    WhisperMessage {
+        target_name: String,
+        message: String,
+    },
+    ShoutMessage {
+        message: String,
+    },
+    MegaphoneMessage {
+        message: String,
+        item_slot: i32,
+    },
+    TamerReaction {
+        reaction_type: i32,
+    },
+    PartnerStop {
+        uid: u32,
+    },
+    PartnerSwitch {
+        slot: u8,
+    },
+    PartnerDelete {
+        slot: u8,
+        validation: String,
+    },
+    EvolutionUnlock {
+        evolution_type: i32,
+        inven_idx: Option<i16>,
+    },
+    RideModeStart {
+        evolution_type: i32,
+        item_type: i32,
+    },
+    RideModeStop,
+    DigimonChangeName {
+        inven_slot: i32,
+        new_name: String,
+    },
+    HatchInsertEgg {
+        vip: u8,
+        inven_slot: u16,
+        npc_idx: i32,
+    },
+    HatchIncrease {
+        vip: u8,
+        npc_idx: i32,
+        data_level: i8,
+    },
+    HatchFinish {
+        vip: u8,
+        portable_pos: u32,
+        name: String,
+        npc_idx: i32,
+    },
+    HatchRemoveEgg {
+        vip: u8,
+        npc_idx: i32,
+    },
+    HatchBackupInsert {
+        vip: u8,
+        inven_slot: u16,
+        npc_idx: i32,
+    },
+    HatchBackupCancel {
+        vip: u8,
+        npc_idx: i32,
+    },
+    IncubatorClose,
+    DigimonArchiveMove {
+        vip: u8,
+        slot1: i32,
+        slot2: i32,
+        npc_type: u32,
+    },
+    DigimonArchiveList {
+        vip: u8,
+        inven_idx: u32,
+        npc_type: u32,
+    },
+    DigimonArchiveSwap {
+        npc_idx: u32,
+        archive_type: i32,
+        src_arr: u8,
+        dst_arr: u8,
+    },
+    InventorySort {
+        sort_type: u8,
+    },
+    ItemIdentify {
+        item_slot: i16,
+    },
+    ItemCraft {
+        recipe_slot: i16,
+    },
+    ItemReroll {
+        item_slot: i16,
+    },
+    ItemSocketIn {
+        item_slot: i16,
+        socket_slot: u8,
+        chip_item_id: i32,
+    },
+    ItemSocketOut {
+        item_slot: i16,
+        socket_slot: u8,
+    },
+    ItemSocketIdentify {
+        item_slot: i16,
+    },
+    ItemReturn {
+        item_slot: i16,
+    },
+    ItemScan {
+        item_slot: i16,
+    },
+    LoadGiftStorage,
+    GiftStorageRetrieve {
+        item_slot: i16,
+    },
+    LoadRewardStorage,
+    RecompenseGain {
+        reward_id: i32,
+    },
+    TamerShopOpen,
+    TamerShopClose,
+    TamerShopBuy {
+        item_id: i32,
+        amount: i16,
+    },
+    ConsignedShopOpen,
+    ConsignedShopView {
+        shop_id: i32,
+    },
+    ConsignedShopPurchase {
+        item_id: i32,
+        amount: i16,
+    },
+    ConsignedShopRetrieve {
+        item_slot: i16,
+    },
+    CashShopOpen,
+    CashShopBuy {
+        amount: u8,
+        total_price: i32,
+        order_id: u16,
+        product_ids: Vec<i32>,
+    },
+    CashShopReload,
+    QuestAvailableList,
+    QuestAccept {
+        quest_id: i32,
+    },
+    QuestDeliver {
+        quest_id: i32,
+    },
+    QuestGiveUp {
+        quest_id: i32,
+    },
+    QuestUpdate {
+        quest_id: i32,
+        progress: i32,
+    },
+    DieConfirm,
+    RemoveBuff {
+        buff_id: i32,
+    },
+    DamageSkinChange {
+        skin_id: i32,
+    },
+    SealOpen {
+        seal_idx: i16,
+    },
+    SealClose {
+        seal_idx: i16,
+    },
+    SealSetLeader {
+        card_code: u16,
+    },
+    SealRemoveLeader,
+    SealSetFavorite {
+        card_code: u16,
+        bookmark: u8,
+    },
+    EncyclopediaLoad,
+    EncyclopediaGetReward {
+        digimon_id: u32,
+    },
+    EncyclopediaDeckBuff {
+        deck_idx: u32,
+    },
+    ArenaDailyPoints {
+        item_slot: i16,
+        points: i16,
+        item_id: i16,
+    },
+    ArenaDailyRanking,
+    ArenaRankingAll {
+        ranking_type: u8,
+    },
+    ArenaRequestRank {
+        ranking_type: u8,
+    },
+    ArenaRequestOldRank {
+        ranking_type: u8,
+    },
+    DungeonNextStage,
+    DungeonSurrender,
+    BurningEvent,
+    DailyCheckEvent,
+    DailyCheckEventRequest {
+        event_no: i32,
+    },
+    JoinEventQueue {
+        event_id: i32,
+    },
+    RegionUnlock {
+        region_idx: i16,
+    },
+    SetTitle {
+        title_id: i16,
+    },
+    ChangeTamerModel {
+        model_id: i32,
+    },
+    TamerNameChange {
+        new_name: String,
+    },
+    RareMachineOpen {
+        npc_idx: u32,
+    },
+    RareMachineRun {
+        npc_idx: u32,
+        inven_idx: u32,
+        reset_count: u32,
+    },
+    PartyInvite {
+        target_handler: u32,
+    },
+    PartyInviteResponse {
+        inviter_handler: u32,
+        accepted: u8,
+    },
+    PartyChat {
+        message: String,
+    },
+    PartyKick {
+        member_slot: u8,
+    },
+    PartyLeave,
+    PartyChangeMaster {
+        new_leader_slot: u8,
+    },
+    PartyChangeLoot {
+        loot_type: u8,
+    },
+    PartyDismiss,
+    GuildCreate {
+        guild_name: String,
+    },
+    GuildDelete,
+    GuildInvite {
+        target_name: String,
+    },
+    GuildInviteAccept {
+        guild_id: i32,
+    },
+    GuildInviteDeny {
+        guild_id: i32,
+    },
+    GuildKick {
+        member_id: i32,
+    },
+    GuildLeave,
+    GuildMessage {
+        message: String,
+    },
+    GuildNotice {
+        notice: String,
+    },
+    GuildHistory,
+    GuildSetTitle {
+        member_id: i32,
+        title: String,
+    },
+    TradeRequest {
+        target_handler: u32,
+    },
+    TradeAccept {
+        accepter_handler: u32,
+    },
+    TradeCancel,
+    TradeAddItem {
+        item_slot: i16,
+        trade_slot: u8,
+    },
+    TradeRemoveItem {
+        trade_slot: u8,
+    },
+    TradeAddMoney {
+        amount: i32,
+    },
+    TradeConfirm,
+    TradeLock,
+    TradeUnlock,
+    SeasonPassDetails,
+    SeasonPassPurchaseExp {
+        purchase_count: i32,
+    },
+    SeasonPassMissionReward {
+        mission_id: i32,
+    },
+    SeasonPassSeasonReward {
+        level: i32,
+    },
+    ChangeChannel {
+        channel: u8,
+    },
+    ChannelSwitchConfirm,
+    TamerShopList,
+    ConsignedWarehouse,
+    ConsignedWarehouseRetrieve {
+        item_slot: i16,
+    },
+    CashShopBuyHistory,
+    AddFriend {
+        friend_name: String,
+    },
+    FriendList,
+    GuildAuthorityMaster {
+        member_id: i32,
+    },
+    GuildAuthoritySubMaster {
+        member_id: i32,
+    },
+    GuildAuthorityMember {
+        member_id: i32,
+    },
+    GuildAuthorityNewMember {
+        member_id: i32,
+    },
+    GuildAuthorityDats {
+        member_id: i32,
+    },
+    HatchSpiritEvolution {
+        model_id: i32,
+        name: String,
+        npc_id: i32,
+    },
+    DigiSummonPurchase {
+        npc_idx: u32,
+    },
+    LoadAccountWarehouse,
+    RetrieveAccountWarehouse {
+        item_slot: i16,
+    },
+    ExtraInventoryCategoryRefresh {
+        category: u8,
+    },
+    PartyConfigChange {
+        loot_type: u8,
+    },
+    PartyMemberDisconnect,
+    MonsterRespawnTimer,
+    JumpBooster,
+    SkillLevelUp {
+        uid: u32,
+        evo_unit_idx: u8,
+        skill_idx: u8,
+    },
+    TamerChargeXCrystal,
+    TamerConsumeXCrystal {
+        amount: i32,
+    },
+    TamerSummon {
+        target_name: String,
+    },
+    TamerSkillRequest {
+        skill_idx: u32,
+        target_uid: u32,
+    },
+    TranscendenceReceiveExp,
+    TranscendenceSuccess,
+    TimeChargeResult {
+        charge_type: u8,
+    },
+    WarpGateDungeon,
+    SpiritCraft {
+        model_id: i32,
+        name: String,
+        npc_id: i32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,7 +648,6 @@ pub struct ItemMoveSuccessPacket {
 impl ItemMoveSuccessPacket {
     pub fn encode(&self) -> Vec<u8> {
         let mut writer = PacketWriter::new(game::MOVE_ITEM);
-        writer.write_u8(1); // success
         writer.write_u16(self.origin_slot);
         writer.write_u16(self.destination_slot);
         writer.finalize()
@@ -244,8 +662,7 @@ pub struct ItemMoveFailPacket {
 
 impl ItemMoveFailPacket {
     pub fn encode(&self) -> Vec<u8> {
-        let mut writer = PacketWriter::new(game::MOVE_ITEM);
-        writer.write_u8(0); // fail
+        let mut writer = PacketWriter::new(game::MOVE_ITEM_FAILURE);
         writer.write_u16(self.origin_slot);
         writer.write_u16(self.destination_slot);
         writer.finalize()
@@ -1345,6 +1762,563 @@ impl TryFrom<RawPacket> for GameRequest {
             game::LOOT_ITEM => Ok(Self::LootItem {
                 drop_handler: reader.read_u32()?,
             }),
+            game::DIGI_SUMMON_SYNC_REQUEST => Ok(Self::DigiSummonSyncRequest),
+            game::AVAILABLE_CHANNELS => Ok(Self::ChannelInfo),
+            game::MEMBERSHIP => Ok(Self::Membership),
+            game::EMOTICON => {
+                let emoticon_type = reader.read_i32()?;
+                let value = if reader.remaining_len() >= 4 {
+                    reader.read_i32()?
+                } else {
+                    -1
+                };
+                Ok(Self::Emoticon { emoticon_type, value })
+            }
+            game::FRIENDLY_INFO => {
+                let target_handler = if reader.remaining_len() >= 4 {
+                    reader.read_u32()?
+                } else {
+                    0
+                };
+                Ok(Self::FriendlyInfo { target_handler })
+            }
+            game::AVAILABLE_RELATIONS => Ok(Self::FriendlyMark),
+            game::EXITEM_MOVE => {
+                let category = reader.read_u16()?;
+                let extra_slot = reader.read_u16()?;
+                let inventory_slot = reader.read_u16()?;
+                Ok(Self::ExtraInventoryMove {
+                    category,
+                    extra_slot,
+                    inventory_slot,
+                })
+            }
+            game::EXITEM_BATCH_MOVE => {
+                let _unknown = reader.read_u8()?;
+                let category = reader.read_u8()?;
+                Ok(Self::ExtraInventoryBatchMove { category })
+            }
+            game::EXITEM_SORT => {
+                let category = reader.read_u8()?;
+                Ok(Self::ExtraInventorySort { category })
+            }
+            game::EXITEM_USE => {
+                let category = reader.read_u8()?;
+                let extra_slot = reader.read_u16()?;
+                Ok(Self::ExtraInventoryUse { category, extra_slot })
+            }
+            game::CHAT_MESSAGE => {
+                let message = reader.read_string()?;
+                Ok(Self::ChatMessage { message })
+            }
+            game::WHISPER_MESSAGE => {
+                let target_name = reader.read_string()?;
+                let message = reader.read_string()?;
+                Ok(Self::WhisperMessage { target_name, message })
+            }
+            game::SHOUT_MESSAGE => {
+                let message = reader.read_string()?;
+                Ok(Self::ShoutMessage { message })
+            }
+            game::MEGAPHONE_MESSAGE => {
+                let message = reader.read_string()?;
+                let item_slot = reader.read_i32()?;
+                Ok(Self::MegaphoneMessage { message, item_slot })
+            }
+            game::TAMER_REACTION => {
+                let reaction_type = reader.read_i32()?;
+                Ok(Self::TamerReaction { reaction_type })
+            }
+            game::PARTNER_STOP => {
+                let uid = reader.read_u32()?;
+                Ok(Self::PartnerStop { uid })
+            }
+            game::PARTNER_SWITCH => {
+                let slot = reader.read_u8()?;
+                Ok(Self::PartnerSwitch { slot })
+            }
+            game::PARTNER_DELETE => {
+                let slot = reader.read_u8()?;
+                let validation = reader.read_string()?;
+                Ok(Self::PartnerDelete { slot, validation })
+            }
+            game::EVOLUTION_UNLOCK => {
+                let evolution_type = reader.read_i32()?;
+                let inven_idx = if reader.remaining_len() >= 2 {
+                    Some(reader.read_i16()?)
+                } else {
+                    None
+                };
+                Ok(Self::EvolutionUnlock { evolution_type, inven_idx })
+            }
+            game::RIDE_MODE_START => {
+                let evolution_type = reader.read_i32()?;
+                let item_type = reader.read_i32()?;
+                Ok(Self::RideModeStart { evolution_type, item_type })
+            }
+            game::RIDE_MODE_STOP => Ok(Self::RideModeStop),
+            game::DIGIMON_CHANGE_NAME => {
+                let inven_slot = reader.read_i32()?;
+                let new_name = reader.read_string()?;
+                Ok(Self::DigimonChangeName { inven_slot, new_name })
+            }
+            game::HATCH_INSERT_EGG => {
+                let vip = reader.read_u8()?;
+                let inven_slot = reader.read_u16()?;
+                let npc_idx = reader.read_i32()?;
+                Ok(Self::HatchInsertEgg { vip, inven_slot, npc_idx })
+            }
+            game::HATCH_INCREASE => {
+                let vip = reader.read_u8()?;
+                let npc_idx = reader.read_i32()?;
+                let data_level = reader.read_u8()? as i8;
+                Ok(Self::HatchIncrease { vip, npc_idx, data_level })
+            }
+            game::HATCH_FINISH => {
+                let vip = reader.read_u8()?;
+                let portable_pos = reader.read_u32()?;
+                let name = reader.read_string()?;
+                let npc_idx = reader.read_i32()?;
+                Ok(Self::HatchFinish { vip, portable_pos, name, npc_idx })
+            }
+            game::HATCH_REMOVE_EGG => {
+                let vip = reader.read_u8()?;
+                let npc_idx = reader.read_i32()?;
+                Ok(Self::HatchRemoveEgg { vip, npc_idx })
+            }
+            game::HATCH_BACKUP_INSERT => {
+                let vip = reader.read_u8()?;
+                let inven_slot = reader.read_u16()?;
+                let npc_idx = reader.read_i32()?;
+                Ok(Self::HatchBackupInsert { vip, inven_slot, npc_idx })
+            }
+            game::HATCH_BACKUP_CANCEL => {
+                let vip = reader.read_u8()?;
+                let npc_idx = reader.read_i32()?;
+                Ok(Self::HatchBackupCancel { vip, npc_idx })
+            }
+            game::INCUBATOR_CLOSE => Ok(Self::IncubatorClose),
+            game::DIGIMON_ARCHIVE_MOVE => {
+                let vip = reader.read_u8()?;
+                let slot1 = reader.read_i32()?;
+                let slot2 = reader.read_i32()?;
+                let npc_type = reader.read_u32()?;
+                Ok(Self::DigimonArchiveMove { vip, slot1, slot2, npc_type })
+            }
+            game::DIGIMON_ARCHIVE_LIST => {
+                let vip = reader.read_u8()?;
+                let inven_idx = reader.read_u32()?;
+                let npc_type = reader.read_u32()?;
+                Ok(Self::DigimonArchiveList { vip, inven_idx, npc_type })
+            }
+            game::DIGIMON_ARCHIVE_SWAP => {
+                let npc_idx = reader.read_u32()?;
+                let archive_type = reader.read_i32()?;
+                let src_arr = reader.read_u8()?;
+                let dst_arr = reader.read_u8()?;
+                Ok(Self::DigimonArchiveSwap { npc_idx, archive_type, src_arr, dst_arr })
+            }
+            game::INVENTORY_SORT => {
+                let sort_type = reader.read_u8()?;
+                Ok(Self::InventorySort { sort_type })
+            }
+            game::ITEM_IDENTIFY => {
+                let item_slot = reader.read_i16()?;
+                Ok(Self::ItemIdentify { item_slot })
+            }
+            game::ITEM_CRAFT => {
+                let recipe_slot = reader.read_i16()?;
+                Ok(Self::ItemCraft { recipe_slot })
+            }
+            game::ITEM_REROLL => {
+                let item_slot = reader.read_i16()?;
+                Ok(Self::ItemReroll { item_slot })
+            }
+            game::ITEM_SOCKET_IN => {
+                let item_slot = reader.read_i16()?;
+                let socket_slot = reader.read_u8()?;
+                let chip_item_id = reader.read_i32()?;
+                Ok(Self::ItemSocketIn { item_slot, socket_slot, chip_item_id })
+            }
+            game::ITEM_SOCKET_OUT => {
+                let item_slot = reader.read_i16()?;
+                let socket_slot = reader.read_u8()?;
+                Ok(Self::ItemSocketOut { item_slot, socket_slot })
+            }
+            game::ITEM_SOCKET_IDENTIFY => {
+                let item_slot = reader.read_i16()?;
+                Ok(Self::ItemSocketIdentify { item_slot })
+            }
+            game::ITEM_RETURN => {
+                let item_slot = reader.read_i16()?;
+                Ok(Self::ItemReturn { item_slot })
+            }
+            game::ITEM_SCAN => {
+                let item_slot = reader.read_i16()?;
+                Ok(Self::ItemScan { item_slot })
+            }
+            game::LOAD_GIFT_STORAGE => Ok(Self::LoadGiftStorage),
+            game::GIFT_STORAGE_RETRIEVE => {
+                let item_slot = reader.read_i16()?;
+                Ok(Self::GiftStorageRetrieve { item_slot })
+            }
+            game::LOAD_REWARD_STORAGE => Ok(Self::LoadRewardStorage),
+            game::RECOMPENSE_GAIN => {
+                let reward_id = reader.read_i32()?;
+                Ok(Self::RecompenseGain { reward_id })
+            }
+            game::TAMER_SHOP_OPEN => Ok(Self::TamerShopOpen),
+            game::TAMER_SHOP_CLOSE => Ok(Self::TamerShopClose),
+            game::TAMER_SHOP_BUY => {
+                let item_id = reader.read_i32()?;
+                let amount = reader.read_i16()?;
+                Ok(Self::TamerShopBuy { item_id, amount })
+            }
+            game::CONSIGNSHOP_OPEN => Ok(Self::ConsignedShopOpen),
+            game::CONSIGNSHOP_VIEW => {
+                let shop_id = reader.read_i32()?;
+                Ok(Self::ConsignedShopView { shop_id })
+            }
+            game::CONSIGNSHOP_PURCHASE => {
+                let item_id = reader.read_i32()?;
+                let amount = reader.read_i16()?;
+                Ok(Self::ConsignedShopPurchase { item_id, amount })
+            }
+            game::CONSIGNSHOP_RETRIEVE => {
+                let item_slot = reader.read_i16()?;
+                Ok(Self::ConsignedShopRetrieve { item_slot })
+            }
+            game::CASHSHOP_OPEN => Ok(Self::CashShopOpen),
+            game::CASHSHOP_BUY => {
+                let amount = reader.read_u8()?;
+                let total_price = reader.read_i32()?;
+                let order_id = reader.read_u16()?;
+                let mut product_ids = Vec::new();
+                for _ in 0..amount {
+                    product_ids.push(reader.read_i32()?);
+                }
+                Ok(Self::CashShopBuy { amount, total_price, order_id, product_ids })
+            }
+            game::CASHSHOP_RELOAD => Ok(Self::CashShopReload),
+            game::QUEST_AVAILABLE_LIST => Ok(Self::QuestAvailableList),
+            game::QUEST_ACCEPT => {
+                let quest_id = reader.read_i32()?;
+                Ok(Self::QuestAccept { quest_id })
+            }
+            game::QUEST_DELIVER => {
+                let quest_id = reader.read_i32()?;
+                Ok(Self::QuestDeliver { quest_id })
+            }
+            game::QUEST_GIVE_UP => {
+                let quest_id = reader.read_i32()?;
+                Ok(Self::QuestGiveUp { quest_id })
+            }
+            game::QUEST_UPDATE => {
+                let quest_id = reader.read_i32()?;
+                let progress = reader.read_i32()?;
+                Ok(Self::QuestUpdate { quest_id, progress })
+            }
+            game::DIE_CONFIRM => Ok(Self::DieConfirm),
+            game::REMOVE_BUFF => {
+                let buff_id = reader.read_i32()?;
+                Ok(Self::RemoveBuff { buff_id })
+            }
+            game::DAMAGE_SKIN_CHANGE => {
+                let skin_id = reader.read_i32()?;
+                Ok(Self::DamageSkinChange { skin_id })
+            }
+            game::SEAL_OPEN => {
+                let seal_idx = reader.read_i16()?;
+                Ok(Self::SealOpen { seal_idx })
+            }
+            game::SEAL_CLOSE => {
+                let seal_idx = reader.read_i16()?;
+                Ok(Self::SealClose { seal_idx })
+            }
+            game::SEAL_SET_LEADER => {
+                let card_code = reader.read_u16()?;
+                Ok(Self::SealSetLeader { card_code })
+            }
+            game::SEAL_REMOVE_LEADER => Ok(Self::SealRemoveLeader),
+            game::SEAL_SET_FAVORITE => {
+                let card_code = reader.read_u16()?;
+                let bookmark = reader.read_u8()?;
+                Ok(Self::SealSetFavorite { card_code, bookmark })
+            }
+            game::ENCYCLOPEDIA_LOAD => Ok(Self::EncyclopediaLoad),
+            game::ENCYCLOPEDIA_GET_REWARD => {
+                let digimon_id = reader.read_u32()?;
+                Ok(Self::EncyclopediaGetReward { digimon_id })
+            }
+            game::ENCYCLOPEDIA_DECK_BUFF => {
+                let deck_idx = reader.read_u32()?;
+                Ok(Self::EncyclopediaDeckBuff { deck_idx })
+            }
+            game::ARENA_DAILY_POINTS => {
+                let _skip = reader.read_u16()?; // skip 2 bytes
+                let item_slot = reader.read_i16()?;
+                let points = reader.read_i16()?;
+                let item_id = reader.read_i16()?;
+                Ok(Self::ArenaDailyPoints { item_slot, points, item_id })
+            }
+            game::ARENA_DAILY_RANKING => Ok(Self::ArenaDailyRanking),
+            game::ARENA_RANKING_ALL => {
+                let ranking_type = reader.read_u8()?;
+                Ok(Self::ArenaRankingAll { ranking_type })
+            }
+            game::ARENA_REQUEST_RANK => {
+                let ranking_type = reader.read_u8()?;
+                Ok(Self::ArenaRequestRank { ranking_type })
+            }
+            game::ARENA_REQUEST_OLD_RANK => {
+                let ranking_type = reader.read_u8()?;
+                Ok(Self::ArenaRequestOldRank { ranking_type })
+            }
+            game::DUNGEON_NEXT_STAGE => Ok(Self::DungeonNextStage),
+            game::DUNGEON_SURRENDER => Ok(Self::DungeonSurrender),
+            game::BURNING_EVENT => Ok(Self::BurningEvent),
+            game::DAILY_CHECK_EVENT => Ok(Self::DailyCheckEvent),
+            game::DAILY_CHECK_EVENT_REQUEST => {
+                let event_no = reader.read_i32()?;
+                Ok(Self::DailyCheckEventRequest { event_no })
+            }
+            game::JOIN_EVENT_QUEUE => {
+                let event_id = reader.read_i32()?;
+                Ok(Self::JoinEventQueue { event_id })
+            }
+            game::REGION_UNLOCK => {
+                let region_idx = reader.read_i16()?;
+                Ok(Self::RegionUnlock { region_idx })
+            }
+            game::SET_TITLE => {
+                let title_id = reader.read_i16()?;
+                Ok(Self::SetTitle { title_id })
+            }
+            game::CHANGE_TAMER_MODEL => {
+                let model_id = reader.read_i32()?;
+                Ok(Self::ChangeTamerModel { model_id })
+            }
+            game::TAMER_NAME_CHANGE => {
+                let new_name = reader.read_string()?;
+                Ok(Self::TamerNameChange { new_name })
+            }
+            game::RARE_MACHINE_OPEN => {
+                let npc_idx = reader.read_u32()?;
+                Ok(Self::RareMachineOpen { npc_idx })
+            }
+            game::RARE_MACHINE_RUN => {
+                let npc_idx = reader.read_u32()?;
+                let inven_idx = reader.read_u32()?;
+                let reset_count = reader.read_u32()?;
+                Ok(Self::RareMachineRun { npc_idx, inven_idx, reset_count })
+            }
+            game::PARTY_INVITE => {
+                let target_handler = reader.read_u32()?;
+                Ok(Self::PartyInvite { target_handler })
+            }
+            game::PARTY_INVITE_RESPONSE => {
+                let inviter_handler = reader.read_u32()?;
+                let accepted = reader.read_u8()?;
+                Ok(Self::PartyInviteResponse { inviter_handler, accepted })
+            }
+            game::PARTY_CHAT => {
+                let message = reader.read_string()?;
+                Ok(Self::PartyChat { message })
+            }
+            game::PARTY_KICK => {
+                let member_slot = reader.read_u8()?;
+                Ok(Self::PartyKick { member_slot })
+            }
+            game::PARTY_LEAVE => Ok(Self::PartyLeave),
+            game::PARTY_CHANGE_MASTER => {
+                let new_leader_slot = reader.read_u8()?;
+                Ok(Self::PartyChangeMaster { new_leader_slot })
+            }
+            game::PARTY_CHANGE_LOOT => {
+                let loot_type = reader.read_u8()?;
+                Ok(Self::PartyChangeLoot { loot_type })
+            }
+            game::PARTY_DISMISS => Ok(Self::PartyDismiss),
+            game::GUILD_CREATE => {
+                let guild_name = reader.read_string()?;
+                Ok(Self::GuildCreate { guild_name })
+            }
+            game::GUILD_DELETE => Ok(Self::GuildDelete),
+            game::GUILD_INVITE => {
+                let target_name = reader.read_string()?;
+                Ok(Self::GuildInvite { target_name })
+            }
+            game::GUILD_INVITE_ACCEPT => {
+                let guild_id = reader.read_i32()?;
+                Ok(Self::GuildInviteAccept { guild_id })
+            }
+            game::GUILD_INVITE_DENY => {
+                let guild_id = reader.read_i32()?;
+                Ok(Self::GuildInviteDeny { guild_id })
+            }
+            game::GUILD_KICK => {
+                let member_id = reader.read_i32()?;
+                Ok(Self::GuildKick { member_id })
+            }
+            game::GUILD_LEAVE => Ok(Self::GuildLeave),
+            game::GUILD_MESSAGE => {
+                let message = reader.read_string()?;
+                Ok(Self::GuildMessage { message })
+            }
+            game::GUILD_NOTICE => {
+                let notice = reader.read_string()?;
+                Ok(Self::GuildNotice { notice })
+            }
+            game::GUILD_HISTORY => Ok(Self::GuildHistory),
+            game::GUILD_SET_TITLE => {
+                let member_id = reader.read_i32()?;
+                let title = reader.read_string()?;
+                Ok(Self::GuildSetTitle { member_id, title })
+            }
+            game::TRADE_REQUEST => {
+                let target_handler = reader.read_u32()?;
+                Ok(Self::TradeRequest { target_handler })
+            }
+            game::TRADE_ACCEPT => {
+                let accepter_handler = reader.read_u32()?;
+                Ok(Self::TradeAccept { accepter_handler })
+            }
+            game::TRADE_CANCEL => Ok(Self::TradeCancel),
+            game::TRADE_ADD_ITEM => {
+                let item_slot = reader.read_i16()?;
+                let trade_slot = reader.read_u8()?;
+                Ok(Self::TradeAddItem { item_slot, trade_slot })
+            }
+            game::TRADE_REMOVE_ITEM => {
+                let trade_slot = reader.read_u8()?;
+                Ok(Self::TradeRemoveItem { trade_slot })
+            }
+            game::TRADE_ADD_MONEY => {
+                let amount = reader.read_i32()?;
+                Ok(Self::TradeAddMoney { amount })
+            }
+            game::TRADE_CONFIRM => Ok(Self::TradeConfirm),
+            game::TRADE_LOCK => Ok(Self::TradeLock),
+            game::TRADE_UNLOCK => Ok(Self::TradeUnlock),
+            game::SEASON_PASS_DETAILS => Ok(Self::SeasonPassDetails),
+            game::SEASON_PASS_PURCHASE_EXP => {
+                let purchase_count = reader.read_i32()?;
+                Ok(Self::SeasonPassPurchaseExp { purchase_count })
+            }
+            game::SEASON_PASS_MISSION_REWARD => {
+                let mission_id = reader.read_i32()?;
+                Ok(Self::SeasonPassMissionReward { mission_id })
+            }
+            game::SEASON_PASS_SEASON_REWARD => {
+                let level = reader.read_i32()?;
+                Ok(Self::SeasonPassSeasonReward { level })
+            }
+            game::CHANGE_CHANNEL => {
+                let channel = reader.read_u8()?;
+                Ok(Self::ChangeChannel { channel })
+            }
+            game::CHANNEL_SWITCH_CONFIRM => Ok(Self::ChannelSwitchConfirm),
+            game::TAMER_SHOP_LIST => Ok(Self::TamerShopList),
+            game::CONSIGNSHOP_WAREHOUSE => Ok(Self::ConsignedWarehouse),
+            game::CONSIGNSHOP_WAREHOUSE_RETRIEVE => {
+                let item_slot = reader.read_i16()?;
+                Ok(Self::ConsignedWarehouseRetrieve { item_slot })
+            }
+            game::CASHSHOP_BUY_HISTORY => Ok(Self::CashShopBuyHistory),
+            game::ADD_FRIEND => {
+                let friend_name = reader.read_string()?;
+                Ok(Self::AddFriend { friend_name })
+            }
+            game::FRIEND_LIST => Ok(Self::FriendList),
+            game::GUILD_AUTHORITY_MASTER => {
+                let member_id = reader.read_i32()?;
+                Ok(Self::GuildAuthorityMaster { member_id })
+            }
+            game::GUILD_AUTHORITY_SUBMASTER => {
+                let member_id = reader.read_i32()?;
+                Ok(Self::GuildAuthoritySubMaster { member_id })
+            }
+            game::GUILD_AUTHORITY_MEMBER => {
+                let member_id = reader.read_i32()?;
+                Ok(Self::GuildAuthorityMember { member_id })
+            }
+            game::GUILD_AUTHORITY_NEW_MEMBER => {
+                let member_id = reader.read_i32()?;
+                Ok(Self::GuildAuthorityNewMember { member_id })
+            }
+            game::GUILD_AUTHORITY_DATS => {
+                let member_id = reader.read_i32()?;
+                Ok(Self::GuildAuthorityDats { member_id })
+            }
+            game::HATCH_SPIRIT_EVOLUTION => {
+                let model_id = reader.read_i32()?;
+                let name = reader.read_string()?;
+                let npc_id = reader.read_i32()?;
+                Ok(Self::HatchSpiritEvolution { model_id, name, npc_id })
+            }
+            game::DIGI_SUMMON_PURCHASE => {
+                let npc_idx = reader.read_u32()?;
+                Ok(Self::DigiSummonPurchase { npc_idx })
+            }
+            game::LOAD_ACCOUNT_WAREHOUSE => Ok(Self::LoadAccountWarehouse),
+            game::RETRIEVE_ACCOUNT_WAREHOUSE => {
+                let item_slot = reader.read_i16()?;
+                Ok(Self::RetrieveAccountWarehouse { item_slot })
+            }
+            game::EXTRA_INVENTORY_CATEGORY_REFRESH => {
+                let category = reader.read_u8()?;
+                Ok(Self::ExtraInventoryCategoryRefresh { category })
+            }
+            game::EXTRA_INVENTORY_MOVE => {
+                let category = reader.read_u16()?;
+                let extra_slot = reader.read_u16()?;
+                let inventory_slot = reader.read_u16()?;
+                Ok(Self::ExtraInventoryMove { category, extra_slot, inventory_slot })
+            }
+            game::EXTRA_INVENTORY_SORT => {
+                let category = reader.read_u8()?;
+                Ok(Self::ExtraInventorySort { category })
+            }
+            game::PARTY_CONFIG_CHANGE => {
+                let loot_type = reader.read_u8()?;
+                Ok(Self::PartyConfigChange { loot_type })
+            }
+            game::PARTY_MEMBER_DISCONNECT => Ok(Self::PartyMemberDisconnect),
+            game::MONSTER_RESPAWN_TIMER => Ok(Self::MonsterRespawnTimer),
+            game::JUMP_BOOSTER => Ok(Self::JumpBooster),
+            game::SKILL_LEVEL_UP => {
+                let uid = reader.read_u32()?;
+                let evo_unit_idx = reader.read_u8()?;
+                let skill_idx = reader.read_u8()?;
+                Ok(Self::SkillLevelUp { uid, evo_unit_idx, skill_idx })
+            }
+            game::TAMER_CHARGE_XCRYSTAL => Ok(Self::TamerChargeXCrystal),
+            game::TAMER_CONSUME_XCRYSTAL => {
+                let amount = reader.read_i32()?;
+                Ok(Self::TamerConsumeXCrystal { amount })
+            }
+            game::TAMER_SUMMON => {
+                let target_name = reader.read_string()?;
+                Ok(Self::TamerSummon { target_name })
+            }
+            game::TAMER_SKILL_REQUEST => {
+                let skill_idx = reader.read_u32()?;
+                let target_uid = reader.read_u32()?;
+                Ok(Self::TamerSkillRequest { skill_idx, target_uid })
+            }
+            game::TRANSCENDENCE_RECEIVE_EXP => Ok(Self::TranscendenceReceiveExp),
+            game::TRANSCENDENCE_SUCCESS => Ok(Self::TranscendenceSuccess),
+            game::TIME_CHARGE_RESULT => {
+                let charge_type = reader.read_u8()?;
+                Ok(Self::TimeChargeResult { charge_type })
+            }
+            game::WARP_GATE_DUNGEON => Ok(Self::WarpGateDungeon),
+            game::SPIRIT_CRAFT => {
+                let model_id = reader.read_i32()?;
+                let name = reader.read_string()?;
+                let npc_id = reader.read_i32()?;
+                Ok(Self::SpiritCraft { model_id, name, npc_id })
+            }
             other => Err(ProtocolError::InvalidGamePacketType(other)),
         }
     }

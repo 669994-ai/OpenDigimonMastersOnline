@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    sync::RwLock,
+    sync::{Arc, RwLock},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -17,8 +17,8 @@ use odmo_application::{
     account::AccountRepository,
     character::{CharacterAccountRepository, CharacterRepository},
     game::{
-        DropCollectionResult, MapDropRepository, MapMobRepository, NpcShopDefinition, NpcShopItem,
-        NpcShopRepository, PortalDefinition, PortalRepository,
+        DropCollectionResult, GameRepository, MapDropRepository, MapMobRepository,
+        NpcShopDefinition, NpcShopItem, NpcShopRepository, PortalDefinition, PortalRepository,
     },
 };
 use odmo_types::{
@@ -28,6 +28,82 @@ use odmo_types::{
     ItemRecord, MobSummary, ServerDescriptor,
 };
 use serde::{Deserialize, Serialize};
+
+/// Persistence backend selection.
+pub enum PersistenceBackend {
+    /// PostgreSQL — canonical production backend.
+    Pg(Arc<pg::PgRepository>),
+    /// JSON file — development/testing only. Requires ODMO_DEV_MODE=1.
+    Json(Arc<JsonRepository>),
+}
+
+/// Initialize the persistence backend.
+///
+/// Priority:
+/// 1. `ODMO_DATABASE_URL` → PostgreSQL (production)
+/// 2. `ODMO_DEV_MODE=1` → JSON file (development)
+/// 3. Neither set → error
+///
+/// For PostgreSQL, runs migrations and seeds demo data automatically.
+pub async fn initialize_backend() -> anyhow::Result<PersistenceBackend> {
+    if let Ok(database_url) = std::env::var("ODMO_DATABASE_URL") {
+        tracing::info!("using PostgreSQL persistence");
+        let pg = pg::PgRepository::open(&database_url)
+            .await
+            .context("failed to connect to PostgreSQL")?;
+        pg.migrate().await.context("failed to run migrations")?;
+        pg.seed_demo().await.context("failed to seed demo data")?;
+        Ok(PersistenceBackend::Pg(Arc::new(pg)))
+    } else if std::env::var("ODMO_DEV_MODE").is_ok() {
+        tracing::warn!("using JSON file persistence (dev mode — not for production)");
+        let repository_path = std::env::var("ODMO_REPOSITORY_PATH")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| std::env::temp_dir().join("odmo-data").join("world.json"));
+        let repo = JsonRepository::open_or_create(repository_path)
+            .context("failed to initialize JSON repository")?;
+        Ok(PersistenceBackend::Json(Arc::new(repo)))
+    } else {
+        anyhow::bail!(
+            "no persistence backend configured. \
+             Set ODMO_DATABASE_URL for PostgreSQL (production) \
+             or ODMO_DEV_MODE=1 for JSON file (development)."
+        )
+    }
+}
+
+impl PersistenceBackend {
+    /// Extract an `Arc<dyn AccountRepository>` from the backend.
+    pub fn account_repository(self: &Arc<Self>) -> Arc<dyn AccountRepository> {
+        match self.as_ref() {
+            PersistenceBackend::Pg(pg) => pg.clone() as Arc<dyn AccountRepository>,
+            PersistenceBackend::Json(json) => json.clone() as Arc<dyn AccountRepository>,
+        }
+    }
+
+    /// Extract an `Arc<dyn CharacterRepository>` from the backend.
+    pub fn character_repository(self: &Arc<Self>) -> Arc<dyn CharacterRepository> {
+        match self.as_ref() {
+            PersistenceBackend::Pg(pg) => pg.clone() as Arc<dyn CharacterRepository>,
+            PersistenceBackend::Json(json) => json.clone() as Arc<dyn CharacterRepository>,
+        }
+    }
+
+    /// Extract an `Arc<dyn CharacterAccountRepository>` from the backend.
+    pub fn character_account_repository(self: &Arc<Self>) -> Arc<dyn CharacterAccountRepository> {
+        match self.as_ref() {
+            PersistenceBackend::Pg(pg) => pg.clone() as Arc<dyn CharacterAccountRepository>,
+            PersistenceBackend::Json(json) => json.clone() as Arc<dyn CharacterAccountRepository>,
+        }
+    }
+
+    /// Extract an `Arc<dyn GameRepository>` from the backend.
+    pub fn game_repository(self: &Arc<Self>) -> Arc<dyn GameRepository> {
+        match self.as_ref() {
+            PersistenceBackend::Pg(pg) => pg.clone() as Arc<dyn GameRepository>,
+            PersistenceBackend::Json(json) => json.clone() as Arc<dyn GameRepository>,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct JsonRepository {
@@ -302,6 +378,54 @@ impl CharacterRepository for JsonRepository {
         for characters in state.characters_by_account.values_mut() {
             if let Some(ch) = characters.iter_mut().find(|c| c.id == character_id) {
                 ch.inventory = inventory;
+                self.persist(&state)?;
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    fn update_extra_inventory(
+        &self,
+        character_id: u64,
+        extra_inventory: odmo_types::InventorySnapshot,
+    ) -> anyhow::Result<()> {
+        let mut state = self.state.write().expect("repository poisoned");
+        for characters in state.characters_by_account.values_mut() {
+            if let Some(ch) = characters.iter_mut().find(|c| c.id == character_id) {
+                ch.extra_inventory = extra_inventory;
+                self.persist(&state)?;
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    fn update_warehouse(
+        &self,
+        character_id: u64,
+        warehouse: odmo_types::InventorySnapshot,
+    ) -> anyhow::Result<()> {
+        let mut state = self.state.write().expect("repository poisoned");
+        for characters in state.characters_by_account.values_mut() {
+            if let Some(ch) = characters.iter_mut().find(|c| c.id == character_id) {
+                ch.warehouse = warehouse;
+                self.persist(&state)?;
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    fn update_account_warehouse(
+        &self,
+        character_id: u64,
+        account_warehouse: odmo_types::InventorySnapshot,
+    ) -> anyhow::Result<()> {
+        let mut state = self.state.write().expect("repository poisoned");
+        for characters in state.characters_by_account.values_mut() {
+            if let Some(ch) = characters.iter_mut().find(|c| c.id == character_id) {
+                ch.account_warehouse = Some(account_warehouse);
                 self.persist(&state)?;
                 return Ok(());
             }

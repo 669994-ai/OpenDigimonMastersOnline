@@ -160,7 +160,7 @@ pub struct GameApplication {
 impl GameApplication {
     pub fn new(config: GameServiceConfig, repository: Arc<dyn GameRepository>) -> Self {
         let portal_bridge =
-            PortalBridge::new(config.portal_state_dir).expect("portal bridge should initialize");
+            PortalBridge::from_json(config.portal_state_dir).expect("portal bridge should initialize");
         Self {
             portal_bridge,
             repository,
@@ -458,35 +458,144 @@ impl GameApplication {
                     .map_err(|error| GameFlowError::Storage(error.to_string()))?
                     .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-                let origin_idx = origin_slot as usize;
-                let dest_idx = destination_slot as usize;
+                const TAB_INVENTORY: u16 = 0;
+                const TAB_WAREHOUSE: u16 = 2000;
+                const TAB_SHARESTASH: u16 = 9000;
+                fn tab_class(sid: u16) -> u16 { sid / 1000 * 1000 }
+                fn tab_index(sid: u16) -> usize { (sid % 1000) as usize }
 
-                // Both slots within inventory range (0..size)
-                if origin_idx < character.inventory.items.len()
-                    && dest_idx < character.inventory.items.len()
-                {
-                    // Swap items in inventory
-                    let origin_item = character.inventory.items[origin_idx].clone();
-                    let dest_item = character.inventory.items[dest_idx].clone();
+                let src_tab = tab_class(origin_slot);
+                let dst_tab = tab_class(destination_slot);
+                let src_idx = tab_index(origin_slot);
+                let dst_idx = tab_index(destination_slot);
+
+                // Helper: swap/merge items between two mutable inventory slices
+                fn transfer_between(
+                    src_items: &mut [ItemRecord],
+                    src_idx: usize,
+                    dst_items: &mut [ItemRecord],
+                    dst_idx: usize,
+                ) {
+                    let origin_item = src_items[src_idx].clone();
+                    let dest_item = dst_items[dst_idx].clone();
 
                     if dest_item.item_id > 0
                         && origin_item.item_id > 0
                         && dest_item.item_id == origin_item.item_id
                     {
-                        // Same item: stack them (merge amounts)
-                        let mut merged = dest_item.clone();
+                        let mut merged = dest_item;
                         merged.amount += origin_item.amount;
-                        character.inventory.items[dest_idx] = merged;
-                        character.inventory.items[origin_idx] = ItemRecord::default();
+                        dst_items[dst_idx] = merged;
+                        src_items[src_idx] = ItemRecord::default();
                     } else {
-                        // Different items: swap
-                        character.inventory.items[origin_idx] = dest_item;
-                        character.inventory.items[dest_idx] = origin_item;
+                        src_items[src_idx] = dest_item;
+                        dst_items[dst_idx] = origin_item;
                     }
+                }
 
+                // Same-tab move: swap via indices without double borrow
+                fn swap_within(items: &mut [ItemRecord], a: usize, b: usize) {
+                    if a >= items.len() || b >= items.len() { return; }
+                    let origin = items[a].clone();
+                    let dest = items[b].clone();
+                    if dest.item_id > 0 && origin.item_id > 0 && dest.item_id == origin.item_id {
+                        let mut merged = dest;
+                        merged.amount += origin.amount;
+                        items[b] = merged;
+                        items[a] = ItemRecord::default();
+                    } else {
+                        items[a] = dest;
+                        items[b] = origin;
+                    }
+                }
+
+                let success = match (src_tab, dst_tab) {
+                    (TAB_INVENTORY, TAB_INVENTORY) => {
+                        let len = character.inventory.items.len();
+                        if src_idx < len && dst_idx < len {
+                            swap_within(&mut character.inventory.items, src_idx, dst_idx);
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_WAREHOUSE, TAB_WAREHOUSE) => {
+                        let len = character.warehouse.items.len();
+                        if src_idx < len && dst_idx < len {
+                            swap_within(&mut character.warehouse.items, src_idx, dst_idx);
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_INVENTORY, TAB_WAREHOUSE) => {
+                        let i_len = character.inventory.items.len();
+                        let w_len = character.warehouse.items.len();
+                        if src_idx < i_len && dst_idx < w_len {
+                            transfer_between(
+                                &mut character.inventory.items, src_idx,
+                                &mut character.warehouse.items, dst_idx,
+                            );
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_WAREHOUSE, TAB_INVENTORY) => {
+                        let w_len = character.warehouse.items.len();
+                        let i_len = character.inventory.items.len();
+                        if src_idx < w_len && dst_idx < i_len {
+                            transfer_between(
+                                &mut character.warehouse.items, src_idx,
+                                &mut character.inventory.items, dst_idx,
+                            );
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_INVENTORY, TAB_SHARESTASH) => {
+                        let aw = character.account_warehouse.as_mut();
+                        match aw {
+                            Some(aw) if src_idx < character.inventory.items.len() && dst_idx < aw.items.len() => {
+                                transfer_between(
+                                    &mut character.inventory.items, src_idx,
+                                    &mut aw.items, dst_idx,
+                                );
+                                true
+                            }
+                            _ => false,
+                        }
+                    }
+                    (TAB_SHARESTASH, TAB_INVENTORY) => {
+                        let aw = character.account_warehouse.as_mut();
+                        match aw {
+                            Some(aw) if src_idx < aw.items.len() && dst_idx < character.inventory.items.len() => {
+                                transfer_between(
+                                    &mut aw.items, src_idx,
+                                    &mut character.inventory.items, dst_idx,
+                                );
+                                true
+                            }
+                            _ => false,
+                        }
+                    }
+                    _ => false,
+                };
+
+                if success {
+                    // Persist all involved inventories unconditionally
                     self.repository
                         .update_inventory(character_id, character.inventory.clone())
                         .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+                    self.repository
+                        .update_warehouse(character_id, character.warehouse.clone())
+                        .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+                    if let Some(aw) = &character.account_warehouse {
+                        self.repository
+                            .update_account_warehouse(character_id, aw.clone())
+                            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+                    }
 
                     let mut responses = Vec::new();
                     responses.push(
@@ -496,16 +605,27 @@ impl GameApplication {
                         }
                         .encode(),
                     );
-                    responses.push(
-                        LoadInventoryPacket {
-                            inventory: character.inventory,
-                            inventory_type: InventoryType::Inventory,
-                        }
-                        .encode(),
-                    );
+                    for tab in [src_tab, dst_tab] {
+                        let (inv, ty) = match tab {
+                            TAB_INVENTORY => (&character.inventory, InventoryType::Inventory),
+                            TAB_WAREHOUSE => (&character.warehouse, InventoryType::Warehouse),
+                            TAB_SHARESTASH => (
+                                character.account_warehouse.as_ref()
+                                    .unwrap_or_else(|| unreachable!()),
+                                InventoryType::AccountWarehouse,
+                            ),
+                            _ => continue,
+                        };
+                        responses.push(
+                            LoadInventoryPacket {
+                                inventory: inv.clone(),
+                                inventory_type: ty,
+                            }
+                            .encode(),
+                        );
+                    }
                     Ok(responses)
                 } else {
-                    // Out of range: fail
                     Ok(vec![
                         ItemMoveFailPacket {
                             origin_slot,
@@ -527,75 +647,113 @@ impl GameApplication {
                     .map_err(|error| GameFlowError::Storage(error.to_string()))?
                     .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-                let origin_idx = origin_slot as usize;
-                let dest_idx = destination_slot as usize;
+                fn tab_class(sid: u16) -> u16 { sid / 1000 * 1000 }
+                fn tab_index(sid: u16) -> usize { (sid % 1000) as usize }
 
-                if origin_idx >= character.inventory.items.len()
-                    || dest_idx >= character.inventory.items.len()
-                {
-                    return Ok(vec![
-                        SplitItemPacket {
-                            origin_slot,
-                            destination_slot,
-                            amount: 0,
-                        }
-                        .encode(),
-                    ]);
-                }
+                let src_tab = tab_class(origin_slot);
+                let dst_tab = tab_class(destination_slot);
+                let src_idx = tab_index(origin_slot);
+                let dst_idx = tab_index(destination_slot);
 
-                let source_item = character.inventory.items[origin_idx].clone();
-                let dest_item = character.inventory.items[dest_idx].clone();
+                fn split_within(items: &mut [ItemRecord], src: usize, dst: usize, amt: i32) -> bool {
+                    if src >= items.len() || dst >= items.len() { return false; }
+                    let source = items[src].clone();
+                    let dest = items[dst].clone();
+                    if source.item_id <= 0 || source.amount < amt { return false; }
+                    if dest.item_id > 0 && dest.item_id != source.item_id { return false; }
 
-                // Validate source has enough
-                if source_item.item_id <= 0 || source_item.amount < amount as i32 {
-                    return Ok(vec![
-                        SplitItemPacket {
-                            origin_slot,
-                            destination_slot,
-                            amount: 0,
-                        }
-                        .encode(),
-                    ]);
-                }
-
-                if dest_item.item_id > 0 {
-                    // Destination already has an item - must be same type to stack
-                    if dest_item.item_id != source_item.item_id {
-                        return Ok(vec![
-                            SplitItemPacket {
-                                origin_slot,
-                                destination_slot,
-                                amount: 0,
-                            }
-                            .encode(),
-                        ]);
+                    if dest.item_id > 0 {
+                        let mut updated = dest;
+                        updated.amount += amt;
+                        updated.sync_record();
+                        items[dst] = updated;
+                    } else {
+                        let mut new_item = source.clone();
+                        new_item.amount = amt;
+                        new_item.sync_record();
+                        items[dst] = new_item;
                     }
-                    // Stack onto destination
-                    let mut updated_dest = dest_item.clone();
-                    updated_dest.amount += amount as i32;
-                    updated_dest.sync_record();
-                    character.inventory.items[dest_idx] = updated_dest;
-                } else {
-                    // Destination is empty: create new stack
-                    let mut new_item = source_item.clone();
-                    new_item.amount = amount as i32;
-                    new_item.sync_record();
-                    character.inventory.items[dest_idx] = new_item;
+
+                    let remaining = source.amount - amt;
+                    if remaining <= 0 {
+                        items[src] = ItemRecord::default();
+                    } else {
+                        let mut updated = source;
+                        updated.amount = remaining;
+                        updated.sync_record();
+                        items[src] = updated;
+                    }
+                    true
                 }
 
-                // Reduce source
-                let remaining = source_item.amount - amount as i32;
-                if remaining <= 0 {
-                    character.inventory.items[origin_idx] = ItemRecord::default();
-                } else {
-                    let mut updated_source = source_item.clone();
-                    updated_source.amount = remaining;
-                    updated_source.sync_record();
-                    character.inventory.items[origin_idx] = updated_source;
+                fn split_cross(
+                    src_items: &mut [ItemRecord], src_idx: usize,
+                    dst_items: &mut [ItemRecord], dst_idx: usize,
+                    amt: i32,
+                ) -> bool {
+                    if src_idx >= src_items.len() || dst_idx >= dst_items.len() { return false; }
+                    let source = src_items[src_idx].clone();
+                    let dest = dst_items[dst_idx].clone();
+                    if source.item_id <= 0 || source.amount < amt { return false; }
+                    if dest.item_id > 0 && dest.item_id != source.item_id { return false; }
+
+                    if dest.item_id > 0 {
+                        let mut updated = dest;
+                        updated.amount += amt;
+                        updated.sync_record();
+                        dst_items[dst_idx] = updated;
+                    } else {
+                        let mut new_item = source.clone();
+                        new_item.amount = amt;
+                        new_item.sync_record();
+                        dst_items[dst_idx] = new_item;
+                    }
+
+                    let remaining = source.amount - amt;
+                    if remaining <= 0 {
+                        src_items[src_idx] = ItemRecord::default();
+                    } else {
+                        let mut updated = source;
+                        updated.amount = remaining;
+                        updated.sync_record();
+                        src_items[src_idx] = updated;
+                    }
+                    true
                 }
 
+                let success = match (src_tab, dst_tab) {
+                    (0, 0) => split_within(&mut character.inventory.items, src_idx, dst_idx, amount as i32),
+                    (2000, 2000) => split_within(&mut character.warehouse.items, src_idx, dst_idx, amount as i32),
+                    (0, 2000) => split_cross(
+                        &mut character.inventory.items, src_idx,
+                        &mut character.warehouse.items, dst_idx,
+                        amount as i32,
+                    ),
+                    (2000, 0) => split_cross(
+                        &mut character.warehouse.items, src_idx,
+                        &mut character.inventory.items, dst_idx,
+                        amount as i32,
+                    ),
+                    _ => false,
+                };
+
+                if !success {
+                    return Ok(vec![
+                        SplitItemPacket {
+                            origin_slot,
+                            destination_slot,
+                            amount: 0,
+                        }
+                        .encode(),
+                    ]);
+                }
+
+                // Persist all involved inventories
                 self.repository
                     .update_inventory(character_id, character.inventory.clone())
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+                self.repository
+                    .update_warehouse(character_id, character.warehouse.clone())
                     .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
                 let mut responses = Vec::new();
@@ -607,13 +765,20 @@ impl GameApplication {
                     }
                     .encode(),
                 );
-                responses.push(
-                    LoadInventoryPacket {
-                        inventory: character.inventory,
-                        inventory_type: InventoryType::Inventory,
-                    }
-                    .encode(),
-                );
+                for tab in [src_tab, dst_tab] {
+                    let (inv, ty) = match tab {
+                        0 => (&character.inventory, InventoryType::Inventory),
+                        2000 => (&character.warehouse, InventoryType::Warehouse),
+                        _ => continue,
+                    };
+                    responses.push(
+                        LoadInventoryPacket {
+                            inventory: inv.clone(),
+                            inventory_type: ty,
+                        }
+                        .encode(),
+                    );
+                }
                 Ok(responses)
             }
             GameRequest::RemoveItem {
@@ -1091,6 +1256,570 @@ impl GameApplication {
                     ])
                 }
             }
+            // DigiSummonSyncRequest — empty request, respond with empty sync response
+            GameRequest::DigiSummonSyncRequest => {
+                // The client expects a DigiSummonSyncResponse (opcode 3702) with result=0 and count=0.
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::DIGI_SUMMON_SYNC_RESPONSE,
+                );
+                writer.write_u8(0); // result = 0 (success)
+                writer.write_u16(0); // product count = 0
+                Ok(vec![writer.finalize()])
+            }
+            // ChannelInfo — client echoes back the channel info sent during ComplementarInformation.
+            // No second response needed.
+            GameRequest::ChannelInfo => Ok(vec![]),
+            // Membership — client echoes back the membership packet sent during ComplementarInformation.
+            // No second response needed.
+            GameRequest::Membership => Ok(vec![]),
+            // Emoticon — client sends an emote to display
+            GameRequest::Emoticon {
+                emoticon_type,
+                value: _,
+            } => {
+                let character_id = session
+                    .character_id
+                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+                // Echo the emoticon back to the client.
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::EMOTICON,
+                );
+                writer.write_u32(character.general_handler);
+                writer.write_i32(emoticon_type);
+                Ok(vec![writer.finalize()])
+            }
+            // FriendlyInfo — client requests friendship info with a target
+            GameRequest::FriendlyInfo { target_handler: _ } => {
+                // Respond with empty friendship data — no friendship system implemented yet.
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::FRIENDLY_INFO,
+                );
+                writer.write_u32(0); // target handler
+                writer.write_i32(0); // friendship level
+                Ok(vec![writer.finalize()])
+            }
+            // FriendlyMark — client echoes back the relations packet sent during ComplementarInformation.
+            // No second response needed.
+            GameRequest::FriendlyMark => Ok(vec![]),
+            // ExtraInventory — move item from extra inventory to regular inventory
+            GameRequest::ExtraInventoryMove {
+                category: _,
+                extra_slot,
+                inventory_slot,
+            } => self.handle_extra_inventory_move(session, extra_slot, inventory_slot),
+            // ExtraInventory — batch move all items from extra to regular
+            GameRequest::ExtraInventoryBatchMove { category: _ } => {
+                self.handle_extra_inventory_batch_move(session)
+            }
+            // ExtraInventory — sort items in extra inventory
+            GameRequest::ExtraInventorySort { category: _ } => {
+                self.handle_extra_inventory_sort(session)
+            }
+            // ExtraInventory — use/consume item from extra inventory
+            GameRequest::ExtraInventoryUse {
+                category: _,
+                extra_slot,
+            } => self.handle_extra_inventory_use(session, extra_slot),
+            // ChatMessage — echo chat back to client (opcode 1006)
+            GameRequest::ChatMessage { message } => {
+                let character_id = session
+                    .character_id
+                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::CHAT_MESSAGE_RESPONSE,
+                );
+                writer.write_u8(0); // chatType: general
+                writer.write_u8(1); // flag
+                writer.write_u32(character.general_handler); // source handler
+                writer.write_string(&message); // message
+                writer.write_u8(0); // terminator
+                Ok(vec![writer.finalize()])
+            }
+            // WhisperMessage — echo whisper back to client
+            GameRequest::WhisperMessage {
+                target_name,
+                message,
+            } => {
+                let character_id = session
+                    .character_id
+                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::CHAT_MESSAGE_RESPONSE,
+                );
+                writer.write_u8(1); // chatType: whisper
+                writer.write_u8(1); // flag
+                writer.write_u8(0); // whisperResult: success
+                writer.write_string(&character.name); // sender name
+                writer.write_string(&target_name); // receiver name
+                writer.write_string(&message); // message
+                writer.write_u8(0); // terminator
+                Ok(vec![writer.finalize()])
+            }
+            // ShoutMessage — echo shout back to client
+            GameRequest::ShoutMessage { message } => {
+                let character_id = session
+                    .character_id
+                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::CHAT_MESSAGE_RESPONSE,
+                );
+                writer.write_u8(2); // chatType: shout
+                writer.write_u8(1); // flag
+                writer.write_u32(character.general_handler); // source handler
+                writer.write_string(&message); // message
+                writer.write_u8(0); // terminator
+                Ok(vec![writer.finalize()])
+            }
+            // MegaphoneMessage — echo megaphone back to client
+            GameRequest::MegaphoneMessage {
+                message,
+                item_slot: _,
+            } => {
+                let character_id = session
+                    .character_id
+                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::CHAT_MESSAGE_RESPONSE,
+                );
+                writer.write_u8(3); // chatType: megaphone
+                writer.write_u8(1); // flag
+                writer.write_u32(character.general_handler); // source handler
+                writer.write_string(&message); // message
+                writer.write_u8(0); // terminator
+                Ok(vec![writer.finalize()])
+            }
+            // TamerReaction — echo reaction back to client
+            GameRequest::TamerReaction { reaction_type } => {
+                let character_id = session
+                    .character_id
+                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::TAMER_REACTION,
+                );
+                writer.write_u32(character.general_handler); // tamer handler
+                writer.write_i32(reaction_type); // reaction type
+                Ok(vec![writer.finalize()])
+            }
+            // PartnerStop — echo partner stop to client
+            GameRequest::PartnerStop { uid: _ } => {
+                let character_id = session
+                    .character_id
+                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::PARTNER_STOP_RESPONSE,
+                );
+                writer.write_u32(character.partner_handler);
+                Ok(vec![writer.finalize()])
+            }
+            // PartnerSwitch — stub: respond with failure (full implementation needs battle tag system)
+            GameRequest::PartnerSwitch { slot: _ } => {
+                let character_id = session
+                    .character_id
+                    .ok_or(GameFlowError::Unauthenticated)?;
+                let _ = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::PARTNER_SWITCH_RESPONSE,
+                );
+                writer.write_u8(0); // failure result
+                Ok(vec![writer.finalize()])
+            }
+            // PartnerDelete — stub: respond with failure (needs secondary password validation)
+            GameRequest::PartnerDelete { slot: _, validation: _ } => {
+                let character_id = session
+                    .character_id
+                    .ok_or(GameFlowError::Unauthenticated)?;
+                let _ = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::PARTNER_DELETE_RESPONSE,
+                );
+                writer.write_u8(0); // failure result
+                Ok(vec![writer.finalize()])
+            }
+            // EvolutionUnlock — stub: respond with failure (needs evolution data)
+            GameRequest::EvolutionUnlock { evolution_type: _, inven_idx: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::EVOLUTION_UNLOCK_RESPONSE,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // RideModeStart — stub: respond with failure
+            GameRequest::RideModeStart { evolution_type: _, item_type: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::RIDE_MODE_START,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // RideModeStop — stub: no response needed
+            GameRequest::RideModeStop => Ok(vec![]),
+            // DigimonChangeName — stub: respond with failure
+            GameRequest::DigimonChangeName { inven_slot: _, new_name: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::DIGIMON_CHANGE_NAME,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // HatchInsertEgg — stub: respond with failure
+            GameRequest::HatchInsertEgg { vip: _, inven_slot: _, npc_idx: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::HATCH_FAILURE,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // HatchIncrease — stub: respond with failure
+            GameRequest::HatchIncrease { vip: _, npc_idx: _, data_level: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::HATCH_FAILURE,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // HatchFinish — stub: respond with failure
+            GameRequest::HatchFinish { vip: _, portable_pos: _, name: _, npc_idx: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::HATCH_FAILURE,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // HatchRemoveEgg — stub: no response needed
+            GameRequest::HatchRemoveEgg { vip: _, npc_idx: _ } => Ok(vec![]),
+            // HatchBackupInsert — stub: no response needed
+            GameRequest::HatchBackupInsert { vip: _, inven_slot: _, npc_idx: _ } => Ok(vec![]),
+            // HatchBackupCancel — stub: no response needed
+            GameRequest::HatchBackupCancel { vip: _, npc_idx: _ } => Ok(vec![]),
+            // IncubatorClose — stub: no response needed
+            GameRequest::IncubatorClose => Ok(vec![]),
+            // DigimonArchiveMove — stub: no response needed
+            GameRequest::DigimonArchiveMove { vip: _, slot1: _, slot2: _, npc_type: _ } => Ok(vec![]),
+            // DigimonArchiveList — stub: no response needed
+            GameRequest::DigimonArchiveList { vip: _, inven_idx: _, npc_type: _ } => Ok(vec![]),
+            // DigimonArchiveSwap — stub: no response needed
+            GameRequest::DigimonArchiveSwap { npc_idx: _, archive_type: _, src_arr: _, dst_arr: _ } => Ok(vec![]),
+            // InventorySort — stub: no response needed
+            GameRequest::InventorySort { sort_type: _ } => Ok(vec![]),
+            // ItemIdentify — stub: respond with failure
+            GameRequest::ItemIdentify { item_slot: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::ITEM_IDENTIFY,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // ItemCraft — stub: respond with failure
+            GameRequest::ItemCraft { recipe_slot: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::ITEM_CRAFT,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // ItemReroll — stub: respond with failure
+            GameRequest::ItemReroll { item_slot: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::ITEM_REROLL,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // ItemSocketIn — stub: respond with failure
+            GameRequest::ItemSocketIn { item_slot: _, socket_slot: _, chip_item_id: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::ITEM_SOCKET_IN,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // ItemSocketOut — stub: respond with failure
+            GameRequest::ItemSocketOut { item_slot: _, socket_slot: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::ITEM_SOCKET_OUT,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // ItemSocketIdentify — stub: respond with failure
+            GameRequest::ItemSocketIdentify { item_slot: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::ITEM_SOCKET_IDENTIFY,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // ItemReturn — stub: no response needed
+            GameRequest::ItemReturn { item_slot: _ } => Ok(vec![]),
+            // ItemScan — stub: no response needed
+            GameRequest::ItemScan { item_slot: _ } => Ok(vec![]),
+            // LoadGiftStorage — stub: respond with empty storage
+            GameRequest::LoadGiftStorage => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::LOAD_GIFT_STORAGE,
+                );
+                writer.write_u16(0); // count = 0
+                Ok(vec![writer.finalize()])
+            }
+            // GiftStorageRetrieve — stub: respond with failure
+            GameRequest::GiftStorageRetrieve { item_slot: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::GIFT_STORAGE_RETRIEVE,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // LoadRewardStorage — stub: respond with empty storage
+            GameRequest::LoadRewardStorage => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::LOAD_REWARD_STORAGE,
+                );
+                writer.write_u16(0); // count = 0
+                Ok(vec![writer.finalize()])
+            }
+            // RecompenseGain — stub: respond with failure
+            GameRequest::RecompenseGain { reward_id: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::RECOMPENSE_GAIN,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // TamerShopOpen — stub: no response needed
+            GameRequest::TamerShopOpen => Ok(vec![]),
+            // TamerShopClose — stub: no response needed
+            GameRequest::TamerShopClose => Ok(vec![]),
+            // TamerShopBuy — stub: respond with failure
+            GameRequest::TamerShopBuy { item_id: _, amount: _ } => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::TAMER_SHOP_BUY,
+                );
+                writer.write_u8(0); // failure
+                Ok(vec![writer.finalize()])
+            }
+            // ConsignedShopOpen — stub: respond with empty
+            GameRequest::ConsignedShopOpen => Ok(vec![]),
+            // ConsignedShopView — stub: respond with empty
+            GameRequest::ConsignedShopView { shop_id: _ } => Ok(vec![]),
+            // ConsignedShopPurchase — stub: respond with failure
+            GameRequest::ConsignedShopPurchase { item_id: _, amount: _ } => Ok(vec![]),
+            // ConsignedShopRetrieve — stub: respond with failure
+            GameRequest::ConsignedShopRetrieve { item_slot: _ } => Ok(vec![]),
+            // CashShopOpen — stub: respond with empty
+            GameRequest::CashShopOpen => Ok(vec![]),
+            // CashShopBuy — stub: respond with failure
+            GameRequest::CashShopBuy { amount: _, total_price: _, order_id: _, product_ids: _ } => Ok(vec![]),
+            // CashShopReload — stub: respond with empty
+            GameRequest::CashShopReload => Ok(vec![]),
+            // QuestAvailableList — stub: respond with empty list
+            GameRequest::QuestAvailableList => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::QUEST_AVAILABLE_LIST,
+                );
+                writer.write_u16(0); // count = 0
+                Ok(vec![writer.finalize()])
+            }
+            // QuestAccept — stub: respond with failure
+            GameRequest::QuestAccept { quest_id: _ } => Ok(vec![]),
+            // QuestDeliver — stub: respond with failure
+            GameRequest::QuestDeliver { quest_id: _ } => Ok(vec![]),
+            // QuestGiveUp — stub: respond with failure
+            GameRequest::QuestGiveUp { quest_id: _ } => Ok(vec![]),
+            // QuestUpdate — stub: respond with failure
+            GameRequest::QuestUpdate { quest_id: _, progress: _ } => Ok(vec![]),
+            // DieConfirm — stub: no response needed
+            GameRequest::DieConfirm => Ok(vec![]),
+            // RemoveBuff — stub: no response needed
+            GameRequest::RemoveBuff { buff_id: _ } => Ok(vec![]),
+            // DamageSkinChange — stub: no response needed
+            GameRequest::DamageSkinChange { skin_id: _ } => Ok(vec![]),
+            // SealOpen — stub: no response needed
+            GameRequest::SealOpen { seal_idx: _ } => Ok(vec![]),
+            // SealClose — stub: no response needed
+            GameRequest::SealClose { seal_idx: _ } => Ok(vec![]),
+            // SealSetLeader — stub: no response needed
+            GameRequest::SealSetLeader { card_code: _ } => Ok(vec![]),
+            // SealRemoveLeader — stub: no response needed
+            GameRequest::SealRemoveLeader => Ok(vec![]),
+            // SealSetFavorite — stub: no response needed
+            GameRequest::SealSetFavorite { card_code: _, bookmark: _ } => Ok(vec![]),
+            // EncyclopediaLoad — stub: respond with empty
+            GameRequest::EncyclopediaLoad => {
+                let mut writer = odmo_protocol::writer::PacketWriter::new(
+                    odmo_protocol::opcode::game::ENCYCLOPEDIA_LOAD,
+                );
+                writer.write_u8(0); // count = 0
+                Ok(vec![writer.finalize()])
+            }
+            // EncyclopediaGetReward — stub: no response needed
+            GameRequest::EncyclopediaGetReward { digimon_id: _ } => Ok(vec![]),
+            // EncyclopediaDeckBuff — stub: no response needed
+            GameRequest::EncyclopediaDeckBuff { deck_idx: _ } => Ok(vec![]),
+            // ArenaDailyPoints — stub: no response needed
+            GameRequest::ArenaDailyPoints { item_slot: _, points: _, item_id: _ } => Ok(vec![]),
+            // ArenaDailyRanking — stub: no response needed
+            GameRequest::ArenaDailyRanking => Ok(vec![]),
+            // ArenaRankingAll — stub: no response needed
+            GameRequest::ArenaRankingAll { ranking_type: _ } => Ok(vec![]),
+            // ArenaRequestRank — stub: no response needed
+            GameRequest::ArenaRequestRank { ranking_type: _ } => Ok(vec![]),
+            // ArenaRequestOldRank — stub: no response needed
+            GameRequest::ArenaRequestOldRank { ranking_type: _ } => Ok(vec![]),
+            // DungeonNextStage — stub: no response needed
+            GameRequest::DungeonNextStage => Ok(vec![]),
+            // DungeonSurrender — stub: no response needed
+            GameRequest::DungeonSurrender => Ok(vec![]),
+            // BurningEvent — stub: no response needed
+            GameRequest::BurningEvent => Ok(vec![]),
+            // DailyCheckEvent — stub: no response needed
+            GameRequest::DailyCheckEvent => Ok(vec![]),
+            // DailyCheckEventRequest — stub: no response needed
+            GameRequest::DailyCheckEventRequest { event_no: _ } => Ok(vec![]),
+            // JoinEventQueue — stub: no response needed
+            GameRequest::JoinEventQueue { event_id: _ } => Ok(vec![]),
+            // RegionUnlock — stub: no response needed
+            GameRequest::RegionUnlock { region_idx: _ } => Ok(vec![]),
+            // SetTitle — stub: no response needed
+            GameRequest::SetTitle { title_id: _ } => Ok(vec![]),
+            // ChangeTamerModel — stub: no response needed
+            GameRequest::ChangeTamerModel { model_id: _ } => Ok(vec![]),
+            // TamerNameChange — stub: no response needed
+            GameRequest::TamerNameChange { new_name: _ } => Ok(vec![]),
+            // RareMachineOpen — stub: no response needed
+            GameRequest::RareMachineOpen { npc_idx: _ } => Ok(vec![]),
+            // RareMachineRun — stub: no response needed
+            GameRequest::RareMachineRun { npc_idx: _, inven_idx: _, reset_count: _ } => Ok(vec![]),
+            // Party stubs
+            GameRequest::PartyInvite { target_handler: _ } => Ok(vec![]),
+            GameRequest::PartyInviteResponse { inviter_handler: _, accepted: _ } => Ok(vec![]),
+            GameRequest::PartyChat { message: _ } => Ok(vec![]),
+            GameRequest::PartyKick { member_slot: _ } => Ok(vec![]),
+            GameRequest::PartyLeave => Ok(vec![]),
+            GameRequest::PartyChangeMaster { new_leader_slot: _ } => Ok(vec![]),
+            GameRequest::PartyChangeLoot { loot_type: _ } => Ok(vec![]),
+            GameRequest::PartyDismiss => Ok(vec![]),
+            // Guild stubs
+            GameRequest::GuildCreate { guild_name: _ } => Ok(vec![]),
+            GameRequest::GuildDelete => Ok(vec![]),
+            GameRequest::GuildInvite { target_name: _ } => Ok(vec![]),
+            GameRequest::GuildInviteAccept { guild_id: _ } => Ok(vec![]),
+            GameRequest::GuildInviteDeny { guild_id: _ } => Ok(vec![]),
+            GameRequest::GuildKick { member_id: _ } => Ok(vec![]),
+            GameRequest::GuildLeave => Ok(vec![]),
+            GameRequest::GuildMessage { message: _ } => Ok(vec![]),
+            GameRequest::GuildNotice { notice: _ } => Ok(vec![]),
+            GameRequest::GuildHistory => Ok(vec![]),
+            GameRequest::GuildSetTitle { member_id: _, title: _ } => Ok(vec![]),
+            // Trade stubs
+            GameRequest::TradeRequest { target_handler: _ } => Ok(vec![]),
+            GameRequest::TradeAccept { accepter_handler: _ } => Ok(vec![]),
+            GameRequest::TradeCancel => Ok(vec![]),
+            GameRequest::TradeAddItem { item_slot: _, trade_slot: _ } => Ok(vec![]),
+            GameRequest::TradeRemoveItem { trade_slot: _ } => Ok(vec![]),
+            GameRequest::TradeAddMoney { amount: _ } => Ok(vec![]),
+            GameRequest::TradeConfirm => Ok(vec![]),
+            GameRequest::TradeLock => Ok(vec![]),
+            GameRequest::TradeUnlock => Ok(vec![]),
+            // Season Pass stubs
+            GameRequest::SeasonPassDetails => Ok(vec![]),
+            GameRequest::SeasonPassPurchaseExp { purchase_count: _ } => Ok(vec![]),
+            GameRequest::SeasonPassMissionReward { mission_id: _ } => Ok(vec![]),
+            GameRequest::SeasonPassSeasonReward { level: _ } => Ok(vec![]),
+            // Channel stubs
+            GameRequest::ChangeChannel { channel: _ } => Ok(vec![]),
+            GameRequest::ChannelSwitchConfirm => Ok(vec![]),
+            // Shop stubs
+            GameRequest::TamerShopList => Ok(vec![]),
+            GameRequest::ConsignedWarehouse => Ok(vec![]),
+            GameRequest::ConsignedWarehouseRetrieve { item_slot: _ } => Ok(vec![]),
+            GameRequest::CashShopBuyHistory => Ok(vec![]),
+            // Friend stubs
+            GameRequest::AddFriend { friend_name: _ } => Ok(vec![]),
+            GameRequest::FriendList => Ok(vec![]),
+            // Guild authority stubs
+            GameRequest::GuildAuthorityMaster { member_id: _ } => Ok(vec![]),
+            GameRequest::GuildAuthoritySubMaster { member_id: _ } => Ok(vec![]),
+            GameRequest::GuildAuthorityMember { member_id: _ } => Ok(vec![]),
+            GameRequest::GuildAuthorityNewMember { member_id: _ } => Ok(vec![]),
+            GameRequest::GuildAuthorityDats { member_id: _ } => Ok(vec![]),
+            // Hatch/Digimon stubs
+            GameRequest::HatchSpiritEvolution { model_id: _, name: _, npc_id: _ } => Ok(vec![]),
+            GameRequest::DigiSummonPurchase { npc_idx: _ } => Ok(vec![]),
+            // Warehouse stubs
+            GameRequest::LoadAccountWarehouse => Ok(vec![]),
+            GameRequest::RetrieveAccountWarehouse { item_slot: _ } => Ok(vec![]),
+            // Extra inventory stubs
+            GameRequest::ExtraInventoryCategoryRefresh { category: _ } => Ok(vec![]),
+            GameRequest::ExtraInventoryMove { category: _, extra_slot: _, inventory_slot: _ } => Ok(vec![]),
+            GameRequest::ExtraInventorySort { category: _ } => Ok(vec![]),
+            // Party extra stubs
+            GameRequest::PartyConfigChange { loot_type: _ } => Ok(vec![]),
+            GameRequest::PartyMemberDisconnect => Ok(vec![]),
+            // Combat/Tamer stubs
+            GameRequest::MonsterRespawnTimer => Ok(vec![]),
+            GameRequest::JumpBooster => Ok(vec![]),
+            GameRequest::SkillLevelUp { uid: _, evo_unit_idx: _, skill_idx: _ } => Ok(vec![]),
+            GameRequest::TamerChargeXCrystal => Ok(vec![]),
+            GameRequest::TamerConsumeXCrystal { amount: _ } => Ok(vec![]),
+            GameRequest::TamerSummon { target_name: _ } => Ok(vec![]),
+            GameRequest::TamerSkillRequest { skill_idx: _, target_uid: _ } => Ok(vec![]),
+            GameRequest::TranscendenceReceiveExp => Ok(vec![]),
+            GameRequest::TranscendenceSuccess => Ok(vec![]),
+            GameRequest::TimeChargeResult { charge_type: _ } => Ok(vec![]),
+            GameRequest::WarpGateDungeon => Ok(vec![]),
+            GameRequest::SpiritCraft { model_id: _, name: _, npc_id: _ } => Ok(vec![])
         }?;
 
         responses.extend(request_responses);
@@ -1116,6 +1845,242 @@ impl GameApplication {
             .map_err(|error| GameFlowError::PortalBridge(error.to_string()))?;
 
         Ok(())
+    }
+
+    fn handle_extra_inventory_move(
+        &self,
+        session: &GameSession,
+        extra_slot: u16,
+        inventory_slot: u16,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        let ext_idx = extra_slot as usize;
+        let inv_idx = inventory_slot as usize;
+
+        if ext_idx >= character.extra_inventory.items.len()
+            || inv_idx >= character.inventory.items.len()
+        {
+            return Ok(vec![LoadInventoryPacket {
+                inventory: character.extra_inventory,
+                inventory_type: InventoryType::ExtraInventory,
+            }
+            .encode()]);
+        }
+
+        let source_item = character.extra_inventory.items[ext_idx].clone();
+        if source_item.item_id <= 0 || source_item.amount <= 0 {
+            return Ok(vec![LoadInventoryPacket {
+                inventory: character.extra_inventory,
+                inventory_type: InventoryType::ExtraInventory,
+            }
+            .encode()]);
+        }
+
+        let dest_item = character.inventory.items[inv_idx].clone();
+        if dest_item.item_id > 0 && dest_item.item_id == source_item.item_id {
+            let mut merged = dest_item.clone();
+            merged.amount = merged.amount.saturating_add(source_item.amount);
+            merged.sync_record();
+            character.inventory.items[inv_idx] = merged;
+            character.extra_inventory.items[ext_idx] = ItemRecord::default();
+        } else if dest_item.item_id > 0 {
+            character.inventory.items[inv_idx] = source_item;
+            character.extra_inventory.items[ext_idx] = dest_item;
+        } else {
+            character.inventory.items[inv_idx] = source_item;
+            character.extra_inventory.items[ext_idx] = ItemRecord::default();
+        }
+
+        self.repository
+            .update_extra_inventory(character_id, character.extra_inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        self.repository
+            .update_inventory(character_id, character.inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let updated = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        Ok(vec![
+            LoadInventoryPacket {
+                inventory: updated.inventory,
+                inventory_type: InventoryType::Inventory,
+            }
+            .encode(),
+            LoadInventoryPacket {
+                inventory: updated.extra_inventory,
+                inventory_type: InventoryType::ExtraInventory,
+            }
+            .encode(),
+        ])
+    }
+
+    fn handle_extra_inventory_batch_move(
+        &self,
+        session: &GameSession,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        for i in 0..character.extra_inventory.items.len() {
+            let item = character.extra_inventory.items[i].clone();
+            if item.item_id <= 0 || item.amount <= 0 {
+                continue;
+            }
+
+            let mut placed = false;
+            for j in 0..character.inventory.items.len() {
+                let existing = &character.inventory.items[j];
+                if existing.item_id == item.item_id && existing.amount > 0 {
+                    let mut merged = existing.clone();
+                    merged.amount = merged.amount.saturating_add(item.amount);
+                    merged.sync_record();
+                    character.inventory.items[j] = merged;
+                    character.extra_inventory.items[i] = ItemRecord::default();
+                    placed = true;
+                    break;
+                }
+            }
+
+            if !placed {
+                for j in 0..character.inventory.items.len() {
+                    if character.inventory.items[j].item_id <= 0
+                        || character.inventory.items[j].amount <= 0
+                    {
+                        character.inventory.items[j] = item;
+                        character.extra_inventory.items[i] = ItemRecord::default();
+                        break;
+                    }
+                }
+            }
+        }
+
+        self.repository
+            .update_extra_inventory(character_id, character.extra_inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        self.repository
+            .update_inventory(character_id, character.inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let updated = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        Ok(vec![LoadInventoryPacket {
+            inventory: updated.extra_inventory,
+            inventory_type: InventoryType::ExtraInventory,
+        }
+        .encode()])
+    }
+
+    fn handle_extra_inventory_sort(
+        &self,
+        session: &GameSession,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        let mut items: Vec<ItemRecord> = character
+            .extra_inventory
+            .items
+            .iter()
+            .filter(|item| item.item_id > 0 && item.amount > 0)
+            .cloned()
+            .collect();
+        items.sort_by_key(|item| item.item_id);
+
+        let empty_count = character.extra_inventory.items.len() - items.len();
+        items.resize(items.len() + empty_count, ItemRecord::default());
+
+        character.extra_inventory.items = items;
+
+        self.repository
+            .update_extra_inventory(character_id, character.extra_inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        Ok(vec![LoadInventoryPacket {
+            inventory: character.extra_inventory,
+            inventory_type: InventoryType::ExtraInventory,
+        }
+        .encode()])
+    }
+
+    fn handle_extra_inventory_use(
+        &self,
+        session: &GameSession,
+        extra_slot: u16,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        let ext_idx = extra_slot as usize;
+        if ext_idx >= character.extra_inventory.items.len() {
+            return Ok(vec![LoadInventoryPacket {
+                inventory: character.extra_inventory,
+                inventory_type: InventoryType::ExtraInventory,
+            }
+            .encode()]);
+        }
+
+        let item = &character.extra_inventory.items[ext_idx];
+        if item.item_id <= 0 || item.amount <= 0 {
+            return Ok(vec![LoadInventoryPacket {
+                inventory: character.extra_inventory,
+                inventory_type: InventoryType::ExtraInventory,
+            }
+            .encode()]);
+        }
+
+        let new_amount = item.amount - 1;
+        if new_amount <= 0 {
+            character.extra_inventory.items[ext_idx] = ItemRecord::default();
+        } else {
+            let mut updated = item.clone();
+            updated.amount = new_amount;
+            updated.sync_record();
+            character.extra_inventory.items[ext_idx] = updated;
+        }
+
+        self.repository
+            .update_extra_inventory(character_id, character.extra_inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let updated = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        Ok(vec![
+            LoadInventoryPacket {
+                inventory: updated.extra_inventory,
+                inventory_type: InventoryType::ExtraInventory,
+            }
+            .encode(),
+        ])
     }
 
     fn drain_social_notifications(&self, session: &GameSession) -> anyhow::Result<Vec<Vec<u8>>> {
@@ -1800,6 +2765,27 @@ mod tests {
         ) -> anyhow::Result<()> {
             unreachable!()
         }
+        fn update_extra_inventory(
+            &self,
+            _character_id: u64,
+            _extra_inventory: odmo_types::InventorySnapshot,
+        ) -> anyhow::Result<()> {
+            unreachable!()
+        }
+        fn update_warehouse(
+            &self,
+            _character_id: u64,
+            _warehouse: odmo_types::InventorySnapshot,
+        ) -> anyhow::Result<()> {
+            unreachable!()
+        }
+        fn update_account_warehouse(
+            &self,
+            _character_id: u64,
+            _account_warehouse: odmo_types::InventorySnapshot,
+        ) -> anyhow::Result<()> {
+            unreachable!()
+        }
     }
 
     impl PortalRepository for InMemoryCharacterRepository {
@@ -1958,7 +2944,7 @@ mod tests {
     #[test]
     fn initial_information_returns_bootstrap_packet() {
         let portal_state_dir = unique_test_dir("with-ticket");
-        let bridge = PortalBridge::new(portal_state_dir.clone()).expect("bridge");
+        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge");
         bridge
             .store_game_session_ticket(&GameSessionTicket {
                 token: "demo".to_string(),
@@ -1987,7 +2973,7 @@ mod tests {
     #[test]
     fn complementar_information_returns_follow_up_packets() {
         let portal_state_dir = unique_test_dir("complementary");
-        let bridge = PortalBridge::new(portal_state_dir.clone()).expect("bridge");
+        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge");
         bridge
             .store_game_session_ticket(&GameSessionTicket {
                 token: "demo".to_string(),
@@ -2094,7 +3080,7 @@ mod tests {
     #[test]
     fn complementar_information_enqueues_friend_connect_for_friended_characters() {
         let portal_state_dir = unique_test_dir("friend-connect");
-        let bridge = PortalBridge::new(portal_state_dir.clone()).expect("bridge");
+        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge");
         bridge
             .store_game_session_ticket(&GameSessionTicket {
                 token: "demo".to_string(),
@@ -2170,7 +3156,7 @@ mod tests {
     #[test]
     fn disconnect_enqueues_unload_for_remaining_map_occupants() {
         let portal_state_dir = unique_test_dir("map-unload");
-        let bridge = PortalBridge::new(portal_state_dir.clone()).expect("bridge");
+        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge");
         bridge
             .store_game_session_ticket(&GameSessionTicket {
                 token: "demo".to_string(),
@@ -2244,7 +3230,7 @@ mod tests {
     #[test]
     fn keep_connection_unloads_tamers_that_moved_out_of_visibility_range() {
         let portal_state_dir = unique_test_dir("distance-hide");
-        let bridge = PortalBridge::new(portal_state_dir.clone()).expect("bridge");
+        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge");
         bridge
             .upsert_map_presence(&CharacterSummary {
                 id: 300,
@@ -2309,7 +3295,7 @@ mod tests {
     #[test]
     fn complementar_information_loads_visible_mobs() {
         let portal_state_dir = unique_test_dir("mob-load");
-        let bridge = PortalBridge::new(portal_state_dir.clone()).expect("bridge");
+        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge");
         bridge
             .store_game_session_ticket(&GameSessionTicket {
                 token: "demo".to_string(),
@@ -2417,7 +3403,7 @@ mod tests {
     #[test]
     fn complementar_information_loads_visible_drops() {
         let portal_state_dir = unique_test_dir("drop-load");
-        let bridge = PortalBridge::new(portal_state_dir.clone()).expect("bridge");
+        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge");
         bridge
             .store_game_session_ticket(&GameSessionTicket {
                 token: "demo".to_string(),

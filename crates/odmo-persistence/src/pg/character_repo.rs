@@ -54,7 +54,7 @@ pub(crate) struct CharacterDb {
     pub server_experience: i32,
     pub premium: i32,
     pub silk: i32,
-    pub membership_seconds: i32,
+    pub membership_seconds: i64,
 }
 
 const SELECT_COLS: &str = "\
@@ -308,6 +308,8 @@ impl CharacterRepository for PgRepository {
             let partner_handler = general_handler + 10_000;
 
             let default_inv = serde_json::json!({"bits": 0, "size": 30, "items": []});
+            let default_warehouse = serde_json::json!({"bits": 0, "size": 21, "items": []});
+            let default_account_warehouse = serde_json::json!({"bits": 0, "size": 14, "items": []});
             let default_seals = serde_json::json!({"seal_leader_id": 0, "seals": []});
             let default_channels = serde_json::json!([{"channel": 0, "load": 1}]);
 
@@ -319,9 +321,9 @@ impl CharacterRepository for PgRepository {
                  channel, current_condition, \
                  general_handler, partner_handler, \
                  partner_name, partner_model, bits, xgauge, xcrystals, \
-                 inventory, warehouse, extra_inventory, \
+                 inventory, warehouse, extra_inventory, account_warehouse, \
                  seal_list, available_channels) \
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)",
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)",
             )
             .bind(account_id as i64)
             .bind(slot as i16)
@@ -343,8 +345,9 @@ impl CharacterRepository for PgRepository {
             .bind(0i16)
             .bind(0i16)
             .bind(&default_inv)
+            .bind(&default_warehouse)
             .bind(&default_inv)
-            .bind(&default_inv)
+            .bind(&default_account_warehouse)
             .bind(&default_seals)
             .bind(&default_channels)
             .execute(&pool)
@@ -454,6 +457,57 @@ impl CharacterRepository for PgRepository {
         self.block_on(async move {
             sqlx::query("UPDATE characters SET inventory = $1 WHERE id = $2")
                 .bind(&inventory_json)
+                .bind(character_id as i64)
+                .execute(&pool)
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn update_extra_inventory(
+        &self,
+        character_id: u64,
+        extra_inventory: odmo_types::InventorySnapshot,
+    ) -> anyhow::Result<()> {
+        let extra_inventory_json = serde_json::to_value(&extra_inventory)?;
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            sqlx::query("UPDATE characters SET extra_inventory = $1 WHERE id = $2")
+                .bind(&extra_inventory_json)
+                .bind(character_id as i64)
+                .execute(&pool)
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn update_warehouse(
+        &self,
+        character_id: u64,
+        warehouse: odmo_types::InventorySnapshot,
+    ) -> anyhow::Result<()> {
+        let warehouse_json = serde_json::to_value(&warehouse)?;
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            sqlx::query("UPDATE characters SET warehouse = $1 WHERE id = $2")
+                .bind(&warehouse_json)
+                .bind(character_id as i64)
+                .execute(&pool)
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn update_account_warehouse(
+        &self,
+        character_id: u64,
+        account_warehouse: odmo_types::InventorySnapshot,
+    ) -> anyhow::Result<()> {
+        let aw_json = serde_json::to_value(&account_warehouse)?;
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            sqlx::query("UPDATE characters SET account_warehouse = $1 WHERE id = $2")
+                .bind(&aw_json)
                 .bind(character_id as i64)
                 .execute(&pool)
                 .await?;
