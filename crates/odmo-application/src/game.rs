@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     path::PathBuf,
     sync::{
-        Arc,
+        Arc, RwLock,
         atomic::{AtomicI16, Ordering},
     },
     time::{SystemTime, UNIX_EPOCH},
@@ -11,16 +11,22 @@ use std::{
 use thiserror::Error;
 
 use odmo_protocol::{
-    AvailableChannelsPacket, CashShopCoinsPacket, DigimonWalkPacket, FriendConnectPacket,
+    AvailableChannelsPacket, CashShopCoinsPacket, DigimonEvolutionFailPacket, DigimonWalkPacket,
     GameConnectionPacket, GameInitialInfoPacket, GameRequest, GuildHistoricPacket,
-    GuildInformationPacket, GuildRankPacket, InventoryType, ItemConsumeFailPacket,
-    ItemMoveFailPacket, ItemMoveSuccessPacket, LoadBuffsPacket, LoadDropsPacket,
-    LoadInventoryPacket, LoadMobBuffsPacket, LoadMobsPacket, LoadTamerPacket, LocalMapSwapPacket,
-    MapSwapPacket, MembershipPacket, NpcPurchaseResultPacket, NpcSellResultPacket, PickBitsPacket,
+    GuildInformationPacket, InventoryType, ItemConsumeFailPacket, ItemMoveFailPacket,
+    ItemMoveSuccessPacket, LoadBuffsPacket, LoadDropsPacket, LoadInventoryPacket,
+    LoadMobBuffsPacket, LoadMobsPacket, LoadTamerPacket, LocalMapSwapPacket, MapSwapPacket,
+    MembershipPacket, NpcPurchaseResultPacket, NpcSellResultPacket, PartnerSwitchFailurePacket,
+    PartnerSwitchPacket, PartyChangeLootTypePacket, PartyCreatedPacket, PartyInvitePacket,
+    PartyInviteResultPacket, PartyJoinPacket, PartyKickPacket, PartyLeaderChangedPacket,
+    PartyLeavePacket, PartyMemberBuffChangePacket, PartyMemberBuffEntry,
+    PartyMemberDisconnectedPacket, PartyMemberInfoPacket, PartyMemberListEntry,
+    PartyMemberListPacket, PartyMemberMapChangePacket, PartyMemberPositionPacket, PickBitsPacket,
     PickItemFailPacket, PickItemFailReason, PickItemPacket, SealsPacket, ServerExperiencePacket,
     SplitItemPacket, TamerAttendancePacket, TamerRelationsPacket, TamerWalkPacket,
     TamerXaiResourcesPacket, TimeRewardPacket, UnloadDropsPacket, UnloadMobsPacket,
     UnloadTamerPacket, UpdateMovementSpeedPacket, UpdateStatusPacket, XaiInfoPacket,
+    game::{FriendConnectPacket, GuildRankPacket, SkillUpdateCooldownPacket},
 };
 use odmo_types::{AccountId, ItemRecord};
 
@@ -32,6 +38,46 @@ use crate::{
 const HANDSHAKE_DEGREE: i16 = 32321;
 const START_TO_SEE_DISTANCE: i64 = 18_000;
 const STOP_SEEING_DISTANCE: i64 = 18_001;
+const PARTY_INVITE_IMPOSSIBLE: i32 = -3;
+const PARTY_INVITE_OFFLINE: i32 = -2;
+const PARTY_INVITE_REJECTED: i32 = -1;
+const PARTY_INVITE_ALREADY_IN_PARTY: i32 = 0;
+const PARTY_INVITE_ACCEPTED: i32 = 1;
+
+#[derive(Debug, Clone)]
+struct PendingPartyInvite {
+    inviter_id: u64,
+    target_id: u64,
+}
+
+#[derive(Debug, Clone)]
+struct PartyRuntimeState {
+    next_party_id: u32,
+    pending_invites: HashMap<u64, PendingPartyInvite>,
+    parties: HashMap<u32, PartyGroup>,
+    party_by_member: HashMap<u64, u32>,
+}
+
+impl Default for PartyRuntimeState {
+    fn default() -> Self {
+        Self {
+            next_party_id: 1,
+            pending_invites: HashMap::new(),
+            parties: HashMap::new(),
+            party_by_member: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct PartyGroup {
+    id: u32,
+    leader_id: u64,
+    loot_type: u32,
+    rare_rate: u8,
+    disp_rare_grade: u8,
+    members: Vec<u64>,
+}
 
 #[derive(Debug, Clone)]
 pub struct GameServiceConfig {
@@ -153,18 +199,20 @@ pub struct GameApplication {
     portal_bridge: PortalBridge,
     repository: Arc<dyn GameRepository>,
     broadcast: Option<Arc<dyn crate::BroadcastSink>>,
+    party_runtime: Arc<RwLock<PartyRuntimeState>>,
     game_server_address: String,
     game_server_port: i32,
 }
 
 impl GameApplication {
     pub fn new(config: GameServiceConfig, repository: Arc<dyn GameRepository>) -> Self {
-        let portal_bridge =
-            PortalBridge::from_json(config.portal_state_dir).expect("portal bridge should initialize");
+        let portal_bridge = PortalBridge::from_json(config.portal_state_dir)
+            .expect("portal bridge should initialize");
         Self {
             portal_bridge,
             repository,
             broadcast: None,
+            party_runtime: Arc::new(RwLock::new(PartyRuntimeState::default())),
             game_server_address: "127.0.0.1".to_string(),
             game_server_port: 7003,
         }
@@ -308,6 +356,16 @@ impl GameApplication {
                     );
                 }
 
+                // Send skill cooldowns for partner digimon (empty until skill system is implemented)
+                responses.push(
+                    SkillUpdateCooldownPacket {
+                        handler: character.partner_handler as i32,
+                        current_type: character.partner_model as i32,
+                        cooldowns: vec![],
+                    }
+                    .encode(),
+                );
+
                 if character.xai.as_ref().is_some_and(|xai| xai.item_id > 0) {
                     responses.push(
                         XaiInfoPacket {
@@ -353,6 +411,21 @@ impl GameApplication {
                         .map_err(|error| GameFlowError::PortalBridge(error.to_string()))?;
                     session.announced_friend_connect = true;
                 }
+
+                // Unlock map region (non-blocking, best-effort)
+                let _ = self.repository.update_character_map_region(
+                    character_id,
+                    character.map_id,
+                    true,
+                );
+
+                // Mark character state as Ready (non-blocking)
+                let _ = self.repository.update_character_state(character_id, 1);
+
+                // Update welcome flag to false (non-blocking)
+                let _ = self
+                    .repository
+                    .update_welcome_flag(session.account_id.unwrap_or(0), false);
 
                 responses.extend(
                     self.register_map_presence(session, &character)
@@ -438,6 +511,7 @@ impl GameApplication {
 
                 // If item was a consumable that affects HP/DS (type check would need asset data),
                 // send UpdateStatusPacket
+                self.broadcast_party_member_info(&updated_character);
                 responses.push(
                     UpdateStatusPacket {
                         character: updated_character,
@@ -461,8 +535,12 @@ impl GameApplication {
                 const TAB_INVENTORY: u16 = 0;
                 const TAB_WAREHOUSE: u16 = 2000;
                 const TAB_SHARESTASH: u16 = 9000;
-                fn tab_class(sid: u16) -> u16 { sid / 1000 * 1000 }
-                fn tab_index(sid: u16) -> usize { (sid % 1000) as usize }
+                fn tab_class(sid: u16) -> u16 {
+                    sid / 1000 * 1000
+                }
+                fn tab_index(sid: u16) -> usize {
+                    (sid % 1000) as usize
+                }
 
                 let src_tab = tab_class(origin_slot);
                 let dst_tab = tab_class(destination_slot);
@@ -495,7 +573,9 @@ impl GameApplication {
 
                 // Same-tab move: swap via indices without double borrow
                 fn swap_within(items: &mut [ItemRecord], a: usize, b: usize) {
-                    if a >= items.len() || b >= items.len() { return; }
+                    if a >= items.len() || b >= items.len() {
+                        return;
+                    }
                     let origin = items[a].clone();
                     let dest = items[b].clone();
                     if dest.item_id > 0 && origin.item_id > 0 && dest.item_id == origin.item_id {
@@ -533,8 +613,10 @@ impl GameApplication {
                         let w_len = character.warehouse.items.len();
                         if src_idx < i_len && dst_idx < w_len {
                             transfer_between(
-                                &mut character.inventory.items, src_idx,
-                                &mut character.warehouse.items, dst_idx,
+                                &mut character.inventory.items,
+                                src_idx,
+                                &mut character.warehouse.items,
+                                dst_idx,
                             );
                             true
                         } else {
@@ -546,8 +628,10 @@ impl GameApplication {
                         let i_len = character.inventory.items.len();
                         if src_idx < w_len && dst_idx < i_len {
                             transfer_between(
-                                &mut character.warehouse.items, src_idx,
-                                &mut character.inventory.items, dst_idx,
+                                &mut character.warehouse.items,
+                                src_idx,
+                                &mut character.inventory.items,
+                                dst_idx,
                             );
                             true
                         } else {
@@ -557,10 +641,15 @@ impl GameApplication {
                     (TAB_INVENTORY, TAB_SHARESTASH) => {
                         let aw = character.account_warehouse.as_mut();
                         match aw {
-                            Some(aw) if src_idx < character.inventory.items.len() && dst_idx < aw.items.len() => {
+                            Some(aw)
+                                if src_idx < character.inventory.items.len()
+                                    && dst_idx < aw.items.len() =>
+                            {
                                 transfer_between(
-                                    &mut character.inventory.items, src_idx,
-                                    &mut aw.items, dst_idx,
+                                    &mut character.inventory.items,
+                                    src_idx,
+                                    &mut aw.items,
+                                    dst_idx,
                                 );
                                 true
                             }
@@ -570,10 +659,15 @@ impl GameApplication {
                     (TAB_SHARESTASH, TAB_INVENTORY) => {
                         let aw = character.account_warehouse.as_mut();
                         match aw {
-                            Some(aw) if src_idx < aw.items.len() && dst_idx < character.inventory.items.len() => {
+                            Some(aw)
+                                if src_idx < aw.items.len()
+                                    && dst_idx < character.inventory.items.len() =>
+                            {
                                 transfer_between(
-                                    &mut aw.items, src_idx,
-                                    &mut character.inventory.items, dst_idx,
+                                    &mut aw.items,
+                                    src_idx,
+                                    &mut character.inventory.items,
+                                    dst_idx,
                                 );
                                 true
                             }
@@ -610,7 +704,9 @@ impl GameApplication {
                             TAB_INVENTORY => (&character.inventory, InventoryType::Inventory),
                             TAB_WAREHOUSE => (&character.warehouse, InventoryType::Warehouse),
                             TAB_SHARESTASH => (
-                                character.account_warehouse.as_ref()
+                                character
+                                    .account_warehouse
+                                    .as_ref()
                                     .unwrap_or_else(|| unreachable!()),
                                 InventoryType::AccountWarehouse,
                             ),
@@ -647,20 +743,35 @@ impl GameApplication {
                     .map_err(|error| GameFlowError::Storage(error.to_string()))?
                     .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-                fn tab_class(sid: u16) -> u16 { sid / 1000 * 1000 }
-                fn tab_index(sid: u16) -> usize { (sid % 1000) as usize }
+                fn tab_class(sid: u16) -> u16 {
+                    sid / 1000 * 1000
+                }
+                fn tab_index(sid: u16) -> usize {
+                    (sid % 1000) as usize
+                }
 
                 let src_tab = tab_class(origin_slot);
                 let dst_tab = tab_class(destination_slot);
                 let src_idx = tab_index(origin_slot);
                 let dst_idx = tab_index(destination_slot);
 
-                fn split_within(items: &mut [ItemRecord], src: usize, dst: usize, amt: i32) -> bool {
-                    if src >= items.len() || dst >= items.len() { return false; }
+                fn split_within(
+                    items: &mut [ItemRecord],
+                    src: usize,
+                    dst: usize,
+                    amt: i32,
+                ) -> bool {
+                    if src >= items.len() || dst >= items.len() {
+                        return false;
+                    }
                     let source = items[src].clone();
                     let dest = items[dst].clone();
-                    if source.item_id <= 0 || source.amount < amt { return false; }
-                    if dest.item_id > 0 && dest.item_id != source.item_id { return false; }
+                    if source.item_id <= 0 || source.amount < amt {
+                        return false;
+                    }
+                    if dest.item_id > 0 && dest.item_id != source.item_id {
+                        return false;
+                    }
 
                     if dest.item_id > 0 {
                         let mut updated = dest;
@@ -687,15 +798,23 @@ impl GameApplication {
                 }
 
                 fn split_cross(
-                    src_items: &mut [ItemRecord], src_idx: usize,
-                    dst_items: &mut [ItemRecord], dst_idx: usize,
+                    src_items: &mut [ItemRecord],
+                    src_idx: usize,
+                    dst_items: &mut [ItemRecord],
+                    dst_idx: usize,
                     amt: i32,
                 ) -> bool {
-                    if src_idx >= src_items.len() || dst_idx >= dst_items.len() { return false; }
+                    if src_idx >= src_items.len() || dst_idx >= dst_items.len() {
+                        return false;
+                    }
                     let source = src_items[src_idx].clone();
                     let dest = dst_items[dst_idx].clone();
-                    if source.item_id <= 0 || source.amount < amt { return false; }
-                    if dest.item_id > 0 && dest.item_id != source.item_id { return false; }
+                    if source.item_id <= 0 || source.amount < amt {
+                        return false;
+                    }
+                    if dest.item_id > 0 && dest.item_id != source.item_id {
+                        return false;
+                    }
 
                     if dest.item_id > 0 {
                         let mut updated = dest;
@@ -722,16 +841,30 @@ impl GameApplication {
                 }
 
                 let success = match (src_tab, dst_tab) {
-                    (0, 0) => split_within(&mut character.inventory.items, src_idx, dst_idx, amount as i32),
-                    (2000, 2000) => split_within(&mut character.warehouse.items, src_idx, dst_idx, amount as i32),
+                    (0, 0) => split_within(
+                        &mut character.inventory.items,
+                        src_idx,
+                        dst_idx,
+                        amount as i32,
+                    ),
+                    (2000, 2000) => split_within(
+                        &mut character.warehouse.items,
+                        src_idx,
+                        dst_idx,
+                        amount as i32,
+                    ),
                     (0, 2000) => split_cross(
-                        &mut character.inventory.items, src_idx,
-                        &mut character.warehouse.items, dst_idx,
+                        &mut character.inventory.items,
+                        src_idx,
+                        &mut character.warehouse.items,
+                        dst_idx,
                         amount as i32,
                     ),
                     (2000, 0) => split_cross(
-                        &mut character.warehouse.items, src_idx,
-                        &mut character.inventory.items, dst_idx,
+                        &mut character.warehouse.items,
+                        src_idx,
+                        &mut character.inventory.items,
+                        dst_idx,
                         amount as i32,
                     ),
                     _ => false,
@@ -1181,6 +1314,12 @@ impl GameApplication {
                         let _ = broadcast.send_to(character.id, &digimon_walk.encode());
                     }
                 }
+                let updated_character = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+                self.broadcast_party_member_position(&updated_character);
 
                 Ok(Vec::new())
             }
@@ -1224,6 +1363,12 @@ impl GameApplication {
                         0.0,
                     )
                     .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+                let updated_character = self
+                    .repository
+                    .character_by_id(character_id)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+                self.broadcast_party_member_map_change(&updated_character);
 
                 // Reset session state for new map
                 session.registered_map_presence = false;
@@ -1277,9 +1422,7 @@ impl GameApplication {
                 emoticon_type,
                 value: _,
             } => {
-                let character_id = session
-                    .character_id
-                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
                 let character = self
                     .repository
                     .character_by_id(character_id)
@@ -1287,9 +1430,8 @@ impl GameApplication {
                     .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
                 // Echo the emoticon back to the client.
-                let mut writer = odmo_protocol::writer::PacketWriter::new(
-                    odmo_protocol::opcode::game::EMOTICON,
-                );
+                let mut writer =
+                    odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::EMOTICON);
                 writer.write_u32(character.general_handler);
                 writer.write_i32(emoticon_type);
                 Ok(vec![writer.finalize()])
@@ -1328,9 +1470,7 @@ impl GameApplication {
             } => self.handle_extra_inventory_use(session, extra_slot),
             // ChatMessage — echo chat back to client (opcode 1006)
             GameRequest::ChatMessage { message } => {
-                let character_id = session
-                    .character_id
-                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
                 let character = self
                     .repository
                     .character_by_id(character_id)
@@ -1352,9 +1492,7 @@ impl GameApplication {
                 target_name,
                 message,
             } => {
-                let character_id = session
-                    .character_id
-                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
                 let character = self
                     .repository
                     .character_by_id(character_id)
@@ -1375,9 +1513,7 @@ impl GameApplication {
             }
             // ShoutMessage — echo shout back to client
             GameRequest::ShoutMessage { message } => {
-                let character_id = session
-                    .character_id
-                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
                 let character = self
                     .repository
                     .character_by_id(character_id)
@@ -1399,9 +1535,7 @@ impl GameApplication {
                 message,
                 item_slot: _,
             } => {
-                let character_id = session
-                    .character_id
-                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
                 let character = self
                     .repository
                     .character_by_id(character_id)
@@ -1420,9 +1554,7 @@ impl GameApplication {
             }
             // TamerReaction — echo reaction back to client
             GameRequest::TamerReaction { reaction_type } => {
-                let character_id = session
-                    .character_id
-                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
                 let character = self
                     .repository
                     .character_by_id(character_id)
@@ -1438,9 +1570,7 @@ impl GameApplication {
             }
             // PartnerStop — echo partner stop to client
             GameRequest::PartnerStop { uid: _ } => {
-                let character_id = session
-                    .character_id
-                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
                 let character = self
                     .repository
                     .character_by_id(character_id)
@@ -1453,28 +1583,76 @@ impl GameApplication {
                 writer.write_u32(character.partner_handler);
                 Ok(vec![writer.finalize()])
             }
-            // PartnerSwitch — stub: respond with failure (full implementation needs battle tag system)
-            GameRequest::PartnerSwitch { slot: _ } => {
-                let character_id = session
-                    .character_id
-                    .ok_or(GameFlowError::Unauthenticated)?;
-                let _ = self
+            // PartnerSwitch — simplified roster-backed switch without battle-tag restrictions yet
+            GameRequest::PartnerSwitch { slot } => {
+                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+                let character = self
                     .repository
                     .character_by_id(character_id)
                     .map_err(|error| GameFlowError::Storage(error.to_string()))?
                     .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+                let old_partner_type = character.partner_current_type;
+                let Some(updated_character) = self
+                    .repository
+                    .switch_partner(character_id, slot)
+                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                else {
+                    return Ok(vec![PartnerSwitchFailurePacket.encode()]);
+                };
+                if updated_character.partner_current_slot == character.partner_current_slot {
+                    return Ok(vec![PartnerSwitchFailurePacket.encode()]);
+                }
 
-                let mut writer = odmo_protocol::writer::PacketWriter::new(
-                    odmo_protocol::opcode::game::PARTNER_SWITCH_RESPONSE,
-                );
-                writer.write_u8(0); // failure result
-                Ok(vec![writer.finalize()])
+                let active_partner = updated_character
+                    .partner_slots
+                    .iter()
+                    .find(|partner| partner.slot == updated_character.partner_current_slot)
+                    .cloned()
+                    .ok_or_else(|| {
+                        GameFlowError::Storage(
+                            "active partner slot missing after switch".to_string(),
+                        )
+                    })?;
+                let active_partner_buffs = active_partner.active_buffs.clone();
+
+                let switch_packet = PartnerSwitchPacket {
+                    handler: updated_character.partner_handler,
+                    old_partner_current_type: old_partner_type,
+                    slot,
+                    partner: active_partner,
+                }
+                .encode();
+
+                if let Some(broadcast) = &self.broadcast {
+                    let _ = broadcast.send_to_visible(
+                        updated_character.map_id,
+                        updated_character.channel,
+                        updated_character.id,
+                        &switch_packet,
+                    );
+                    let _ = broadcast.send_to(updated_character.id, &switch_packet);
+                }
+
+                self.broadcast_party_member_digimon_change(&updated_character);
+                self.broadcast_party_member_buff_change(&updated_character, &active_partner_buffs);
+
+                Ok(vec![
+                    UpdateStatusPacket {
+                        character: updated_character,
+                    }
+                    .encode(),
+                ])
             }
+            GameRequest::PartnerEvolution {
+                digimon_handler: _,
+                evolution_slot: _,
+            } => Ok(vec![DigimonEvolutionFailPacket.encode()]),
             // PartnerDelete — stub: respond with failure (needs secondary password validation)
-            GameRequest::PartnerDelete { slot: _, validation: _ } => {
-                let character_id = session
-                    .character_id
-                    .ok_or(GameFlowError::Unauthenticated)?;
+            GameRequest::PartnerDelete {
+                slot: _,
+                validation: _,
+            } => {
+                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
                 let _ = self
                     .repository
                     .character_by_id(character_id)
@@ -1488,7 +1666,10 @@ impl GameApplication {
                 Ok(vec![writer.finalize()])
             }
             // EvolutionUnlock — stub: respond with failure (needs evolution data)
-            GameRequest::EvolutionUnlock { evolution_type: _, inven_idx: _ } => {
+            GameRequest::EvolutionUnlock {
+                evolution_type: _,
+                inven_idx: _,
+            } => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
                     odmo_protocol::opcode::game::EVOLUTION_UNLOCK_RESPONSE,
                 );
@@ -1496,7 +1677,10 @@ impl GameApplication {
                 Ok(vec![writer.finalize()])
             }
             // RideModeStart — stub: respond with failure
-            GameRequest::RideModeStart { evolution_type: _, item_type: _ } => {
+            GameRequest::RideModeStart {
+                evolution_type: _,
+                item_type: _,
+            } => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
                     odmo_protocol::opcode::game::RIDE_MODE_START,
                 );
@@ -1506,7 +1690,10 @@ impl GameApplication {
             // RideModeStop — stub: no response needed
             GameRequest::RideModeStop => Ok(vec![]),
             // DigimonChangeName — stub: respond with failure
-            GameRequest::DigimonChangeName { inven_slot: _, new_name: _ } => {
+            GameRequest::DigimonChangeName {
+                inven_slot: _,
+                new_name: _,
+            } => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
                     odmo_protocol::opcode::game::DIGIMON_CHANGE_NAME,
                 );
@@ -1514,7 +1701,11 @@ impl GameApplication {
                 Ok(vec![writer.finalize()])
             }
             // HatchInsertEgg — stub: respond with failure
-            GameRequest::HatchInsertEgg { vip: _, inven_slot: _, npc_idx: _ } => {
+            GameRequest::HatchInsertEgg {
+                vip: _,
+                inven_slot: _,
+                npc_idx: _,
+            } => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
                     odmo_protocol::opcode::game::HATCH_FAILURE,
                 );
@@ -1522,7 +1713,11 @@ impl GameApplication {
                 Ok(vec![writer.finalize()])
             }
             // HatchIncrease — stub: respond with failure
-            GameRequest::HatchIncrease { vip: _, npc_idx: _, data_level: _ } => {
+            GameRequest::HatchIncrease {
+                vip: _,
+                npc_idx: _,
+                data_level: _,
+            } => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
                     odmo_protocol::opcode::game::HATCH_FAILURE,
                 );
@@ -1530,7 +1725,12 @@ impl GameApplication {
                 Ok(vec![writer.finalize()])
             }
             // HatchFinish — stub: respond with failure
-            GameRequest::HatchFinish { vip: _, portable_pos: _, name: _, npc_idx: _ } => {
+            GameRequest::HatchFinish {
+                vip: _,
+                portable_pos: _,
+                name: _,
+                npc_idx: _,
+            } => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
                     odmo_protocol::opcode::game::HATCH_FAILURE,
                 );
@@ -1540,17 +1740,35 @@ impl GameApplication {
             // HatchRemoveEgg — stub: no response needed
             GameRequest::HatchRemoveEgg { vip: _, npc_idx: _ } => Ok(vec![]),
             // HatchBackupInsert — stub: no response needed
-            GameRequest::HatchBackupInsert { vip: _, inven_slot: _, npc_idx: _ } => Ok(vec![]),
+            GameRequest::HatchBackupInsert {
+                vip: _,
+                inven_slot: _,
+                npc_idx: _,
+            } => Ok(vec![]),
             // HatchBackupCancel — stub: no response needed
             GameRequest::HatchBackupCancel { vip: _, npc_idx: _ } => Ok(vec![]),
             // IncubatorClose — stub: no response needed
             GameRequest::IncubatorClose => Ok(vec![]),
             // DigimonArchiveMove — stub: no response needed
-            GameRequest::DigimonArchiveMove { vip: _, slot1: _, slot2: _, npc_type: _ } => Ok(vec![]),
+            GameRequest::DigimonArchiveMove {
+                vip: _,
+                slot1: _,
+                slot2: _,
+                npc_type: _,
+            } => Ok(vec![]),
             // DigimonArchiveList — stub: no response needed
-            GameRequest::DigimonArchiveList { vip: _, inven_idx: _, npc_type: _ } => Ok(vec![]),
+            GameRequest::DigimonArchiveList {
+                vip: _,
+                inven_idx: _,
+                npc_type: _,
+            } => Ok(vec![]),
             // DigimonArchiveSwap — stub: no response needed
-            GameRequest::DigimonArchiveSwap { npc_idx: _, archive_type: _, src_arr: _, dst_arr: _ } => Ok(vec![]),
+            GameRequest::DigimonArchiveSwap {
+                npc_idx: _,
+                archive_type: _,
+                src_arr: _,
+                dst_arr: _,
+            } => Ok(vec![]),
             // InventorySort — stub: no response needed
             GameRequest::InventorySort { sort_type: _ } => Ok(vec![]),
             // ItemIdentify — stub: respond with failure
@@ -1578,7 +1796,11 @@ impl GameApplication {
                 Ok(vec![writer.finalize()])
             }
             // ItemSocketIn — stub: respond with failure
-            GameRequest::ItemSocketIn { item_slot: _, socket_slot: _, chip_item_id: _ } => {
+            GameRequest::ItemSocketIn {
+                item_slot: _,
+                socket_slot: _,
+                chip_item_id: _,
+            } => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
                     odmo_protocol::opcode::game::ITEM_SOCKET_IN,
                 );
@@ -1586,7 +1808,10 @@ impl GameApplication {
                 Ok(vec![writer.finalize()])
             }
             // ItemSocketOut — stub: respond with failure
-            GameRequest::ItemSocketOut { item_slot: _, socket_slot: _ } => {
+            GameRequest::ItemSocketOut {
+                item_slot: _,
+                socket_slot: _,
+            } => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
                     odmo_protocol::opcode::game::ITEM_SOCKET_OUT,
                 );
@@ -1642,7 +1867,10 @@ impl GameApplication {
             // TamerShopClose — stub: no response needed
             GameRequest::TamerShopClose => Ok(vec![]),
             // TamerShopBuy — stub: respond with failure
-            GameRequest::TamerShopBuy { item_id: _, amount: _ } => {
+            GameRequest::TamerShopBuy {
+                item_id: _,
+                amount: _,
+            } => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
                     odmo_protocol::opcode::game::TAMER_SHOP_BUY,
                 );
@@ -1654,13 +1882,21 @@ impl GameApplication {
             // ConsignedShopView — stub: respond with empty
             GameRequest::ConsignedShopView { shop_id: _ } => Ok(vec![]),
             // ConsignedShopPurchase — stub: respond with failure
-            GameRequest::ConsignedShopPurchase { item_id: _, amount: _ } => Ok(vec![]),
+            GameRequest::ConsignedShopPurchase {
+                item_id: _,
+                amount: _,
+            } => Ok(vec![]),
             // ConsignedShopRetrieve — stub: respond with failure
             GameRequest::ConsignedShopRetrieve { item_slot: _ } => Ok(vec![]),
             // CashShopOpen — stub: respond with empty
             GameRequest::CashShopOpen => Ok(vec![]),
             // CashShopBuy — stub: respond with failure
-            GameRequest::CashShopBuy { amount: _, total_price: _, order_id: _, product_ids: _ } => Ok(vec![]),
+            GameRequest::CashShopBuy {
+                amount: _,
+                total_price: _,
+                order_id: _,
+                product_ids: _,
+            } => Ok(vec![]),
             // CashShopReload — stub: respond with empty
             GameRequest::CashShopReload => Ok(vec![]),
             // QuestAvailableList — stub: respond with empty list
@@ -1678,7 +1914,10 @@ impl GameApplication {
             // QuestGiveUp — stub: respond with failure
             GameRequest::QuestGiveUp { quest_id: _ } => Ok(vec![]),
             // QuestUpdate — stub: respond with failure
-            GameRequest::QuestUpdate { quest_id: _, progress: _ } => Ok(vec![]),
+            GameRequest::QuestUpdate {
+                quest_id: _,
+                progress: _,
+            } => Ok(vec![]),
             // DieConfirm — stub: no response needed
             GameRequest::DieConfirm => Ok(vec![]),
             // RemoveBuff — stub: no response needed
@@ -1694,7 +1933,10 @@ impl GameApplication {
             // SealRemoveLeader — stub: no response needed
             GameRequest::SealRemoveLeader => Ok(vec![]),
             // SealSetFavorite — stub: no response needed
-            GameRequest::SealSetFavorite { card_code: _, bookmark: _ } => Ok(vec![]),
+            GameRequest::SealSetFavorite {
+                card_code: _,
+                bookmark: _,
+            } => Ok(vec![]),
             // EncyclopediaLoad — stub: respond with empty
             GameRequest::EncyclopediaLoad => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
@@ -1708,7 +1950,11 @@ impl GameApplication {
             // EncyclopediaDeckBuff — stub: no response needed
             GameRequest::EncyclopediaDeckBuff { deck_idx: _ } => Ok(vec![]),
             // ArenaDailyPoints — stub: no response needed
-            GameRequest::ArenaDailyPoints { item_slot: _, points: _, item_id: _ } => Ok(vec![]),
+            GameRequest::ArenaDailyPoints {
+                item_slot: _,
+                points: _,
+                item_id: _,
+            } => Ok(vec![]),
             // ArenaDailyRanking — stub: no response needed
             GameRequest::ArenaDailyRanking => Ok(vec![]),
             // ArenaRankingAll — stub: no response needed
@@ -1740,15 +1986,30 @@ impl GameApplication {
             // RareMachineOpen — stub: no response needed
             GameRequest::RareMachineOpen { npc_idx: _ } => Ok(vec![]),
             // RareMachineRun — stub: no response needed
-            GameRequest::RareMachineRun { npc_idx: _, inven_idx: _, reset_count: _ } => Ok(vec![]),
+            GameRequest::RareMachineRun {
+                npc_idx: _,
+                inven_idx: _,
+                reset_count: _,
+            } => Ok(vec![]),
             // Party stubs
-            GameRequest::PartyInvite { target_handler: _ } => Ok(vec![]),
-            GameRequest::PartyInviteResponse { inviter_handler: _, accepted: _ } => Ok(vec![]),
+            GameRequest::PartyInvite { target_name } => {
+                self.handle_party_invite(session, target_name)
+            }
+            GameRequest::PartyInviteResponse {
+                result_type,
+                inviter_name,
+            } => self.handle_party_invite_response(session, result_type, inviter_name),
             GameRequest::PartyChat { message: _ } => Ok(vec![]),
-            GameRequest::PartyKick { member_slot: _ } => Ok(vec![]),
-            GameRequest::PartyLeave => Ok(vec![]),
-            GameRequest::PartyChangeMaster { new_leader_slot: _ } => Ok(vec![]),
-            GameRequest::PartyChangeLoot { loot_type: _ } => Ok(vec![]),
+            GameRequest::PartyKick { target_name } => self.handle_party_kick(session, target_name),
+            GameRequest::PartyLeave => self.handle_party_leave(session),
+            GameRequest::PartyChangeMaster { new_leader_slot } => {
+                self.handle_party_change_master(session, new_leader_slot)
+            }
+            GameRequest::PartyChangeLoot {
+                loot_type,
+                rare_type,
+                disp_rare_grade,
+            } => self.handle_party_change_loot(session, loot_type, rare_type, disp_rare_grade),
             GameRequest::PartyDismiss => Ok(vec![]),
             // Guild stubs
             GameRequest::GuildCreate { guild_name: _ } => Ok(vec![]),
@@ -1761,12 +2022,20 @@ impl GameApplication {
             GameRequest::GuildMessage { message: _ } => Ok(vec![]),
             GameRequest::GuildNotice { notice: _ } => Ok(vec![]),
             GameRequest::GuildHistory => Ok(vec![]),
-            GameRequest::GuildSetTitle { member_id: _, title: _ } => Ok(vec![]),
+            GameRequest::GuildSetTitle {
+                member_id: _,
+                title: _,
+            } => Ok(vec![]),
             // Trade stubs
             GameRequest::TradeRequest { target_handler: _ } => Ok(vec![]),
-            GameRequest::TradeAccept { accepter_handler: _ } => Ok(vec![]),
+            GameRequest::TradeAccept {
+                accepter_handler: _,
+            } => Ok(vec![]),
             GameRequest::TradeCancel => Ok(vec![]),
-            GameRequest::TradeAddItem { item_slot: _, trade_slot: _ } => Ok(vec![]),
+            GameRequest::TradeAddItem {
+                item_slot: _,
+                trade_slot: _,
+            } => Ok(vec![]),
             GameRequest::TradeRemoveItem { trade_slot: _ } => Ok(vec![]),
             GameRequest::TradeAddMoney { amount: _ } => Ok(vec![]),
             GameRequest::TradeConfirm => Ok(vec![]),
@@ -1795,14 +2064,22 @@ impl GameApplication {
             GameRequest::GuildAuthorityNewMember { member_id: _ } => Ok(vec![]),
             GameRequest::GuildAuthorityDats { member_id: _ } => Ok(vec![]),
             // Hatch/Digimon stubs
-            GameRequest::HatchSpiritEvolution { model_id: _, name: _, npc_id: _ } => Ok(vec![]),
+            GameRequest::HatchSpiritEvolution {
+                model_id: _,
+                name: _,
+                npc_id: _,
+            } => Ok(vec![]),
             GameRequest::DigiSummonPurchase { npc_idx: _ } => Ok(vec![]),
             // Warehouse stubs
             GameRequest::LoadAccountWarehouse => Ok(vec![]),
             GameRequest::RetrieveAccountWarehouse { item_slot: _ } => Ok(vec![]),
             // Extra inventory stubs
             GameRequest::ExtraInventoryCategoryRefresh { category: _ } => Ok(vec![]),
-            GameRequest::ExtraInventoryMove { category: _, extra_slot: _, inventory_slot: _ } => Ok(vec![]),
+            GameRequest::ExtraInventoryMove {
+                category: _,
+                extra_slot: _,
+                inventory_slot: _,
+            } => Ok(vec![]),
             GameRequest::ExtraInventorySort { category: _ } => Ok(vec![]),
             // Party extra stubs
             GameRequest::PartyConfigChange { loot_type: _ } => Ok(vec![]),
@@ -1810,29 +2087,490 @@ impl GameApplication {
             // Combat/Tamer stubs
             GameRequest::MonsterRespawnTimer => Ok(vec![]),
             GameRequest::JumpBooster => Ok(vec![]),
-            GameRequest::SkillLevelUp { uid: _, evo_unit_idx: _, skill_idx: _ } => Ok(vec![]),
+            GameRequest::SkillLevelUp {
+                uid: _,
+                evo_unit_idx: _,
+                skill_idx: _,
+            } => Ok(vec![]),
             GameRequest::TamerChargeXCrystal => Ok(vec![]),
             GameRequest::TamerConsumeXCrystal { amount: _ } => Ok(vec![]),
             GameRequest::TamerSummon { target_name: _ } => Ok(vec![]),
-            GameRequest::TamerSkillRequest { skill_idx: _, target_uid: _ } => Ok(vec![]),
+            GameRequest::TamerSkillRequest {
+                skill_idx: _,
+                target_uid: _,
+            } => Ok(vec![]),
             GameRequest::TranscendenceReceiveExp => Ok(vec![]),
             GameRequest::TranscendenceSuccess => Ok(vec![]),
             GameRequest::TimeChargeResult { charge_type: _ } => Ok(vec![]),
             GameRequest::WarpGateDungeon => Ok(vec![]),
-            GameRequest::SpiritCraft { model_id: _, name: _, npc_id: _ } => Ok(vec![])
+            GameRequest::SpiritCraft {
+                model_id: _,
+                name: _,
+                npc_id: _,
+            } => Ok(vec![]),
         }?;
 
         responses.extend(request_responses);
         Ok(responses)
     }
 
+    fn handle_party_invite(
+        &self,
+        session: &GameSession,
+        target_name: String,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let inviter_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let inviter = self
+            .repository
+            .character_by_id(inviter_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(inviter_id))?;
+
+        let Some(target) = self
+            .repository
+            .character_by_name(&target_name)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+        else {
+            return Ok(vec![
+                PartyInviteResultPacket {
+                    result_type: PARTY_INVITE_OFFLINE,
+                    target_name,
+                }
+                .encode(),
+            ]);
+        };
+
+        let Some(broadcast) = &self.broadcast else {
+            return Ok(vec![
+                PartyInviteResultPacket {
+                    result_type: PARTY_INVITE_OFFLINE,
+                    target_name: target.name,
+                }
+                .encode(),
+            ]);
+        };
+
+        if !broadcast.is_online(target.id) || target.id == inviter.id {
+            return Ok(vec![
+                PartyInviteResultPacket {
+                    result_type: PARTY_INVITE_OFFLINE,
+                    target_name: target.name,
+                }
+                .encode(),
+            ]);
+        }
+
+        {
+            let mut runtime = self.party_runtime.write().expect("party runtime poisoned");
+            if runtime.party_by_member.contains_key(&target.id) {
+                return Ok(vec![
+                    PartyInviteResultPacket {
+                        result_type: PARTY_INVITE_ALREADY_IN_PARTY,
+                        target_name: target.name,
+                    }
+                    .encode(),
+                ]);
+            }
+
+            runtime.pending_invites.insert(
+                target.id,
+                PendingPartyInvite {
+                    inviter_id: inviter.id,
+                    target_id: target.id,
+                },
+            );
+        }
+
+        broadcast
+            .send_to(
+                target.id,
+                &PartyInvitePacket {
+                    inviter_name: inviter.name,
+                }
+                .encode(),
+            )
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        Ok(vec![])
+    }
+
+    fn handle_party_invite_response(
+        &self,
+        session: &GameSession,
+        result_type: i32,
+        inviter_name: String,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let invitee_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let invitee = self
+            .repository
+            .character_by_id(invitee_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(invitee_id))?;
+        let Some(inviter) = self
+            .repository
+            .character_by_name(&inviter_name)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+        else {
+            return Ok(vec![]);
+        };
+
+        let pending = {
+            let mut runtime = self.party_runtime.write().expect("party runtime poisoned");
+            match runtime.pending_invites.remove(&invitee.id) {
+                Some(pending)
+                    if pending.inviter_id == inviter.id && pending.target_id == invitee.id =>
+                {
+                    Some(pending)
+                }
+                Some(other) => {
+                    runtime.pending_invites.insert(other.target_id, other);
+                    None
+                }
+                None => None,
+            }
+        };
+        if pending.is_none() {
+            return Ok(vec![]);
+        }
+
+        let Some(broadcast) = &self.broadcast else {
+            return Ok(vec![]);
+        };
+
+        if result_type != PARTY_INVITE_ACCEPTED {
+            if broadcast.is_online(inviter.id) {
+                let _ = broadcast.send_to(
+                    inviter.id,
+                    &PartyInviteResultPacket {
+                        result_type,
+                        target_name: invitee.name,
+                    }
+                    .encode(),
+                );
+            }
+            return Ok(vec![]);
+        }
+
+        let (party, created_new, existing_members_before_add) = {
+            let mut runtime = self.party_runtime.write().expect("party runtime poisoned");
+            if runtime.party_by_member.contains_key(&invitee.id) {
+                drop(runtime);
+                if broadcast.is_online(inviter.id) {
+                    let _ = broadcast.send_to(
+                        inviter.id,
+                        &PartyInviteResultPacket {
+                            result_type: PARTY_INVITE_ALREADY_IN_PARTY,
+                            target_name: invitee.name,
+                        }
+                        .encode(),
+                    );
+                }
+                return Ok(vec![]);
+            }
+
+            let existing_party_id = runtime.party_by_member.get(&inviter.id).copied();
+            if let Some(party_id) = existing_party_id {
+                let snapshot = {
+                    let party = runtime
+                        .parties
+                        .get_mut(&party_id)
+                        .expect("party should exist for member mapping");
+                    let existing_members = party.members.iter().copied().collect::<Vec<_>>();
+                    party.members.push(invitee.id);
+                    (party.clone(), false, existing_members)
+                };
+                runtime.party_by_member.insert(invitee.id, party_id);
+                snapshot
+            } else {
+                let party_id = runtime.next_party_id;
+                runtime.next_party_id = runtime.next_party_id.saturating_add(1);
+                let party = PartyGroup {
+                    id: party_id,
+                    leader_id: inviter.id,
+                    loot_type: 0,
+                    rare_rate: 0,
+                    disp_rare_grade: 0,
+                    members: vec![inviter.id, invitee.id],
+                };
+                runtime.parties.insert(party_id, party.clone());
+                runtime.party_by_member.insert(inviter.id, party_id);
+                runtime.party_by_member.insert(invitee.id, party_id);
+                (party, true, vec![inviter.id])
+            }
+        };
+
+        let invitee_list_packet = self.build_party_member_list_packet(&party, invitee.id)?;
+
+        if broadcast.is_online(inviter.id) {
+            if created_new {
+                let _ = broadcast.send_to(
+                    inviter.id,
+                    &PartyCreatedPacket {
+                        party_id: party.id,
+                        loot_type: party.loot_type,
+                    }
+                    .encode(),
+                );
+            }
+
+            let _ = broadcast.send_to(
+                inviter.id,
+                &PartyInviteResultPacket {
+                    result_type: PARTY_INVITE_ACCEPTED,
+                    target_name: invitee.name.clone(),
+                }
+                .encode(),
+            );
+        }
+
+        let join_packet = self.build_party_join_packet(&invitee, &inviter)?;
+        for member_id in existing_members_before_add {
+            if member_id != invitee.id && broadcast.is_online(member_id) {
+                let _ = broadcast.send_to(member_id, &join_packet);
+            }
+        }
+
+        Ok(vec![invitee_list_packet])
+    }
+
+    fn handle_party_leave(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let Some(broadcast) = &self.broadcast else {
+            return Ok(vec![]);
+        };
+
+        let (party_member_ids, leaving_slot, new_leader_slot, destroy_party) = {
+            let mut runtime = self.party_runtime.write().expect("party runtime poisoned");
+            let Some(party_id) = runtime.party_by_member.get(&character_id).copied() else {
+                return Ok(vec![]);
+            };
+            let Some(party) = runtime.parties.get_mut(&party_id) else {
+                runtime.party_by_member.remove(&character_id);
+                return Ok(vec![]);
+            };
+            let Some(leaving_slot) = party
+                .members
+                .iter()
+                .position(|member_id| *member_id == character_id)
+            else {
+                runtime.party_by_member.remove(&character_id);
+                return Ok(vec![]);
+            };
+
+            let recipients = party.members.clone();
+            party.members.remove(leaving_slot);
+
+            let mut new_leader_slot = None;
+            if party.leader_id == character_id {
+                if let Some(new_leader_id) = party.members.first().copied() {
+                    party.leader_id = new_leader_id;
+                    new_leader_slot = party
+                        .members
+                        .iter()
+                        .position(|member_id| *member_id == new_leader_id)
+                        .map(|slot| slot as i32);
+                }
+            }
+
+            let remaining_members = party.members.clone();
+            let destroy_party = party.members.len() < 2;
+            let _ = party;
+            runtime.party_by_member.remove(&character_id);
+            if destroy_party {
+                runtime.parties.remove(&party_id);
+                for member_id in &remaining_members {
+                    runtime.party_by_member.remove(member_id);
+                }
+            }
+
+            (
+                recipients,
+                leaving_slot as u8,
+                new_leader_slot,
+                destroy_party,
+            )
+        };
+
+        let leave_packet = PartyLeavePacket {
+            member_slot: leaving_slot,
+        }
+        .encode();
+        for member_id in party_member_ids {
+            if broadcast.is_online(member_id) {
+                let _ = broadcast.send_to(member_id, &leave_packet);
+                if !destroy_party {
+                    if let Some(new_leader_slot) = new_leader_slot {
+                        let _ = broadcast.send_to(
+                            member_id,
+                            &PartyLeaderChangedPacket { new_leader_slot }.encode(),
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(vec![])
+    }
+
+    fn handle_party_kick(
+        &self,
+        session: &GameSession,
+        target_name: String,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let requester_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let Some(target) = self
+            .repository
+            .character_by_name(&target_name)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+        else {
+            return Ok(vec![]);
+        };
+        let Some(broadcast) = &self.broadcast else {
+            return Ok(vec![]);
+        };
+
+        let (party_member_ids, target_slot, destroy_party) = {
+            let mut runtime = self.party_runtime.write().expect("party runtime poisoned");
+            let Some(party_id) = runtime.party_by_member.get(&requester_id).copied() else {
+                return Ok(vec![]);
+            };
+            let Some(target_party_id) = runtime.party_by_member.get(&target.id).copied() else {
+                return Ok(vec![]);
+            };
+            if party_id != target_party_id {
+                return Ok(vec![]);
+            }
+            let Some(party) = runtime.parties.get_mut(&party_id) else {
+                return Ok(vec![]);
+            };
+            if party.leader_id != requester_id {
+                return Ok(vec![]);
+            }
+            let Some(target_slot) = party
+                .members
+                .iter()
+                .position(|member_id| *member_id == target.id)
+            else {
+                return Ok(vec![]);
+            };
+            let recipients = party.members.clone();
+            party.members.remove(target_slot);
+
+            let remaining_members = party.members.clone();
+            let destroy_party = party.members.len() < 2;
+            let _ = party;
+            runtime.party_by_member.remove(&target.id);
+            if destroy_party {
+                runtime.parties.remove(&party_id);
+                for member_id in &remaining_members {
+                    runtime.party_by_member.remove(member_id);
+                }
+            }
+
+            (recipients, target_slot as u8, destroy_party)
+        };
+
+        let kick_packet = PartyKickPacket {
+            member_slot: target_slot,
+        }
+        .encode();
+        for member_id in &party_member_ids {
+            if broadcast.is_online(*member_id) {
+                let _ = broadcast.send_to(*member_id, &kick_packet);
+            }
+        }
+
+        let _ = destroy_party;
+        Ok(vec![])
+    }
+
+    fn handle_party_change_master(
+        &self,
+        session: &GameSession,
+        new_leader_slot: i32,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let requester_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let Some(broadcast) = &self.broadcast else {
+            return Ok(vec![]);
+        };
+
+        let recipients = {
+            let mut runtime = self.party_runtime.write().expect("party runtime poisoned");
+            let Some(party_id) = runtime.party_by_member.get(&requester_id).copied() else {
+                return Ok(vec![]);
+            };
+            let Some(party) = runtime.parties.get_mut(&party_id) else {
+                return Ok(vec![]);
+            };
+            if party.leader_id != requester_id {
+                return Ok(vec![]);
+            }
+            let Some(new_leader_id) = party.members.get(new_leader_slot.max(0) as usize).copied()
+            else {
+                return Ok(vec![]);
+            };
+            party.leader_id = new_leader_id;
+            party.members.clone()
+        };
+
+        let packet = PartyLeaderChangedPacket { new_leader_slot }.encode();
+        for member_id in recipients {
+            if broadcast.is_online(member_id) {
+                let _ = broadcast.send_to(member_id, &packet);
+            }
+        }
+
+        Ok(vec![])
+    }
+
+    fn handle_party_change_loot(
+        &self,
+        session: &GameSession,
+        loot_type: i32,
+        rare_type: u8,
+        disp_rare_grade: u8,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let requester_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let Some(broadcast) = &self.broadcast else {
+            return Ok(vec![]);
+        };
+
+        let recipients = {
+            let mut runtime = self.party_runtime.write().expect("party runtime poisoned");
+            let Some(party_id) = runtime.party_by_member.get(&requester_id).copied() else {
+                return Ok(vec![]);
+            };
+            let Some(party) = runtime.parties.get_mut(&party_id) else {
+                return Ok(vec![]);
+            };
+            if party.leader_id != requester_id {
+                return Ok(vec![]);
+            }
+            party.loot_type = loot_type.max(0) as u32;
+            party.rare_rate = rare_type;
+            party.disp_rare_grade = disp_rare_grade;
+            party.members.clone()
+        };
+
+        let packet = PartyChangeLootTypePacket {
+            loot_type,
+            rare_type,
+            disp_rare_grade,
+        }
+        .encode();
+        for member_id in recipients {
+            if broadcast.is_online(member_id) {
+                let _ = broadcast.send_to(member_id, &packet);
+            }
+        }
+
+        Ok(vec![])
+    }
+
     pub fn handle_disconnect(&self, session: &GameSession) -> Result<(), GameFlowError> {
         let Some(character_id) = session.character_id else {
             return Ok(());
         };
-        if !session.registered_map_presence {
-            return Ok(());
-        }
 
         let character = self
             .repository
@@ -1840,11 +2578,302 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        self.portal_bridge
-            .remove_map_presence(character.map_id, character.channel, character.id)
-            .map_err(|error| GameFlowError::PortalBridge(error.to_string()))?;
+        if session.registered_map_presence {
+            self.portal_bridge
+                .remove_map_presence(character.map_id, character.channel, character.id)
+                .map_err(|error| GameFlowError::PortalBridge(error.to_string()))?;
+        }
+
+        self.broadcast_party_member_disconnected(character_id);
+
+        let mut runtime = self.party_runtime.write().expect("party runtime poisoned");
+        runtime.pending_invites.retain(|_, invite| {
+            invite.inviter_id != character_id && invite.target_id != character_id
+        });
+        if let Some(party_id) = runtime.party_by_member.remove(&character_id) {
+            if let Some(party) = runtime.parties.get_mut(&party_id) {
+                party.members.retain(|member_id| *member_id != character_id);
+                if party.leader_id == character_id {
+                    if let Some(new_leader) = party.members.first().copied() {
+                        party.leader_id = new_leader;
+                    }
+                }
+                if party.members.len() < 2 {
+                    let members_to_clear = party.members.clone();
+                    runtime.parties.remove(&party_id);
+                    for member_id in members_to_clear {
+                        runtime.party_by_member.remove(&member_id);
+                    }
+                }
+            }
+        }
 
         Ok(())
+    }
+
+    fn build_party_member_list_packet(
+        &self,
+        party: &PartyGroup,
+        receiver_id: u64,
+    ) -> Result<Vec<u8>, GameFlowError> {
+        let receiver = self
+            .repository
+            .character_by_id(receiver_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(receiver_id))?;
+        let my_slot = party
+            .members
+            .iter()
+            .position(|member_id| *member_id == receiver_id)
+            .map(|index| index as i32)
+            .ok_or_else(|| GameFlowError::Storage("receiver not found in party".to_string()))?;
+        let leader_slot = party
+            .members
+            .iter()
+            .position(|member_id| *member_id == party.leader_id)
+            .map(|index| index as i32)
+            .unwrap_or(0);
+
+        let mut members = Vec::new();
+        for (index, member_id) in party.members.iter().enumerate() {
+            if *member_id == receiver_id {
+                continue;
+            }
+            let member = self
+                .repository
+                .character_by_id(*member_id)
+                .map_err(|error| GameFlowError::Storage(error.to_string()))?
+                .ok_or(GameFlowError::CharacterNotFound(*member_id))?;
+            members.push(PartyMemberListEntry {
+                party_slot: index as i32,
+                character: self.party_visible_character(&receiver, &member),
+            });
+        }
+
+        Ok(PartyMemberListPacket {
+            party_id: party.id,
+            my_slot,
+            leader_slot,
+            loot_type: party.loot_type,
+            rare_rate: party.rare_rate,
+            disp_rare_grade: party.disp_rare_grade,
+            members,
+        }
+        .encode())
+    }
+
+    fn build_party_join_packet(
+        &self,
+        joined_member: &odmo_types::CharacterSummary,
+        viewer: &odmo_types::CharacterSummary,
+    ) -> Result<Vec<u8>, GameFlowError> {
+        let runtime = self.party_runtime.read().expect("party runtime poisoned");
+        let Some(party_id) = runtime.party_by_member.get(&joined_member.id).copied() else {
+            return Err(GameFlowError::Storage(
+                "joined member is not mapped to a party".to_string(),
+            ));
+        };
+        let Some(party) = runtime.parties.get(&party_id) else {
+            return Err(GameFlowError::Storage(
+                "party mapping exists without party".to_string(),
+            ));
+        };
+        let Some(slot) = party
+            .members
+            .iter()
+            .position(|member_id| *member_id == joined_member.id)
+        else {
+            return Err(GameFlowError::Storage(
+                "joined member missing from party".to_string(),
+            ));
+        };
+        Ok(PartyJoinPacket {
+            member: PartyMemberListEntry {
+                party_slot: slot as i32,
+                character: self.party_visible_character(viewer, joined_member),
+            },
+        }
+        .encode())
+    }
+
+    fn party_visible_character(
+        &self,
+        viewer: &odmo_types::CharacterSummary,
+        member: &odmo_types::CharacterSummary,
+    ) -> odmo_types::CharacterSummary {
+        let mut visible = member.clone();
+        if viewer.map_id != member.map_id || viewer.channel != member.channel {
+            visible.general_handler = 0;
+            visible.partner_handler = 0;
+        }
+        visible
+    }
+
+    fn party_context_for_member(&self, character_id: u64) -> Option<(PartyGroup, usize)> {
+        let runtime = self.party_runtime.read().expect("party runtime poisoned");
+        let party_id = runtime.party_by_member.get(&character_id).copied()?;
+        let party = runtime.parties.get(&party_id)?.clone();
+        let slot = party
+            .members
+            .iter()
+            .position(|member_id| *member_id == character_id)?;
+        Some((party, slot))
+    }
+
+    fn party_other_members(&self, character_id: u64) -> Vec<u64> {
+        self.party_context_for_member(character_id)
+            .map(|(party, _)| {
+                party
+                    .members
+                    .into_iter()
+                    .filter(|member_id| *member_id != character_id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn broadcast_party_packet(&self, recipients: &[u64], packet: &[u8]) {
+        let Some(broadcast) = &self.broadcast else {
+            return;
+        };
+        for member_id in recipients {
+            if broadcast.is_online(*member_id) {
+                let _ = broadcast.send_to(*member_id, packet);
+            }
+        }
+    }
+
+    fn broadcast_party_member_info(&self, character: &odmo_types::CharacterSummary) {
+        let Some((_, slot)) = self.party_context_for_member(character.id) else {
+            return;
+        };
+        let packet = PartyMemberInfoPacket {
+            member_slot: slot as u8,
+            digimon_type: character.partner_current_type,
+            tamer_hp: character.current_hp,
+            tamer_max_hp: character.hp,
+            tamer_ds: character.current_ds,
+            tamer_max_ds: character.ds,
+            digimon_hp: character.partner_current_hp,
+            digimon_max_hp: character.partner_hp,
+            digimon_ds: character.partner_current_ds,
+            digimon_max_ds: character.partner_ds,
+            tamer_level: u16::from(character.level),
+            digimon_level: u16::from(character.partner_level),
+        }
+        .encode();
+        let recipients = self.party_other_members(character.id);
+        self.broadcast_party_packet(&recipients, &packet);
+    }
+
+    fn broadcast_party_member_position(&self, character: &odmo_types::CharacterSummary) {
+        let Some((_, slot)) = self.party_context_for_member(character.id) else {
+            return;
+        };
+        let packet = PartyMemberPositionPacket {
+            member_slot: slot as u8,
+            tamer_x: character.x,
+            tamer_y: character.y,
+            digimon_x: character.partner_x,
+            digimon_y: character.partner_y,
+        }
+        .encode();
+        let recipients = self.party_other_members(character.id);
+        self.broadcast_party_packet(&recipients, &packet);
+    }
+
+    fn broadcast_party_member_map_change(&self, character: &odmo_types::CharacterSummary) {
+        let Some((_, slot)) = self.party_context_for_member(character.id) else {
+            return;
+        };
+        let recipients = self.party_other_members(character.id);
+        let Some(broadcast) = &self.broadcast else {
+            return;
+        };
+
+        for member_id in recipients {
+            if !broadcast.is_online(member_id) {
+                continue;
+            }
+            let Ok(Some(viewer)) = self.repository.character_by_id(member_id) else {
+                continue;
+            };
+            let packet = self.party_member_map_change_packet_for_viewer(&viewer, character, slot);
+            let _ = broadcast.send_to(member_id, &packet);
+        }
+    }
+
+    fn broadcast_party_member_digimon_change(&self, character: &odmo_types::CharacterSummary) {
+        let Some((_, slot)) = self.party_context_for_member(character.id) else {
+            return;
+        };
+        let packet = odmo_protocol::PartyMemberDigimonChangePacket {
+            member_slot: slot as u8,
+            digimon_type: character.partner_current_type,
+            digimon_name: character.partner_name.clone(),
+            digimon_hp: character.partner_current_hp.clamp(0, u16::MAX as i32) as u16,
+            digimon_max_hp: character.partner_hp.clamp(0, u16::MAX as i32) as u16,
+            digimon_ds: character.partner_current_ds.clamp(0, u16::MAX as i32) as u16,
+            digimon_max_ds: character.partner_ds.clamp(0, u16::MAX as i32) as u16,
+        }
+        .encode();
+        let recipients = self.party_other_members(character.id);
+        self.broadcast_party_packet(&recipients, &packet);
+    }
+
+    fn broadcast_party_member_buff_change(
+        &self,
+        character: &odmo_types::CharacterSummary,
+        active_buffs: &[odmo_types::ActiveBuffSnapshot],
+    ) {
+        let Some((_, slot)) = self.party_context_for_member(character.id) else {
+            return;
+        };
+        let packet = PartyMemberBuffChangePacket {
+            member_slot: slot as u8,
+            buffs: active_buffs
+                .iter()
+                .map(|buff| PartyMemberBuffEntry {
+                    // The modern client packet is delta-shaped. For partner switch we
+                    // publish the new active set as present entries and let an empty
+                    // list represent "no active party-visible buffs".
+                    status: 1,
+                    buff_code: buff.buff_id,
+                })
+                .collect(),
+        }
+        .encode();
+        let recipients = self.party_other_members(character.id);
+        self.broadcast_party_packet(&recipients, &packet);
+    }
+
+    fn broadcast_party_member_disconnected(&self, character_id: u64) {
+        let Some((_, slot)) = self.party_context_for_member(character_id) else {
+            return;
+        };
+        let packet = PartyMemberDisconnectedPacket {
+            member_slot: slot as i32,
+        }
+        .encode();
+        let recipients = self.party_other_members(character_id);
+        self.broadcast_party_packet(&recipients, &packet);
+    }
+
+    fn party_member_map_change_packet_for_viewer(
+        &self,
+        viewer: &odmo_types::CharacterSummary,
+        member: &odmo_types::CharacterSummary,
+        member_slot: usize,
+    ) -> Vec<u8> {
+        let same_map = viewer.map_id == member.map_id && viewer.channel == member.channel;
+        PartyMemberMapChangePacket {
+            member_slot: member_slot as u8,
+            map_id: i32::from(member.map_id),
+            channel: i32::from(member.channel),
+            tamer_handler: if same_map { member.general_handler } else { 0 },
+            digimon_handler: if same_map { member.partner_handler } else { 0 },
+        }
+        .encode()
     }
 
     fn handle_extra_inventory_move(
@@ -1866,20 +2895,24 @@ impl GameApplication {
         if ext_idx >= character.extra_inventory.items.len()
             || inv_idx >= character.inventory.items.len()
         {
-            return Ok(vec![LoadInventoryPacket {
-                inventory: character.extra_inventory,
-                inventory_type: InventoryType::ExtraInventory,
-            }
-            .encode()]);
+            return Ok(vec![
+                LoadInventoryPacket {
+                    inventory: character.extra_inventory,
+                    inventory_type: InventoryType::ExtraInventory,
+                }
+                .encode(),
+            ]);
         }
 
         let source_item = character.extra_inventory.items[ext_idx].clone();
         if source_item.item_id <= 0 || source_item.amount <= 0 {
-            return Ok(vec![LoadInventoryPacket {
-                inventory: character.extra_inventory,
-                inventory_type: InventoryType::ExtraInventory,
-            }
-            .encode()]);
+            return Ok(vec![
+                LoadInventoryPacket {
+                    inventory: character.extra_inventory,
+                    inventory_type: InventoryType::ExtraInventory,
+                }
+                .encode(),
+            ]);
         }
 
         let dest_item = character.inventory.items[inv_idx].clone();
@@ -1981,11 +3014,13 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        Ok(vec![LoadInventoryPacket {
-            inventory: updated.extra_inventory,
-            inventory_type: InventoryType::ExtraInventory,
-        }
-        .encode()])
+        Ok(vec![
+            LoadInventoryPacket {
+                inventory: updated.extra_inventory,
+                inventory_type: InventoryType::ExtraInventory,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_extra_inventory_sort(
@@ -2017,11 +3052,13 @@ impl GameApplication {
             .update_extra_inventory(character_id, character.extra_inventory.clone())
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        Ok(vec![LoadInventoryPacket {
-            inventory: character.extra_inventory,
-            inventory_type: InventoryType::ExtraInventory,
-        }
-        .encode()])
+        Ok(vec![
+            LoadInventoryPacket {
+                inventory: character.extra_inventory,
+                inventory_type: InventoryType::ExtraInventory,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_extra_inventory_use(
@@ -2038,20 +3075,24 @@ impl GameApplication {
 
         let ext_idx = extra_slot as usize;
         if ext_idx >= character.extra_inventory.items.len() {
-            return Ok(vec![LoadInventoryPacket {
-                inventory: character.extra_inventory,
-                inventory_type: InventoryType::ExtraInventory,
-            }
-            .encode()]);
+            return Ok(vec![
+                LoadInventoryPacket {
+                    inventory: character.extra_inventory,
+                    inventory_type: InventoryType::ExtraInventory,
+                }
+                .encode(),
+            ]);
         }
 
         let item = &character.extra_inventory.items[ext_idx];
         if item.item_id <= 0 || item.amount <= 0 {
-            return Ok(vec![LoadInventoryPacket {
-                inventory: character.extra_inventory,
-                inventory_type: InventoryType::ExtraInventory,
-            }
-            .encode()]);
+            return Ok(vec![
+                LoadInventoryPacket {
+                    inventory: character.extra_inventory,
+                    inventory_type: InventoryType::ExtraInventory,
+                }
+                .encode(),
+            ]);
         }
 
         let new_amount = item.amount - 1;
@@ -2269,13 +3310,19 @@ impl GameApplication {
             return Ok(Vec::new());
         }
 
-        let _ = self.repository.character_by_id(character_id)?.ok_or_else(|| {
-            anyhow::anyhow!("character {character_id} not found during mob reconciliation")
-        })?;
+        let _ = self
+            .repository
+            .character_by_id(character_id)?
+            .ok_or_else(|| {
+                anyhow::anyhow!("character {character_id} not found during mob reconciliation")
+            })?;
 
-        let character = self.repository.character_by_id(character_id)?.ok_or_else(|| {
-            anyhow::anyhow!("character {character_id} not found during mob reconciliation")
-        })?;
+        let character = self
+            .repository
+            .character_by_id(character_id)?
+            .ok_or_else(|| {
+                anyhow::anyhow!("character {character_id} not found during mob reconciliation")
+            })?;
         let current = self
             .repository
             .mobs_by_map(character.map_id, character.channel)?;
@@ -2317,13 +3364,19 @@ impl GameApplication {
             return Ok(Vec::new());
         }
 
-        let _ = self.repository.character_by_id(character_id)?.ok_or_else(|| {
-            anyhow::anyhow!("character {character_id} not found during drop reconciliation")
-        })?;
+        let _ = self
+            .repository
+            .character_by_id(character_id)?
+            .ok_or_else(|| {
+                anyhow::anyhow!("character {character_id} not found during drop reconciliation")
+            })?;
 
-        let character = self.repository.character_by_id(character_id)?.ok_or_else(|| {
-            anyhow::anyhow!("character {character_id} not found during drop reconciliation")
-        })?;
+        let character = self
+            .repository
+            .character_by_id(character_id)?
+            .ok_or_else(|| {
+                anyhow::anyhow!("character {character_id} not found during drop reconciliation")
+            })?;
         let current = self
             .repository
             .drops_by_map(character.map_id, character.channel)?;
@@ -2450,9 +3503,8 @@ mod tests {
     use odmo_types::{
         ActiveBuffSnapshot, AttendanceStatus, CharacterConnectionState, CharacterSummary,
         DEFAULT_ALT_PARTNER_MODEL_ID, DEFAULT_ALT_TAMER_MODEL_ID, DEFAULT_GM_PARTNER_MODEL_ID,
-        DEFAULT_GM_TAMER_MODEL_ID, DEFAULT_PARTNER_MODEL_ID, DEFAULT_START_MAP_ID,
-        DEFAULT_START_X, DEFAULT_START_Y,
-        DEFAULT_TAMER_MODEL_ID, DailyRewardStatus, DropSummary, GameSessionTicket,
+        DEFAULT_GM_TAMER_MODEL_ID, DEFAULT_PARTNER_MODEL_ID, DEFAULT_START_MAP_ID, DEFAULT_START_X,
+        DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID, DailyRewardStatus, DropSummary, GameSessionTicket,
         GuildHistoricEntry, GuildMemberSnapshot, GuildSnapshot, MobSummary, RelationEntry,
         SealListSnapshot, SealRecord, XaiSnapshot,
     };
@@ -2462,6 +3514,61 @@ mod tests {
         characters: RwLock<HashMap<u64, CharacterSummary>>,
         mobs_by_map: RwLock<HashMap<(i16, u8), Vec<MobSummary>>>,
         drops_by_map: RwLock<HashMap<(i16, u8), Vec<DropSummary>>>,
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingBroadcast {
+        online: RwLock<std::collections::HashSet<u64>>,
+        packets: RwLock<HashMap<u64, Vec<Vec<u8>>>>,
+    }
+
+    impl RecordingBroadcast {
+        fn with_online(online: impl IntoIterator<Item = u64>) -> Self {
+            Self {
+                online: RwLock::new(online.into_iter().collect::<std::collections::HashSet<_>>()),
+                packets: RwLock::new(HashMap::new()),
+            }
+        }
+
+        fn packets_for(&self, character_id: u64) -> Vec<Vec<u8>> {
+            self.packets
+                .read()
+                .expect("broadcast poisoned")
+                .get(&character_id)
+                .cloned()
+                .unwrap_or_default()
+        }
+    }
+
+    impl crate::BroadcastSink for RecordingBroadcast {
+        fn send_to(&self, character_id: u64, packet: &[u8]) -> anyhow::Result<()> {
+            self.packets
+                .write()
+                .expect("broadcast poisoned")
+                .entry(character_id)
+                .or_default()
+                .push(packet.to_vec());
+            Ok(())
+        }
+
+        fn is_online(&self, character_id: u64) -> bool {
+            self.online
+                .read()
+                .expect("broadcast poisoned")
+                .contains(&character_id)
+        }
+
+        fn send_to_visible(
+            &self,
+            _map_id: i16,
+            _channel: u8,
+            _exclude_character_id: u64,
+            _packet: &[u8],
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        fn update_location(&self, _character_id: u64, _map_id: i16, _channel: u8) {}
     }
 
     impl InMemoryCharacterRepository {
@@ -2560,18 +3667,62 @@ mod tests {
                             }),
                             active_buffs: vec![ActiveBuffSnapshot {
                                 buff_id: 500,
+                                buff_class: 1,
                                 skill_id: 8_001_001,
                                 remaining_seconds: 120,
                             }],
                             current_xgauge: 500,
                             current_xcrystals: 2,
+                            partner_current_slot: 1,
+                            partner_slots: vec![
+                                odmo_types::PartnerSlotSnapshot {
+                                    slot: 1,
+                                    digimon_type: DEFAULT_PARTNER_MODEL_ID,
+                                    model: DEFAULT_PARTNER_MODEL_ID,
+                                    name: "Agumon".to_string(),
+                                    ..odmo_types::PartnerSlotSnapshot::default()
+                                },
+                                odmo_types::PartnerSlotSnapshot {
+                                    slot: 2,
+                                    digimon_type: 31_002,
+                                    model: 31_002,
+                                    level: 11,
+                                    name: "Greymon".to_string(),
+                                    size: 13_000,
+                                    hatch_grade: 4,
+                                    hp: 1_400,
+                                    ds: 1_200,
+                                    current_hp: 1_400,
+                                    current_ds: 1_200,
+                                    de: 120,
+                                    at: 150,
+                                    fs: 120,
+                                    ev: 8,
+                                    cc: 5,
+                                    ms: 260,
+                                    as_value: 950,
+                                    ht: 3,
+                                    ar: 1,
+                                    bl: 2,
+                                    clone_level: 3,
+                                    clone_at_value: 1,
+                                    clone_bl_value: 1,
+                                    clone_hp_value: 1,
+                                    clone_at_level: 1,
+                                    clone_bl_level: 1,
+                                    clone_hp_level: 1,
+                                    ..odmo_types::PartnerSlotSnapshot::default()
+                                },
+                            ],
                             partner_active_buffs: vec![ActiveBuffSnapshot {
                                 buff_id: 600,
+                                buff_class: 1,
                                 skill_id: 8_002_001,
                                 remaining_seconds: 90,
                             }],
                             partner_active_debuffs: vec![ActiveBuffSnapshot {
                                 buff_id: 700,
+                                buff_class: 1,
                                 skill_id: 8_003_001,
                                 remaining_seconds: 30,
                             }],
@@ -2631,6 +3782,7 @@ mod tests {
                             previous_y: DEFAULT_START_Y,
                             active_debuffs: vec![ActiveBuffSnapshot {
                                 buff_id: 901,
+                                buff_class: 1,
                                 skill_id: 7_001_001,
                                 remaining_seconds: 45,
                             }],
@@ -2714,6 +3866,15 @@ mod tests {
                 .get(&character_id)
                 .cloned())
         }
+        fn character_by_name(&self, name: &str) -> anyhow::Result<Option<CharacterSummary>> {
+            Ok(self
+                .characters
+                .read()
+                .expect("repo poisoned")
+                .values()
+                .find(|character| character.name.eq_ignore_ascii_case(name))
+                .cloned())
+        }
         fn is_name_available(&self, _name: &str) -> anyhow::Result<bool> {
             unreachable!()
         }
@@ -2733,37 +3894,112 @@ mod tests {
         }
         fn update_character_position(
             &self,
-            _character_id: u64,
-            _x: i32,
-            _y: i32,
+            character_id: u64,
+            x: i32,
+            y: i32,
             _z: f32,
         ) -> anyhow::Result<()> {
-            unreachable!()
+            let mut characters = self.characters.write().expect("repo poisoned");
+            if let Some(character) = characters.get_mut(&character_id) {
+                character.x = x;
+                character.y = y;
+            }
+            Ok(())
         }
         fn update_partner_position(
             &self,
-            _character_id: u64,
-            _x: i32,
-            _y: i32,
+            character_id: u64,
+            x: i32,
+            y: i32,
             _z: f32,
         ) -> anyhow::Result<()> {
-            unreachable!()
+            let mut characters = self.characters.write().expect("repo poisoned");
+            if let Some(character) = characters.get_mut(&character_id) {
+                character.partner_x = x;
+                character.partner_y = y;
+            }
+            Ok(())
         }
         fn update_character_map(
             &self,
-            _character_id: u64,
-            _map_id: i16,
-            _x: i32,
-            _y: i32,
+            character_id: u64,
+            map_id: i16,
+            x: i32,
+            y: i32,
         ) -> anyhow::Result<()> {
-            unreachable!()
+            let mut characters = self.characters.write().expect("repo poisoned");
+            if let Some(character) = characters.get_mut(&character_id) {
+                character.map_id = map_id;
+                character.x = x;
+                character.y = y;
+            }
+            Ok(())
+        }
+        fn switch_partner(
+            &self,
+            character_id: u64,
+            slot: u8,
+        ) -> anyhow::Result<Option<CharacterSummary>> {
+            let mut characters = self.characters.write().expect("repo poisoned");
+            let Some(character) = characters.get_mut(&character_id) else {
+                return Ok(None);
+            };
+            let Some(target) = character
+                .partner_slots
+                .iter()
+                .find(|partner| partner.slot == slot)
+                .cloned()
+            else {
+                return Ok(None);
+            };
+            if character.partner_current_slot == slot {
+                return Ok(Some(character.clone()));
+            }
+            character.partner_current_slot = slot;
+            character.partner_current_type = target.digimon_type;
+            character.partner_model = target.model;
+            character.partner_name = target.name;
+            character.partner_level = target.level;
+            character.partner_size = target.size;
+            character.partner_hatch_grade = target.hatch_grade;
+            character.partner_hp = target.hp;
+            character.partner_ds = target.ds;
+            character.partner_current_hp = target.current_hp;
+            character.partner_current_ds = target.current_ds;
+            character.partner_de = target.de;
+            character.partner_at = target.at;
+            character.partner_fs = target.fs;
+            character.partner_ev = target.ev;
+            character.partner_cc = target.cc;
+            character.partner_ms = target.ms;
+            character.partner_as = target.as_value;
+            character.partner_ht = target.ht;
+            character.partner_ar = target.ar;
+            character.partner_bl = target.bl;
+            character.partner_clone_level = target.clone_level;
+            character.partner_clone_at_value = target.clone_at_value;
+            character.partner_clone_bl_value = target.clone_bl_value;
+            character.partner_clone_ct_value = target.clone_ct_value;
+            character.partner_clone_ev_value = target.clone_ev_value;
+            character.partner_clone_hp_value = target.clone_hp_value;
+            character.partner_clone_at_level = target.clone_at_level;
+            character.partner_clone_bl_level = target.clone_bl_level;
+            character.partner_clone_ct_level = target.clone_ct_level;
+            character.partner_clone_ev_level = target.clone_ev_level;
+            character.partner_clone_hp_level = target.clone_hp_level;
+            character.partner_active_buffs = target.active_buffs;
+            Ok(Some(character.clone()))
         }
         fn update_inventory(
             &self,
-            _character_id: u64,
-            _inventory: odmo_types::InventorySnapshot,
+            character_id: u64,
+            inventory: odmo_types::InventorySnapshot,
         ) -> anyhow::Result<()> {
-            unreachable!()
+            let mut characters = self.characters.write().expect("repo poisoned");
+            if let Some(character) = characters.get_mut(&character_id) {
+                character.inventory = inventory;
+            }
+            Ok(())
         }
         fn update_extra_inventory(
             &self,
@@ -2786,11 +4022,41 @@ mod tests {
         ) -> anyhow::Result<()> {
             unreachable!()
         }
+        fn update_character_map_region(
+            &self,
+            _character_id: u64,
+            _map_id: i16,
+            _unlocked: bool,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn update_character_state(&self, _character_id: u64, _state: u8) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn update_welcome_flag(&self, _account_id: u64, _welcome: bool) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     impl PortalRepository for InMemoryCharacterRepository {
-        fn portal_by_id(&self, _portal_id: i32) -> anyhow::Result<Option<PortalDefinition>> {
-            Ok(None)
+        fn portal_by_id(&self, portal_id: i32) -> anyhow::Result<Option<PortalDefinition>> {
+            Ok(match portal_id {
+                10001 => Some(PortalDefinition {
+                    id: 10001,
+                    is_local: false,
+                    destination_map_id: 102,
+                    destination_x: 32615,
+                    destination_y: 14930,
+                }),
+                10002 => Some(PortalDefinition {
+                    id: 10002,
+                    is_local: false,
+                    destination_map_id: 3,
+                    destination_x: 18086,
+                    destination_y: 18874,
+                }),
+                _ => None,
+            })
         }
     }
 
@@ -2890,6 +4156,35 @@ mod tests {
 
     fn unique_test_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("odmo-game-{name}-{}", uuid::Uuid::new_v4()))
+    }
+
+    fn establish_party(
+        app: &GameApplication,
+        inviter_id: u64,
+        invitee_id: u64,
+        invitee_name: &str,
+        inviter_name: &str,
+    ) {
+        let mut inviter_session = GameSession::new(1);
+        inviter_session.character_id = Some(inviter_id);
+        app.handle_request(
+            &mut inviter_session,
+            GameRequest::PartyInvite {
+                target_name: invitee_name.to_string(),
+            },
+        )
+        .expect("invite should be delivered");
+
+        let mut invitee_session = GameSession::new(2);
+        invitee_session.character_id = Some(invitee_id);
+        app.handle_request(
+            &mut invitee_session,
+            GameRequest::PartyInviteResponse {
+                result_type: PARTY_INVITE_ACCEPTED,
+                inviter_name: inviter_name.to_string(),
+            },
+        )
+        .expect("accept should create party");
     }
 
     fn test_add_inventory_item(
@@ -3657,6 +4952,576 @@ mod tests {
         assert!(
             packet_types.contains(&odmo_protocol::opcode::game::PICK_ITEM_FAIL),
             "foreign owned drop should return pick-item-fail",
+        );
+    }
+
+    #[test]
+    fn party_invite_accept_bootstraps_party_contract() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-accept"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        let mut inviter_session = GameSession::new(1);
+        inviter_session.character_id = Some(100);
+
+        let invite_responses = app
+            .handle_request(
+                &mut inviter_session,
+                GameRequest::PartyInvite {
+                    target_name: "Matt".to_string(),
+                },
+            )
+            .expect("invite should be accepted for online target");
+        assert!(
+            invite_responses.is_empty(),
+            "invite sender should not receive immediate local packets on success",
+        );
+
+        let invite_packets = broadcast.packets_for(200);
+        assert_eq!(
+            invite_packets.len(),
+            1,
+            "target should receive one invite packet"
+        );
+        assert_eq!(
+            PacketReader::from_frame(&invite_packets[0])
+                .expect("invite frame should decode")
+                .packet_type,
+            odmo_protocol::opcode::game::PARTY_INVITE,
+        );
+
+        let mut target_session = GameSession::new(2);
+        target_session.character_id = Some(200);
+
+        let responses = app
+            .handle_request(
+                &mut target_session,
+                GameRequest::PartyInviteResponse {
+                    result_type: PARTY_INVITE_ACCEPTED,
+                    inviter_name: "AdminTamer".to_string(),
+                },
+            )
+            .expect("accept should create party");
+        assert_eq!(
+            responses.len(),
+            1,
+            "invitee should receive party member list"
+        );
+        assert_eq!(
+            PacketReader::from_frame(&responses[0])
+                .expect("member-list frame should decode")
+                .packet_type,
+            odmo_protocol::opcode::game::PARTY_MEMBER_LIST,
+        );
+
+        let inviter_packets = broadcast.packets_for(100);
+        let inviter_types: Vec<i16> = inviter_packets
+            .iter()
+            .map(|frame| {
+                PacketReader::from_frame(frame)
+                    .expect("leader frame should decode")
+                    .packet_type
+            })
+            .collect();
+        assert!(
+            inviter_types.contains(&odmo_protocol::opcode::game::PARTY_CREATED),
+            "leader should receive party-created packet",
+        );
+        assert!(
+            inviter_types.contains(&odmo_protocol::opcode::game::PARTY_INVITE_RESPONSE),
+            "leader should receive invite-result packet",
+        );
+        assert!(
+            inviter_types.contains(&odmo_protocol::opcode::game::PARTY_JOIN),
+            "leader should receive join packet for the new member",
+        );
+    }
+
+    #[test]
+    fn party_invite_reject_notifies_inviter() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-reject"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        let mut inviter_session = GameSession::new(1);
+        inviter_session.character_id = Some(100);
+        app.handle_request(
+            &mut inviter_session,
+            GameRequest::PartyInvite {
+                target_name: "Matt".to_string(),
+            },
+        )
+        .expect("invite should be delivered");
+
+        let mut target_session = GameSession::new(2);
+        target_session.character_id = Some(200);
+        let responses = app
+            .handle_request(
+                &mut target_session,
+                GameRequest::PartyInviteResponse {
+                    result_type: PARTY_INVITE_REJECTED,
+                    inviter_name: "AdminTamer".to_string(),
+                },
+            )
+            .expect("reject should notify inviter");
+        assert!(
+            responses.is_empty(),
+            "reject should not send local packets to invitee"
+        );
+
+        let inviter_packets = broadcast.packets_for(100);
+        let inviter_types: Vec<i16> = inviter_packets
+            .iter()
+            .map(|frame| {
+                PacketReader::from_frame(frame)
+                    .expect("leader frame should decode")
+                    .packet_type
+            })
+            .collect();
+        assert!(
+            inviter_types.contains(&odmo_protocol::opcode::game::PARTY_INVITE_RESPONSE),
+            "inviter should receive reject result packet",
+        );
+    }
+
+    #[test]
+    fn party_leave_notifies_members() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-leave"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        establish_party(&app, 100, 200, "Matt", "AdminTamer");
+
+        let mut invitee_session = GameSession::new(2);
+        invitee_session.character_id = Some(200);
+        app.handle_request(&mut invitee_session, GameRequest::PartyLeave)
+            .expect("leave should succeed");
+
+        let inviter_types: Vec<i16> = broadcast
+            .packets_for(100)
+            .iter()
+            .map(|frame| PacketReader::from_frame(frame).expect("frame").packet_type)
+            .collect();
+        assert!(
+            inviter_types.contains(&odmo_protocol::opcode::game::PARTY_LEAVE),
+            "remaining member should receive leave packet",
+        );
+    }
+
+    #[test]
+    fn party_kick_notifies_target_and_members() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-kick"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        establish_party(&app, 100, 200, "Matt", "AdminTamer");
+
+        let mut leader_session = GameSession::new(1);
+        leader_session.character_id = Some(100);
+        app.handle_request(
+            &mut leader_session,
+            GameRequest::PartyKick {
+                target_name: "Matt".to_string(),
+            },
+        )
+        .expect("kick should succeed");
+
+        let target_types: Vec<i16> = broadcast
+            .packets_for(200)
+            .iter()
+            .map(|frame| PacketReader::from_frame(frame).expect("frame").packet_type)
+            .collect();
+        assert!(
+            target_types.contains(&odmo_protocol::opcode::game::PARTY_KICK),
+            "kicked member should receive kick packet",
+        );
+    }
+
+    #[test]
+    fn party_change_master_broadcasts_slot() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-master"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        establish_party(&app, 100, 200, "Matt", "AdminTamer");
+
+        let mut leader_session = GameSession::new(1);
+        leader_session.character_id = Some(100);
+        app.handle_request(
+            &mut leader_session,
+            GameRequest::PartyChangeMaster { new_leader_slot: 1 },
+        )
+        .expect("leader change should succeed");
+
+        let invitee_types: Vec<i16> = broadcast
+            .packets_for(200)
+            .iter()
+            .map(|frame| PacketReader::from_frame(frame).expect("frame").packet_type)
+            .collect();
+        assert!(
+            invitee_types.contains(&odmo_protocol::opcode::game::PARTY_CHANGE_MASTER),
+            "members should receive leader-changed packet",
+        );
+    }
+
+    #[test]
+    fn party_change_loot_broadcasts_rule() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-loot"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        establish_party(&app, 100, 200, "Matt", "AdminTamer");
+
+        let mut leader_session = GameSession::new(1);
+        leader_session.character_id = Some(100);
+        app.handle_request(
+            &mut leader_session,
+            GameRequest::PartyChangeLoot {
+                loot_type: 2,
+                rare_type: 3,
+                disp_rare_grade: 4,
+            },
+        )
+        .expect("loot change should succeed");
+
+        let invitee_types: Vec<i16> = broadcast
+            .packets_for(200)
+            .iter()
+            .map(|frame| PacketReader::from_frame(frame).expect("frame").packet_type)
+            .collect();
+        assert!(
+            invitee_types.contains(&odmo_protocol::opcode::game::PARTY_CHANGE_LOOT),
+            "members should receive loot-change packet",
+        );
+    }
+
+    #[test]
+    fn consume_item_broadcasts_party_member_info() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        {
+            let mut characters = repo.characters.write().expect("repo poisoned");
+            let character = characters.get_mut(&100).expect("leader should exist");
+            if character.inventory.items.is_empty() {
+                character
+                    .inventory
+                    .items
+                    .resize(1, odmo_types::ItemRecord::default());
+            }
+            character.inventory.items[0] = odmo_types::ItemRecord {
+                item_id: 5101,
+                amount: 1,
+                ..odmo_types::ItemRecord::default()
+            };
+            character.inventory.items[0].sync_record();
+        }
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-info"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        establish_party(&app, 100, 200, "Matt", "AdminTamer");
+
+        let mut leader_session = GameSession::new(1);
+        leader_session.character_id = Some(100);
+        app.handle_request(
+            &mut leader_session,
+            GameRequest::ConsumeItem {
+                target_handler: 0,
+                slot: 0,
+            },
+        )
+        .expect("consume should succeed");
+
+        let info_packet = broadcast
+            .packets_for(200)
+            .into_iter()
+            .find(|frame| {
+                PacketReader::from_frame(frame)
+                    .map(|raw| raw.packet_type == odmo_protocol::opcode::game::PARTY_MEMBER_INFO)
+                    .unwrap_or(false)
+            })
+            .expect("party member info should be broadcast");
+        let raw = PacketReader::from_frame(&info_packet).expect("frame");
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u8().expect("slot"), 0);
+        assert_eq!(payload.read_i32().expect("digimon type"), 31_001);
+    }
+
+    #[test]
+    fn movement_broadcasts_party_member_position() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-position"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        establish_party(&app, 100, 200, "Matt", "AdminTamer");
+
+        let mut leader_session = GameSession::new(1);
+        leader_session.character_id = Some(100);
+        app.handle_request(
+            &mut leader_session,
+            GameRequest::TamerMovimentation {
+                ticks: 0,
+                handler: 32_767,
+                x: 4321,
+                y: 5432,
+                z: 0.0,
+            },
+        )
+        .expect("movement should succeed");
+
+        let position_packet = broadcast
+            .packets_for(200)
+            .into_iter()
+            .find(|frame| {
+                PacketReader::from_frame(frame)
+                    .map(|raw| {
+                        raw.packet_type == odmo_protocol::opcode::game::PARTY_MEMBER_POSITION
+                    })
+                    .unwrap_or(false)
+            })
+            .expect("party member position should be broadcast");
+        let raw = PacketReader::from_frame(&position_packet).expect("frame");
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u8().expect("slot"), 0);
+        assert_eq!(payload.read_i32().expect("x"), 4321);
+        assert_eq!(payload.read_i32().expect("y"), 5432);
+    }
+
+    #[test]
+    fn warp_gate_broadcasts_party_member_map_change() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-map-change"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        establish_party(&app, 100, 200, "Matt", "AdminTamer");
+
+        let mut leader_session = GameSession::new(1);
+        leader_session.character_id = Some(100);
+        app.handle_request(
+            &mut leader_session,
+            GameRequest::WarpGate { portal_id: 10001 },
+        )
+        .expect("warp should succeed");
+
+        let map_packet = broadcast
+            .packets_for(200)
+            .into_iter()
+            .find(|frame| {
+                PacketReader::from_frame(frame)
+                    .map(|raw| {
+                        raw.packet_type == odmo_protocol::opcode::game::PARTY_MEMBER_MAP_CHANGE
+                    })
+                    .unwrap_or(false)
+            })
+            .expect("party member map change should be broadcast");
+        let raw = PacketReader::from_frame(&map_packet).expect("frame");
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u8().expect("slot"), 0);
+        assert_eq!(payload.read_i32().expect("map"), 102);
+    }
+
+    #[test]
+    fn disconnect_broadcasts_party_member_disconnected_even_without_map_presence() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-disconnected"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        establish_party(&app, 100, 200, "Matt", "AdminTamer");
+
+        let mut invitee_session = GameSession::new(2);
+        invitee_session.character_id = Some(200);
+        app.handle_disconnect(&invitee_session)
+            .expect("disconnect should clean party runtime");
+
+        let disconnect_packet = broadcast
+            .packets_for(100)
+            .into_iter()
+            .find(|frame| {
+                PacketReader::from_frame(frame)
+                    .map(|raw| {
+                        raw.packet_type == odmo_protocol::opcode::game::PARTY_MEMBER_DISCONNECTED
+                    })
+                    .unwrap_or(false)
+            })
+            .expect("party member disconnected should be broadcast");
+        let raw = PacketReader::from_frame(&disconnect_packet).expect("frame");
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_i32().expect("slot"), 1);
+    }
+
+    #[test]
+    fn partner_switch_broadcasts_party_member_digimon_change() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let broadcast = Arc::new(RecordingBroadcast::with_online([100, 200]));
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("party-partner-switch"),
+            },
+            repo,
+        )
+        .with_broadcast(broadcast.clone());
+
+        establish_party(&app, 100, 200, "Matt", "AdminTamer");
+
+        let mut leader_session = GameSession::new(1);
+        leader_session.character_id = Some(100);
+        let responses = app
+            .handle_request(&mut leader_session, GameRequest::PartnerSwitch { slot: 2 })
+            .expect("partner switch should succeed");
+
+        assert!(
+            responses.iter().any(|frame| {
+                PacketReader::from_frame(frame)
+                    .map(|raw| raw.packet_type == odmo_protocol::opcode::game::UPDATE_STATUS)
+                    .unwrap_or(false)
+            }),
+            "partner switch should refresh local status",
+        );
+
+        let change_packet = broadcast
+            .packets_for(200)
+            .into_iter()
+            .find(|frame| {
+                PacketReader::from_frame(frame)
+                    .map(|raw| {
+                        raw.packet_type == odmo_protocol::opcode::game::PARTY_MEMBER_DIGIMON_CHANGE
+                    })
+                    .unwrap_or(false)
+            })
+            .expect("party digimon change should be broadcast");
+        let raw = PacketReader::from_frame(&change_packet).expect("frame");
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u8().expect("slot"), 0);
+        assert_eq!(payload.read_i32().expect("type"), 31_002);
+
+        let buff_packet = broadcast
+            .packets_for(200)
+            .into_iter()
+            .find(|frame| {
+                PacketReader::from_frame(frame)
+                    .map(|raw| {
+                        raw.packet_type == odmo_protocol::opcode::game::PARTY_MEMBER_BUFF_CHANGE
+                    })
+                    .unwrap_or(false)
+            })
+            .expect("party buff change should be broadcast");
+        let raw = PacketReader::from_frame(&buff_packet).expect("frame");
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u8().expect("slot"), 0);
+        assert_eq!(payload.read_u16().expect("buff count"), 0);
+    }
+
+    #[test]
+    fn partner_switch_invalid_slot_uses_modern_failure_contract() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-switch-fail"),
+            },
+            repo,
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(&mut session, GameRequest::PartnerSwitch { slot: 9 })
+            .expect("failure packet should still be returned");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::PARTNER_SWITCH_RESPONSE
+        );
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u32().expect("uid"), 0);
+    }
+
+    #[test]
+    fn partner_evolution_currently_returns_modern_failure_packet() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-evolution-fail"),
+            },
+            repo,
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::PartnerEvolution {
+                    digimon_handler: 21_000,
+                    evolution_slot: 4,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::EVOLUTION_FAILURE
         );
     }
 }

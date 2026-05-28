@@ -398,6 +398,7 @@ impl Default for XaiSnapshot {
 #[serde(default)]
 pub struct ActiveBuffSnapshot {
     pub buff_id: u16,
+    pub buff_class: u16,
     pub skill_id: i32,
     pub remaining_seconds: i32,
 }
@@ -406,8 +407,87 @@ impl Default for ActiveBuffSnapshot {
     fn default() -> Self {
         Self {
             buff_id: 0,
+            buff_class: 0,
             skill_id: 0,
             remaining_seconds: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PartnerSlotSnapshot {
+    pub slot: u8,
+    pub digimon_type: i32,
+    pub model: i32,
+    pub level: u8,
+    pub name: String,
+    pub size: i16,
+    pub hatch_grade: u8,
+    pub hp: i32,
+    pub ds: i32,
+    pub current_hp: i32,
+    pub current_ds: i32,
+    pub de: i32,
+    pub at: i32,
+    pub fs: i32,
+    pub ev: i32,
+    pub cc: i32,
+    pub ms: i32,
+    pub as_value: i32,
+    pub ht: i32,
+    pub ar: i32,
+    pub bl: i32,
+    pub clone_level: u16,
+    pub clone_at_value: u16,
+    pub clone_bl_value: u16,
+    pub clone_ct_value: u16,
+    pub clone_ev_value: u16,
+    pub clone_hp_value: u16,
+    pub clone_at_level: u16,
+    pub clone_bl_level: u16,
+    pub clone_ct_level: u16,
+    pub clone_ev_level: u16,
+    pub clone_hp_level: u16,
+    pub active_buffs: Vec<ActiveBuffSnapshot>,
+}
+
+impl Default for PartnerSlotSnapshot {
+    fn default() -> Self {
+        Self {
+            slot: 1,
+            digimon_type: 31_001,
+            model: DEFAULT_PARTNER_MODEL_ID,
+            level: 1,
+            name: String::new(),
+            size: 12_000,
+            hatch_grade: 3,
+            hp: 1_000,
+            ds: 1_000,
+            current_hp: 1_000,
+            current_ds: 1_000,
+            de: 100,
+            at: 100,
+            fs: 100,
+            ev: 0,
+            cc: 0,
+            ms: 250,
+            as_value: 1_000,
+            ht: 0,
+            ar: 0,
+            bl: 0,
+            clone_level: 0,
+            clone_at_value: 0,
+            clone_bl_value: 0,
+            clone_ct_value: 0,
+            clone_ev_value: 0,
+            clone_hp_value: 0,
+            clone_at_level: 0,
+            clone_bl_level: 0,
+            clone_ct_level: 0,
+            clone_ev_level: 0,
+            clone_hp_level: 0,
+            active_buffs: Vec::new(),
         }
     }
 }
@@ -566,7 +646,9 @@ pub struct CharacterSummary {
     pub partner_x: i32,
     pub partner_y: i32,
     pub partner_z: f32,
+    pub partner_current_slot: u8,
     pub partner_current_type: i32,
+    pub partner_slots: Vec<PartnerSlotSnapshot>,
     pub partner_active_buffs: Vec<ActiveBuffSnapshot>,
     pub partner_active_debuffs: Vec<ActiveBuffSnapshot>,
     pub partner_model: i32,
@@ -687,7 +769,9 @@ impl Default for CharacterSummary {
             partner_x: 14_834,
             partner_y: 9_895,
             partner_z: 0.0,
+            partner_current_slot: 1,
             partner_current_type: 31_001,
+            partner_slots: vec![PartnerSlotSnapshot::default()],
             partner_active_buffs: Vec::new(),
             partner_active_debuffs: Vec::new(),
             partner_model: DEFAULT_PARTNER_MODEL_ID,

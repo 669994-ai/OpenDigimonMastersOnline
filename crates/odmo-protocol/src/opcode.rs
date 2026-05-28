@@ -87,6 +87,8 @@ pub mod game {
     pub const TAMER_REACTION: i16 = 1058;
     pub const PARTNER_STOP: i16 = 1033;
     pub const PARTNER_STOP_RESPONSE: i16 = 1033;
+    pub const EVOLUTION: i16 = 1028;
+    pub const EVOLUTION_FAILURE: i16 = 1029;
     pub const PARTNER_SWITCH: i16 = 1041;
     pub const PARTNER_SWITCH_RESPONSE: i16 = 1041;
     pub const PARTNER_DELETE: i16 = 1042;
@@ -166,11 +168,20 @@ pub mod game {
     pub const PARTY_INVITE: i16 = 2301;
     pub const PARTY_INVITE_RESPONSE: i16 = 2302;
     pub const PARTY_CHAT: i16 = 2304;
+    pub const PARTY_JOIN: i16 = 2305;
     pub const PARTY_KICK: i16 = 2306;
     pub const PARTY_LEAVE: i16 = 2307;
     pub const PARTY_CHANGE_MASTER: i16 = 2308;
     pub const PARTY_CHANGE_LOOT: i16 = 2309;
+    pub const PARTY_MEMBER_LIST: i16 = 2310;
+    pub const PARTY_MEMBER_DISCONNECTED: i16 = 2312;
+    pub const PARTY_MEMBER_INFO: i16 = 2313;
+    pub const PARTY_MEMBER_MAP_CHANGE: i16 = 2315;
+    pub const PARTY_MEMBER_DIGIMON_CHANGE: i16 = 2316;
     pub const PARTY_DISMISS: i16 = 2317;
+    pub const PARTY_CREATED: i16 = 2319;
+    pub const PARTY_MEMBER_POSITION: i16 = 2320;
+    pub const PARTY_MEMBER_BUFF_CHANGE: i16 = 2323;
     pub const GUILD_CREATE: i16 = 2101;
     pub const GUILD_DELETE: i16 = 2102;
     pub const GUILD_INVITE: i16 = 2109;
@@ -229,5 +240,6 @@ pub mod game {
     pub const TIME_CHARGE_RESULT: i16 = 16042;
     pub const WARP_GATE_DUNGEON: i16 = 4119;
     pub const SPIRIT_CRAFT: i16 = 3241;
+    pub const SKILL_UPDATE_COOLDOWN: i16 = 3246;
     pub const FRIENDLY_INFO: i16 = 3129;
 }

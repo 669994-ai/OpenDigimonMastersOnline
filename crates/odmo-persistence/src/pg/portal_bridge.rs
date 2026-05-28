@@ -26,7 +26,10 @@ impl PortalStore for PgRepository {
         })
     }
 
-    fn consume_transfer_ticket(&self, account_id: AccountId) -> anyhow::Result<Option<TransferTicket>> {
+    fn consume_transfer_ticket(
+        &self,
+        account_id: AccountId,
+    ) -> anyhow::Result<Option<TransferTicket>> {
         self.block_on(async {
             let row: Option<(String, i32)> = sqlx::query_as(
                 "SELECT token, server_id FROM transfer_tickets WHERE account_id = $1",
@@ -69,7 +72,10 @@ impl PortalStore for PgRepository {
         })
     }
 
-    fn consume_game_session_ticket(&self, account_id: AccountId) -> anyhow::Result<Option<GameSessionTicket>> {
+    fn consume_game_session_ticket(
+        &self,
+        account_id: AccountId,
+    ) -> anyhow::Result<Option<GameSessionTicket>> {
         self.block_on(async {
             let row: Option<(String, i64)> = sqlx::query_as(
                 "SELECT token, character_id FROM game_session_tickets WHERE account_id = $1",

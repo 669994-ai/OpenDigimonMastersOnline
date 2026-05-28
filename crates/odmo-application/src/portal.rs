@@ -31,11 +31,17 @@ pub enum SocialNotificationKind {
 pub trait PortalStore: Send + Sync + 'static {
     // Transfer tickets (account → character)
     fn store_transfer_ticket(&self, ticket: &TransferTicket) -> anyhow::Result<()>;
-    fn consume_transfer_ticket(&self, account_id: AccountId) -> anyhow::Result<Option<TransferTicket>>;
+    fn consume_transfer_ticket(
+        &self,
+        account_id: AccountId,
+    ) -> anyhow::Result<Option<TransferTicket>>;
 
     // Game session tickets (character → game)
     fn store_game_session_ticket(&self, ticket: &GameSessionTicket) -> anyhow::Result<()>;
-    fn consume_game_session_ticket(&self, account_id: AccountId) -> anyhow::Result<Option<GameSessionTicket>>;
+    fn consume_game_session_ticket(
+        &self,
+        account_id: AccountId,
+    ) -> anyhow::Result<Option<GameSessionTicket>>;
 
     // Social notifications
     fn enqueue_social_notification(
@@ -71,7 +77,10 @@ pub struct JsonPortalBridge {
 impl JsonPortalBridge {
     pub fn new(root: PathBuf) -> anyhow::Result<Self> {
         fs::create_dir_all(&root).with_context(|| {
-            format!("failed to create portal bridge directory {}", root.display())
+            format!(
+                "failed to create portal bridge directory {}",
+                root.display()
+            )
         })?;
         Ok(Self { root })
     }
@@ -85,14 +94,19 @@ impl JsonPortalBridge {
     }
 
     fn social_inbox_path(&self, character_id: CharacterId) -> PathBuf {
-        self.root.join(format!("social-character-{character_id}.json"))
+        self.root
+            .join(format!("social-character-{character_id}.json"))
     }
 
     fn map_presence_path(&self, map_id: i16, channel: u8) -> PathBuf {
-        self.root.join(format!("map-{map_id}-channel-{channel}.json"))
+        self.root
+            .join(format!("map-{map_id}-channel-{channel}.json"))
     }
 
-    fn load_social_notifications(&self, character_id: CharacterId) -> anyhow::Result<Vec<SocialNotification>> {
+    fn load_social_notifications(
+        &self,
+        character_id: CharacterId,
+    ) -> anyhow::Result<Vec<SocialNotification>> {
         let path = self.social_inbox_path(character_id);
         if !path.exists() {
             return Ok(Vec::new());
@@ -114,7 +128,10 @@ impl PortalStore for JsonPortalBridge {
         Ok(())
     }
 
-    fn consume_transfer_ticket(&self, account_id: AccountId) -> anyhow::Result<Option<TransferTicket>> {
+    fn consume_transfer_ticket(
+        &self,
+        account_id: AccountId,
+    ) -> anyhow::Result<Option<TransferTicket>> {
         let path = self.ticket_path(account_id);
         if !path.exists() {
             return Ok(None);
@@ -136,7 +153,10 @@ impl PortalStore for JsonPortalBridge {
         Ok(())
     }
 
-    fn consume_game_session_ticket(&self, account_id: AccountId) -> anyhow::Result<Option<GameSessionTicket>> {
+    fn consume_game_session_ticket(
+        &self,
+        account_id: AccountId,
+    ) -> anyhow::Result<Option<GameSessionTicket>> {
         let path = self.game_ticket_path(account_id);
         if !path.exists() {
             return Ok(None);
@@ -150,7 +170,11 @@ impl PortalStore for JsonPortalBridge {
         Ok(Some(ticket))
     }
 
-    fn enqueue_social_notification(&self, character_id: CharacterId, notification: SocialNotification) -> anyhow::Result<()> {
+    fn enqueue_social_notification(
+        &self,
+        character_id: CharacterId,
+        notification: SocialNotification,
+    ) -> anyhow::Result<()> {
         let mut notifications = self.load_social_notifications(character_id)?;
         notifications.push(notification);
         let path = self.social_inbox_path(character_id);
@@ -160,7 +184,10 @@ impl PortalStore for JsonPortalBridge {
         Ok(())
     }
 
-    fn consume_social_notifications(&self, character_id: CharacterId) -> anyhow::Result<Vec<SocialNotification>> {
+    fn consume_social_notifications(
+        &self,
+        character_id: CharacterId,
+    ) -> anyhow::Result<Vec<SocialNotification>> {
         let notifications = self.load_social_notifications(character_id)?;
         let path = self.social_inbox_path(character_id);
         if path.exists() {
@@ -193,7 +220,12 @@ impl PortalStore for JsonPortalBridge {
         Ok(())
     }
 
-    fn remove_map_presence(&self, map_id: i16, channel: u8, character_id: CharacterId) -> anyhow::Result<Vec<CharacterSummary>> {
+    fn remove_map_presence(
+        &self,
+        map_id: i16,
+        channel: u8,
+        character_id: CharacterId,
+    ) -> anyhow::Result<Vec<CharacterSummary>> {
         let mut entries = self.load_map_presence(map_id, channel)?;
         let before_len = entries.len();
         entries.retain(|entry| entry.id != character_id);
@@ -230,7 +262,9 @@ impl std::fmt::Debug for PortalBridge {
 
 impl PortalBridge {
     pub fn from_store(store: impl PortalStore) -> Self {
-        Self { inner: Arc::new(store) }
+        Self {
+            inner: Arc::new(store),
+        }
     }
 
     pub fn from_json(root: PathBuf) -> anyhow::Result<Self> {
@@ -241,7 +275,10 @@ impl PortalBridge {
         self.inner.store_transfer_ticket(ticket)
     }
 
-    pub fn consume_transfer_ticket(&self, account_id: AccountId) -> anyhow::Result<Option<TransferTicket>> {
+    pub fn consume_transfer_ticket(
+        &self,
+        account_id: AccountId,
+    ) -> anyhow::Result<Option<TransferTicket>> {
         self.inner.consume_transfer_ticket(account_id)
     }
 
@@ -249,19 +286,34 @@ impl PortalBridge {
         self.inner.store_game_session_ticket(ticket)
     }
 
-    pub fn consume_game_session_ticket(&self, account_id: AccountId) -> anyhow::Result<Option<GameSessionTicket>> {
+    pub fn consume_game_session_ticket(
+        &self,
+        account_id: AccountId,
+    ) -> anyhow::Result<Option<GameSessionTicket>> {
         self.inner.consume_game_session_ticket(account_id)
     }
 
-    pub fn enqueue_social_notification(&self, character_id: CharacterId, notification: SocialNotification) -> anyhow::Result<()> {
-        self.inner.enqueue_social_notification(character_id, notification)
+    pub fn enqueue_social_notification(
+        &self,
+        character_id: CharacterId,
+        notification: SocialNotification,
+    ) -> anyhow::Result<()> {
+        self.inner
+            .enqueue_social_notification(character_id, notification)
     }
 
-    pub fn consume_social_notifications(&self, character_id: CharacterId) -> anyhow::Result<Vec<SocialNotification>> {
+    pub fn consume_social_notifications(
+        &self,
+        character_id: CharacterId,
+    ) -> anyhow::Result<Vec<SocialNotification>> {
         self.inner.consume_social_notifications(character_id)
     }
 
-    pub fn load_map_presence(&self, map_id: i16, channel: u8) -> anyhow::Result<Vec<CharacterSummary>> {
+    pub fn load_map_presence(
+        &self,
+        map_id: i16,
+        channel: u8,
+    ) -> anyhow::Result<Vec<CharacterSummary>> {
         self.inner.load_map_presence(map_id, channel)
     }
 
@@ -269,7 +321,13 @@ impl PortalBridge {
         self.inner.upsert_map_presence(character)
     }
 
-    pub fn remove_map_presence(&self, map_id: i16, channel: u8, character_id: CharacterId) -> anyhow::Result<Vec<CharacterSummary>> {
-        self.inner.remove_map_presence(map_id, channel, character_id)
+    pub fn remove_map_presence(
+        &self,
+        map_id: i16,
+        channel: u8,
+        character_id: CharacterId,
+    ) -> anyhow::Result<Vec<CharacterSummary>> {
+        self.inner
+            .remove_map_presence(map_id, channel, character_id)
     }
 }

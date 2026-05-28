@@ -8,10 +8,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-fn map_key(map_id: i16, channel: u8) -> String {
-    format!("{map_id}:{channel}")
-}
-
 use anyhow::Context;
 use odmo_application::{
     account::AccountRepository,
@@ -25,9 +21,86 @@ use odmo_types::{
     AccessLevel, Account, AccountId, AccountSuspension, CharacterSummary,
     DEFAULT_GM_PARTNER_MODEL_ID, DEFAULT_GM_TAMER_MODEL_ID, DEFAULT_PARTNER_MODEL_ID,
     DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID, DropSummary,
-    ItemRecord, MobSummary, ServerDescriptor,
+    ItemRecord, MobSummary, PartnerSlotSnapshot, ServerDescriptor,
 };
 use serde::{Deserialize, Serialize};
+
+fn map_key(map_id: i16, channel: u8) -> String {
+    format!("{map_id}:{channel}")
+}
+
+fn active_partner_snapshot(character: &CharacterSummary) -> PartnerSlotSnapshot {
+    PartnerSlotSnapshot {
+        slot: character.partner_current_slot,
+        digimon_type: character.partner_current_type,
+        model: character.partner_model,
+        level: character.partner_level,
+        name: character.partner_name.clone(),
+        size: character.partner_size,
+        hatch_grade: character.partner_hatch_grade,
+        hp: character.partner_hp,
+        ds: character.partner_ds,
+        current_hp: character.partner_current_hp,
+        current_ds: character.partner_current_ds,
+        de: character.partner_de,
+        at: character.partner_at,
+        fs: character.partner_fs,
+        ev: character.partner_ev,
+        cc: character.partner_cc,
+        ms: character.partner_ms,
+        as_value: character.partner_as,
+        ht: character.partner_ht,
+        ar: character.partner_ar,
+        bl: character.partner_bl,
+        clone_level: character.partner_clone_level,
+        clone_at_value: character.partner_clone_at_value,
+        clone_bl_value: character.partner_clone_bl_value,
+        clone_ct_value: character.partner_clone_ct_value,
+        clone_ev_value: character.partner_clone_ev_value,
+        clone_hp_value: character.partner_clone_hp_value,
+        clone_at_level: character.partner_clone_at_level,
+        clone_bl_level: character.partner_clone_bl_level,
+        clone_ct_level: character.partner_clone_ct_level,
+        clone_ev_level: character.partner_clone_ev_level,
+        clone_hp_level: character.partner_clone_hp_level,
+        active_buffs: character.partner_active_buffs.clone(),
+    }
+}
+
+fn apply_partner_snapshot(character: &mut CharacterSummary, partner: &PartnerSlotSnapshot) {
+    character.partner_current_type = partner.digimon_type;
+    character.partner_model = partner.model;
+    character.partner_level = partner.level;
+    character.partner_name = partner.name.clone();
+    character.partner_size = partner.size;
+    character.partner_hatch_grade = partner.hatch_grade;
+    character.partner_hp = partner.hp;
+    character.partner_ds = partner.ds;
+    character.partner_current_hp = partner.current_hp;
+    character.partner_current_ds = partner.current_ds;
+    character.partner_de = partner.de;
+    character.partner_at = partner.at;
+    character.partner_fs = partner.fs;
+    character.partner_ev = partner.ev;
+    character.partner_cc = partner.cc;
+    character.partner_ms = partner.ms;
+    character.partner_as = partner.as_value;
+    character.partner_ht = partner.ht;
+    character.partner_ar = partner.ar;
+    character.partner_bl = partner.bl;
+    character.partner_clone_level = partner.clone_level;
+    character.partner_clone_at_value = partner.clone_at_value;
+    character.partner_clone_bl_value = partner.clone_bl_value;
+    character.partner_clone_ct_value = partner.clone_ct_value;
+    character.partner_clone_ev_value = partner.clone_ev_value;
+    character.partner_clone_hp_value = partner.clone_hp_value;
+    character.partner_clone_at_level = partner.clone_at_level;
+    character.partner_clone_bl_level = partner.clone_bl_level;
+    character.partner_clone_ct_level = partner.clone_ct_level;
+    character.partner_clone_ev_level = partner.clone_ev_level;
+    character.partner_clone_hp_level = partner.clone_hp_level;
+    character.partner_active_buffs = partner.active_buffs.clone();
+}
 
 /// Persistence backend selection.
 pub enum PersistenceBackend {
@@ -132,8 +205,9 @@ impl JsonRepository {
         };
 
         if normalize_legacy_snapshot(&mut snapshot) {
-            fs::write(&path, serde_json::to_vec_pretty(&snapshot)?)
-                .with_context(|| format!("failed to persist normalized repository {}", path.display()))?;
+            fs::write(&path, serde_json::to_vec_pretty(&snapshot)?).with_context(|| {
+                format!("failed to persist normalized repository {}", path.display())
+            })?;
         }
 
         Ok(Self {
@@ -232,6 +306,16 @@ impl CharacterRepository for JsonRepository {
             .cloned())
     }
 
+    fn character_by_name(&self, name: &str) -> anyhow::Result<Option<CharacterSummary>> {
+        let state = self.state.read().expect("repository poisoned");
+        Ok(state
+            .characters_by_account
+            .values()
+            .flat_map(|characters| characters.iter())
+            .find(|character| character.name.eq_ignore_ascii_case(name))
+            .cloned())
+    }
+
     fn is_name_available(&self, name: &str) -> anyhow::Result<bool> {
         let state = self.state.read().expect("repository poisoned");
         Ok(!state
@@ -265,8 +349,17 @@ impl CharacterRepository for JsonRepository {
             account_id,
             slot,
             name: tamer_name,
+            partner_current_slot: 1,
+            partner_current_type: partner_model,
             partner_model,
-            partner_name,
+            partner_name: partner_name.clone(),
+            partner_slots: vec![PartnerSlotSnapshot {
+                slot: 1,
+                digimon_type: partner_model,
+                model: partner_model,
+                name: partner_name,
+                ..PartnerSlotSnapshot::default()
+            }],
             general_handler: next_id as u32 + 10_000,
             partner_handler: next_id as u32 + 20_000,
             model: tamer_model,
@@ -345,6 +438,50 @@ impl CharacterRepository for JsonRepository {
             }
         }
         Ok(())
+    }
+
+    fn switch_partner(
+        &self,
+        character_id: u64,
+        slot: u8,
+    ) -> anyhow::Result<Option<CharacterSummary>> {
+        let mut state = self.state.write().expect("repository poisoned");
+        let mut updated_character = None;
+        for characters in state.characters_by_account.values_mut() {
+            if let Some(ch) = characters.iter_mut().find(|c| c.id == character_id) {
+                let current_slot = ch.partner_current_slot;
+                if current_slot == slot {
+                    updated_character = Some(ch.clone());
+                    break;
+                }
+
+                if let Some(current_index) = ch
+                    .partner_slots
+                    .iter()
+                    .position(|partner| partner.slot == current_slot)
+                {
+                    ch.partner_slots[current_index] = active_partner_snapshot(ch);
+                }
+
+                let Some(target_partner) = ch
+                    .partner_slots
+                    .iter()
+                    .find(|partner| partner.slot == slot)
+                    .cloned()
+                else {
+                    return Ok(None);
+                };
+
+                apply_partner_snapshot(ch, &target_partner);
+                ch.partner_current_slot = slot;
+                updated_character = Some(ch.clone());
+                break;
+            }
+        }
+        if updated_character.is_some() {
+            self.persist(&state)?;
+        }
+        Ok(updated_character)
     }
 
     fn update_character_map(
@@ -430,6 +567,21 @@ impl CharacterRepository for JsonRepository {
                 return Ok(());
             }
         }
+        Ok(())
+    }
+
+    fn update_character_map_region(
+        &self,
+        _character_id: u64,
+        _map_id: i16,
+        _unlocked: bool,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+    fn update_character_state(&self, _character_id: u64, _state: u8) -> anyhow::Result<()> {
+        Ok(())
+    }
+    fn update_welcome_flag(&self, _account_id: AccountId, _welcome: bool) -> anyhow::Result<()> {
         Ok(())
     }
 }
@@ -757,7 +909,35 @@ impl WorldSnapshot {
                         account_id: 1,
                         slot: 0,
                         name: "AdminTamer".to_string(),
+                        partner_current_slot: 1,
+                        partner_current_type: DEFAULT_PARTNER_MODEL_ID,
                         partner_name: "Agumon".to_string(),
+                        partner_slots: vec![
+                            PartnerSlotSnapshot {
+                                slot: 1,
+                                digimon_type: DEFAULT_PARTNER_MODEL_ID,
+                                model: DEFAULT_PARTNER_MODEL_ID,
+                                name: "Agumon".to_string(),
+                                ..PartnerSlotSnapshot::default()
+                            },
+                            PartnerSlotSnapshot {
+                                slot: 2,
+                                digimon_type: 31_002,
+                                model: 31_002,
+                                name: "Greymon".to_string(),
+                                level: 11,
+                                hp: 1_400,
+                                ds: 1_200,
+                                current_hp: 1_400,
+                                current_ds: 1_200,
+                                at: 150,
+                                de: 120,
+                                fs: 120,
+                                ms: 260,
+                                as_value: 950,
+                                ..PartnerSlotSnapshot::default()
+                            },
+                        ],
                         general_handler: 11_000,
                         partner_handler: 21_000,
                         model: DEFAULT_TAMER_MODEL_ID,
@@ -772,7 +952,16 @@ impl WorldSnapshot {
                         account_id: 2,
                         slot: 0,
                         name: "GmTamer".to_string(),
+                        partner_current_slot: 1,
+                        partner_current_type: DEFAULT_GM_PARTNER_MODEL_ID,
                         partner_name: "Gabumon".to_string(),
+                        partner_slots: vec![PartnerSlotSnapshot {
+                            slot: 1,
+                            digimon_type: DEFAULT_GM_PARTNER_MODEL_ID,
+                            model: DEFAULT_GM_PARTNER_MODEL_ID,
+                            name: "Gabumon".to_string(),
+                            ..PartnerSlotSnapshot::default()
+                        }],
                         general_handler: 12_000,
                         partner_handler: 22_000,
                         model: DEFAULT_GM_TAMER_MODEL_ID,
@@ -879,17 +1068,31 @@ fn normalize_legacy_snapshot(snapshot: &mut WorldSnapshot) -> bool {
         }
     }
 
-    if !snapshot.mobs_by_map.contains_key(&map_key(DEFAULT_START_MAP_ID, 0)) {
-        snapshot
-            .mobs_by_map
-            .insert(map_key(DEFAULT_START_MAP_ID, 0), WorldSnapshot::demo().mobs_by_map.remove(&map_key(DEFAULT_START_MAP_ID, 0)).unwrap_or_default());
+    if !snapshot
+        .mobs_by_map
+        .contains_key(&map_key(DEFAULT_START_MAP_ID, 0))
+    {
+        snapshot.mobs_by_map.insert(
+            map_key(DEFAULT_START_MAP_ID, 0),
+            WorldSnapshot::demo()
+                .mobs_by_map
+                .remove(&map_key(DEFAULT_START_MAP_ID, 0))
+                .unwrap_or_default(),
+        );
         changed = true;
     }
 
-    if !snapshot.drops_by_map.contains_key(&map_key(DEFAULT_START_MAP_ID, 0)) {
-        snapshot
-            .drops_by_map
-            .insert(map_key(DEFAULT_START_MAP_ID, 0), WorldSnapshot::demo().drops_by_map.remove(&map_key(DEFAULT_START_MAP_ID, 0)).unwrap_or_default());
+    if !snapshot
+        .drops_by_map
+        .contains_key(&map_key(DEFAULT_START_MAP_ID, 0))
+    {
+        snapshot.drops_by_map.insert(
+            map_key(DEFAULT_START_MAP_ID, 0),
+            WorldSnapshot::demo()
+                .drops_by_map
+                .remove(&map_key(DEFAULT_START_MAP_ID, 0))
+                .unwrap_or_default(),
+        );
         changed = true;
     }
 

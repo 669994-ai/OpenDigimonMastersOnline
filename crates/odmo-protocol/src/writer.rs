@@ -60,6 +60,14 @@ impl PacketWriter {
         self.write_u8(0);
     }
 
+    pub fn write_fixed_wide_string(&mut self, value: &str, char_count: usize) {
+        let mut wide: Vec<u16> = value.encode_utf16().take(char_count).collect();
+        wide.resize(char_count, 0);
+        for code_unit in wide {
+            self.write_u16(code_unit);
+        }
+    }
+
     pub fn write_string_at(&mut self, value: &str, pos: usize) {
         let bytes = value.as_bytes();
         self.buffer[pos] = bytes.len() as u8;

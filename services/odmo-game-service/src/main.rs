@@ -48,6 +48,10 @@ impl odmo_application::BroadcastSink for SessionBroadcast {
         Ok(())
     }
 
+    fn is_online(&self, character_id: u64) -> bool {
+        self.senders.contains_key(&character_id)
+    }
+
     fn send_to_visible(
         &self,
         map_id: i16,

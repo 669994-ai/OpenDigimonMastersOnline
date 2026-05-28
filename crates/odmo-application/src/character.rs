@@ -14,8 +14,8 @@ use odmo_protocol::character::{
     DeleteCharacterResult,
 };
 use odmo_types::{
-    Account, AccountId, CharacterSummary, GameServerTarget, GameSessionTicket,
-    DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y,
+    Account, AccountId, CharacterSummary, DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y,
+    GameServerTarget, GameSessionTicket,
 };
 use uuid::Uuid;
 
@@ -58,6 +58,7 @@ pub trait CharacterRepository: Send + Sync {
         slot: u8,
     ) -> anyhow::Result<Option<CharacterSummary>>;
     fn character_by_id(&self, character_id: u64) -> anyhow::Result<Option<CharacterSummary>>;
+    fn character_by_name(&self, name: &str) -> anyhow::Result<Option<CharacterSummary>>;
     fn is_name_available(&self, name: &str) -> anyhow::Result<bool>;
     fn create_character(
         &self,
@@ -83,6 +84,11 @@ pub trait CharacterRepository: Send + Sync {
         y: i32,
         z: f32,
     ) -> anyhow::Result<()>;
+    fn switch_partner(
+        &self,
+        character_id: u64,
+        slot: u8,
+    ) -> anyhow::Result<Option<CharacterSummary>>;
     fn update_character_map(
         &self,
         character_id: u64,
@@ -110,6 +116,14 @@ pub trait CharacterRepository: Send + Sync {
         character_id: u64,
         account_warehouse: odmo_types::InventorySnapshot,
     ) -> anyhow::Result<()>;
+    fn update_character_map_region(
+        &self,
+        character_id: u64,
+        map_id: i16,
+        unlocked: bool,
+    ) -> anyhow::Result<()>;
+    fn update_character_state(&self, character_id: u64, state: u8) -> anyhow::Result<()>;
+    fn update_welcome_flag(&self, account_id: AccountId, welcome: bool) -> anyhow::Result<()>;
 }
 
 pub trait CharacterAccountRepository: Send + Sync {
@@ -484,6 +498,17 @@ mod tests {
                 .cloned())
         }
 
+        fn character_by_name(&self, name: &str) -> anyhow::Result<Option<CharacterSummary>> {
+            Ok(self
+                .characters_by_account
+                .read()
+                .expect("repo poisoned")
+                .values()
+                .flatten()
+                .find(|character| character.name.eq_ignore_ascii_case(name))
+                .cloned())
+        }
+
         fn is_name_available(&self, name: &str) -> anyhow::Result<bool> {
             Ok(!self
                 .characters_by_account
@@ -516,8 +541,17 @@ mod tests {
                 account_id,
                 slot,
                 name: tamer_name,
+                partner_current_slot: 1,
+                partner_current_type: partner_model,
                 partner_model,
-                partner_name,
+                partner_name: partner_name.clone(),
+                partner_slots: vec![odmo_types::PartnerSlotSnapshot {
+                    slot: 1,
+                    digimon_type: partner_model,
+                    model: partner_model,
+                    name: partner_name,
+                    ..odmo_types::PartnerSlotSnapshot::default()
+                }],
                 general_handler: next_id as u32 + 10_000,
                 partner_handler: next_id as u32 + 20_000,
                 model: tamer_model,
@@ -563,6 +597,37 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
+        fn switch_partner(
+            &self,
+            character_id: u64,
+            slot: u8,
+        ) -> anyhow::Result<Option<CharacterSummary>> {
+            let mut guard = self.characters_by_account.write().expect("repo poisoned");
+            for characters in guard.values_mut() {
+                if let Some(character) = characters.iter_mut().find(|c| c.id == character_id) {
+                    let Some(target) = character
+                        .partner_slots
+                        .iter()
+                        .find(|partner| partner.slot == slot)
+                        .cloned()
+                    else {
+                        return Ok(None);
+                    };
+                    character.partner_current_slot = slot;
+                    character.partner_current_type = target.digimon_type;
+                    character.partner_model = target.model;
+                    character.partner_name = target.name.clone();
+                    character.partner_level = target.level;
+                    character.partner_hp = target.hp;
+                    character.partner_ds = target.ds;
+                    character.partner_current_hp = target.current_hp;
+                    character.partner_current_ds = target.current_ds;
+                    character.partner_active_buffs = target.active_buffs.clone();
+                    return Ok(Some(character.clone()));
+                }
+            }
+            Ok(None)
+        }
         fn update_inventory(
             &self,
             _character_id: u64,
@@ -588,6 +653,24 @@ mod tests {
             &self,
             _character_id: u64,
             _account_warehouse: odmo_types::InventorySnapshot,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn update_character_map_region(
+            &self,
+            _character_id: u64,
+            _map_id: i16,
+            _unlocked: bool,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn update_character_state(&self, _character_id: u64, _state: u8) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn update_welcome_flag(
+            &self,
+            _account_id: AccountId,
+            _welcome: bool,
         ) -> anyhow::Result<()> {
             Ok(())
         }
@@ -666,7 +749,8 @@ mod tests {
     #[test]
     fn request_characters_consumes_transfer_ticket_and_returns_list() {
         let portal_state_dir = unique_test_dir("character-with-ticket");
-        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge should initialize");
+        let bridge =
+            PortalBridge::from_json(portal_state_dir.clone()).expect("bridge should initialize");
         bridge
             .store_transfer_ticket(&TransferTicket {
                 token: "demo".to_string(),
@@ -699,7 +783,8 @@ mod tests {
     #[test]
     fn create_character_returns_created_packet() {
         let portal_state_dir = unique_test_dir("character-create");
-        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge should initialize");
+        let bridge =
+            PortalBridge::from_json(portal_state_dir.clone()).expect("bridge should initialize");
         bridge
             .store_transfer_ticket(&TransferTicket {
                 token: "demo".to_string(),

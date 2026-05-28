@@ -112,6 +112,10 @@ pub enum GameRequest {
     PartnerStop {
         uid: u32,
     },
+    PartnerEvolution {
+        digimon_handler: u32,
+        evolution_slot: u8,
+    },
     PartnerSwitch {
         slot: u8,
     },
@@ -330,24 +334,26 @@ pub enum GameRequest {
         reset_count: u32,
     },
     PartyInvite {
-        target_handler: u32,
+        target_name: String,
     },
     PartyInviteResponse {
-        inviter_handler: u32,
-        accepted: u8,
+        result_type: i32,
+        inviter_name: String,
     },
     PartyChat {
         message: String,
     },
     PartyKick {
-        member_slot: u8,
+        target_name: String,
     },
     PartyLeave,
     PartyChangeMaster {
-        new_leader_slot: u8,
+        new_leader_slot: i32,
     },
     PartyChangeLoot {
-        loot_type: u8,
+        loot_type: i32,
+        rare_type: u8,
+        disp_rare_grade: u8,
     },
     PartyDismiss,
     GuildCreate {
@@ -1251,6 +1257,400 @@ impl FriendConnectPacket {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyInvitePacket {
+    pub inviter_name: String,
+}
+
+impl PartyInvitePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_INVITE);
+        writer.write_string(&self.inviter_name);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyInviteResultPacket {
+    pub result_type: i32,
+    pub target_name: String,
+}
+
+impl PartyInviteResultPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_INVITE_RESPONSE);
+        writer.write_i32(self.result_type);
+        writer.write_string(&self.target_name);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyCreatedPacket {
+    pub party_id: u32,
+    pub loot_type: u32,
+}
+
+impl PartyCreatedPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_CREATED);
+        writer.write_u32(self.party_id);
+        writer.write_u32(self.loot_type);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartyMemberListEntry {
+    pub party_slot: i32,
+    pub character: CharacterSummary,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartyJoinPacket {
+    pub member: PartyMemberListEntry,
+}
+
+impl PartyJoinPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_JOIN);
+        write_party_member(&mut writer, &self.member);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartyMemberListPacket {
+    pub party_id: u32,
+    pub my_slot: i32,
+    pub leader_slot: i32,
+    pub loot_type: u32,
+    pub rare_rate: u8,
+    pub disp_rare_grade: u8,
+    pub members: Vec<PartyMemberListEntry>,
+}
+
+impl PartyMemberListPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_MEMBER_LIST);
+        writer.write_u32(self.party_id);
+        writer.write_i32(self.my_slot);
+        writer.write_i32(self.leader_slot);
+        writer.write_u32(self.loot_type);
+        writer.write_u8(self.rare_rate);
+        writer.write_u8(self.disp_rare_grade);
+        for member in &self.members {
+            write_party_member(&mut writer, member);
+        }
+        writer.write_i32(-1);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyLeavePacket {
+    pub member_slot: u8,
+}
+
+impl PartyLeavePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_LEAVE);
+        writer.write_u8(self.member_slot);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyKickPacket {
+    pub member_slot: u8,
+}
+
+impl PartyKickPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_KICK);
+        writer.write_u8(self.member_slot);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyLeaderChangedPacket {
+    pub new_leader_slot: i32,
+}
+
+impl PartyLeaderChangedPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_CHANGE_MASTER);
+        writer.write_i32(self.new_leader_slot);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyChangeLootTypePacket {
+    pub loot_type: i32,
+    pub rare_type: u8,
+    pub disp_rare_grade: u8,
+}
+
+impl PartyChangeLootTypePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_CHANGE_LOOT);
+        writer.write_i32(self.loot_type);
+        writer.write_u8(self.rare_type);
+        writer.write_u8(self.disp_rare_grade);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyMemberInfoPacket {
+    pub member_slot: u8,
+    pub digimon_type: i32,
+    pub tamer_hp: i32,
+    pub tamer_max_hp: i32,
+    pub tamer_ds: i32,
+    pub tamer_max_ds: i32,
+    pub digimon_hp: i32,
+    pub digimon_max_hp: i32,
+    pub digimon_ds: i32,
+    pub digimon_max_ds: i32,
+    pub tamer_level: u16,
+    pub digimon_level: u16,
+}
+
+impl PartyMemberInfoPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_MEMBER_INFO);
+        writer.write_u8(self.member_slot);
+        writer.write_i32(self.digimon_type);
+        writer.write_i32(self.tamer_hp);
+        writer.write_i32(self.tamer_max_hp);
+        writer.write_i32(self.tamer_ds);
+        writer.write_i32(self.tamer_max_ds);
+        writer.write_i32(self.digimon_hp);
+        writer.write_i32(self.digimon_max_hp);
+        writer.write_i32(self.digimon_ds);
+        writer.write_i32(self.digimon_max_ds);
+        writer.write_u16(self.tamer_level);
+        writer.write_u16(self.digimon_level);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyMemberPositionPacket {
+    pub member_slot: u8,
+    pub tamer_x: i32,
+    pub tamer_y: i32,
+    pub digimon_x: i32,
+    pub digimon_y: i32,
+}
+
+impl PartyMemberPositionPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_MEMBER_POSITION);
+        writer.write_u8(self.member_slot);
+        writer.write_i32(self.tamer_x);
+        writer.write_i32(self.tamer_y);
+        writer.write_i32(self.digimon_x);
+        writer.write_i32(self.digimon_y);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyMemberMapChangePacket {
+    pub member_slot: u8,
+    pub map_id: i32,
+    pub channel: i32,
+    pub tamer_handler: u32,
+    pub digimon_handler: u32,
+}
+
+impl PartyMemberMapChangePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_MEMBER_MAP_CHANGE);
+        writer.write_u8(self.member_slot);
+        writer.write_i32(self.map_id);
+        writer.write_i32(self.channel);
+        writer.write_u32(self.tamer_handler);
+        writer.write_u32(self.digimon_handler);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyMemberDigimonChangePacket {
+    pub member_slot: u8,
+    pub digimon_type: i32,
+    pub digimon_name: String,
+    pub digimon_hp: u16,
+    pub digimon_max_hp: u16,
+    pub digimon_ds: u16,
+    pub digimon_max_ds: u16,
+}
+
+impl PartyMemberDigimonChangePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_MEMBER_DIGIMON_CHANGE);
+        writer.write_u8(self.member_slot);
+        writer.write_i32(self.digimon_type);
+        writer.write_string(&self.digimon_name);
+        writer.write_u16(self.digimon_hp);
+        writer.write_u16(self.digimon_max_hp);
+        writer.write_u16(self.digimon_ds);
+        writer.write_u16(self.digimon_max_ds);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyMemberBuffEntry {
+    pub status: u8,
+    pub buff_code: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyMemberBuffChangePacket {
+    pub member_slot: u8,
+    pub buffs: Vec<PartyMemberBuffEntry>,
+}
+
+impl PartyMemberBuffChangePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_MEMBER_BUFF_CHANGE);
+        writer.write_u8(self.member_slot);
+        writer.write_u16(self.buffs.len() as u16);
+        for buff in &self.buffs {
+            writer.write_u8(buff.status);
+            writer.write_u16(buff.buff_code);
+        }
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartnerSwitchFailurePacket;
+
+impl PartnerSwitchFailurePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTNER_SWITCH_RESPONSE);
+        writer.write_u32(0);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DigimonEvolutionFailPacket;
+
+impl DigimonEvolutionFailPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::EVOLUTION_FAILURE);
+        writer.write_i32(0);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DigimonEvolutionSuccessPacket {
+    pub digimon_handler: u32,
+    pub tamer_handler: u32,
+    pub new_type: i32,
+    pub evolution_slot: u8,
+    pub hp_rate: u8,
+    pub parts_type: i32,
+}
+
+impl DigimonEvolutionSuccessPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::EVOLUTION);
+        writer.write_u32(self.digimon_handler);
+        writer.write_u32(self.tamer_handler);
+        writer.write_i32(self.new_type);
+        writer.write_u8(self.evolution_slot);
+        writer.write_u8(self.hp_rate);
+        writer.write_i32(self.parts_type);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartnerSwitchPacket {
+    pub handler: u32,
+    pub old_partner_current_type: i32,
+    pub slot: u8,
+    pub partner: odmo_types::PartnerSlotSnapshot,
+}
+
+impl PartnerSwitchPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTNER_SWITCH_RESPONSE);
+        writer.write_u32(self.handler);
+        writer.write_i32(self.old_partner_current_type);
+        writer.write_u8(self.slot);
+        writer.write_i32(self.partner.digimon_type);
+        writer.write_u8(self.partner.level);
+        writer.write_fixed_wide_string(&self.partner.name, 32);
+        writer.write_i16(self.partner.size);
+        writer.write_i32(0);
+        writer.write_u16(self.partner.clone_level);
+        writer.write_u16(self.partner.clone_at_value);
+        writer.write_u16(self.partner.clone_bl_value);
+        writer.write_u16(self.partner.clone_ct_value);
+        writer.write_u16(0);
+        writer.write_u16(self.partner.clone_ev_value);
+        writer.write_u16(0);
+        writer.write_u16(self.partner.clone_hp_value);
+        writer.write_u16(self.partner.clone_at_level);
+        writer.write_u16(self.partner.clone_bl_level);
+        writer.write_u16(self.partner.clone_ct_level);
+        writer.write_u16(0);
+        writer.write_u16(self.partner.clone_ev_level);
+        writer.write_u16(0);
+        writer.write_u16(self.partner.clone_hp_level);
+        writer.write_u16(self.partner.active_buffs.len() as u16);
+        for buff in &self.partner.active_buffs {
+            writer.write_u16(buff.buff_id);
+            writer.write_u16(buff.buff_class);
+            writer.write_u32(buff.remaining_seconds.max(0) as u32);
+            writer.write_i32(buff.skill_id);
+        }
+        writer.write_i32(self.partner.hp);
+        writer.write_i32(self.partner.ds);
+        writer.write_i32(self.partner.de);
+        writer.write_i32(self.partner.at);
+        writer.write_i32(self.partner.current_hp);
+        writer.write_i32(self.partner.current_ds);
+        writer.write_i32(self.partner.fs);
+        writer.write_i32(0);
+        writer.write_i32(self.partner.ev);
+        writer.write_i32(self.partner.cc);
+        writer.write_i32(self.partner.ms);
+        writer.write_i32(self.partner.as_value);
+        writer.write_i32(self.partner.ar);
+        writer.write_i32(self.partner.ht);
+        writer.write_i32(0);
+        writer.write_i32(0);
+        writer.write_i32(0);
+        writer.write_i32(self.partner.bl);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyMemberDisconnectedPacket {
+    pub member_slot: i32,
+}
+
+impl PartyMemberDisconnectedPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::PARTY_MEMBER_DISCONNECTED);
+        writer.write_i32(self.member_slot);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TamerAttendancePacket {
     pub attendance: AttendanceStatus,
 }
@@ -1541,6 +1941,20 @@ fn guild_member_model(member: &odmo_types::GuildMemberSnapshot) -> u8 {
         .clamp(u8::MIN as i32, u8::MAX as i32) as u8
 }
 
+fn write_party_member(writer: &mut PacketWriter, member: &PartyMemberListEntry) {
+    writer.write_i32(member.party_slot);
+    writer.write_i32(member.character.model);
+    writer.write_i16(i16::from(member.character.level));
+    writer.write_string(&member.character.name);
+    writer.write_i32(member.character.partner_current_type);
+    writer.write_i16(i16::from(member.character.partner_level));
+    writer.write_string(&member.character.partner_name);
+    writer.write_i32(i32::from(member.character.map_id));
+    writer.write_i32(i32::from(member.character.channel));
+    writer.write_u32(member.character.general_handler);
+    writer.write_u32(member.character.partner_handler);
+}
+
 fn is_online_state(state: odmo_types::CharacterConnectionState) -> bool {
     matches!(
         state,
@@ -1662,6 +2076,28 @@ impl LocalMapSwapPacket {
     }
 }
 
+/// Packet sent to update skill cooldowns for a digimon (opcode 3246).
+#[derive(Debug, Clone)]
+pub struct SkillUpdateCooldownPacket {
+    pub handler: i32,
+    pub current_type: i32,
+    pub cooldowns: Vec<(i32, i32)>, // (skill_id, end_timestamp)
+}
+
+impl SkillUpdateCooldownPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::SKILL_UPDATE_COOLDOWN);
+        writer.write_i32(self.handler);
+        writer.write_i32(self.current_type);
+        writer.write_i32(self.cooldowns.len() as i32);
+        for (skill_id, end_time) in &self.cooldowns {
+            writer.write_i32(*skill_id);
+            writer.write_i32(*end_time);
+        }
+        writer.finalize()
+    }
+}
+
 // ---
 
 impl TryFrom<RawPacket> for GameRequest {
@@ -1772,7 +2208,10 @@ impl TryFrom<RawPacket> for GameRequest {
                 } else {
                     -1
                 };
-                Ok(Self::Emoticon { emoticon_type, value })
+                Ok(Self::Emoticon {
+                    emoticon_type,
+                    value,
+                })
             }
             game::FRIENDLY_INFO => {
                 let target_handler = if reader.remaining_len() >= 4 {
@@ -1805,7 +2244,10 @@ impl TryFrom<RawPacket> for GameRequest {
             game::EXITEM_USE => {
                 let category = reader.read_u8()?;
                 let extra_slot = reader.read_u16()?;
-                Ok(Self::ExtraInventoryUse { category, extra_slot })
+                Ok(Self::ExtraInventoryUse {
+                    category,
+                    extra_slot,
+                })
             }
             game::CHAT_MESSAGE => {
                 let message = reader.read_string()?;
@@ -1814,7 +2256,10 @@ impl TryFrom<RawPacket> for GameRequest {
             game::WHISPER_MESSAGE => {
                 let target_name = reader.read_string()?;
                 let message = reader.read_string()?;
-                Ok(Self::WhisperMessage { target_name, message })
+                Ok(Self::WhisperMessage {
+                    target_name,
+                    message,
+                })
             }
             game::SHOUT_MESSAGE => {
                 let message = reader.read_string()?;
@@ -1833,6 +2278,14 @@ impl TryFrom<RawPacket> for GameRequest {
                 let uid = reader.read_u32()?;
                 Ok(Self::PartnerStop { uid })
             }
+            game::EVOLUTION => {
+                let digimon_handler = reader.read_u32()?;
+                let evolution_slot = reader.read_u8()?;
+                Ok(Self::PartnerEvolution {
+                    digimon_handler,
+                    evolution_slot,
+                })
+            }
             game::PARTNER_SWITCH => {
                 let slot = reader.read_u8()?;
                 Ok(Self::PartnerSwitch { slot })
@@ -1849,37 +2302,59 @@ impl TryFrom<RawPacket> for GameRequest {
                 } else {
                     None
                 };
-                Ok(Self::EvolutionUnlock { evolution_type, inven_idx })
+                Ok(Self::EvolutionUnlock {
+                    evolution_type,
+                    inven_idx,
+                })
             }
             game::RIDE_MODE_START => {
                 let evolution_type = reader.read_i32()?;
                 let item_type = reader.read_i32()?;
-                Ok(Self::RideModeStart { evolution_type, item_type })
+                Ok(Self::RideModeStart {
+                    evolution_type,
+                    item_type,
+                })
             }
             game::RIDE_MODE_STOP => Ok(Self::RideModeStop),
             game::DIGIMON_CHANGE_NAME => {
                 let inven_slot = reader.read_i32()?;
                 let new_name = reader.read_string()?;
-                Ok(Self::DigimonChangeName { inven_slot, new_name })
+                Ok(Self::DigimonChangeName {
+                    inven_slot,
+                    new_name,
+                })
             }
             game::HATCH_INSERT_EGG => {
                 let vip = reader.read_u8()?;
                 let inven_slot = reader.read_u16()?;
                 let npc_idx = reader.read_i32()?;
-                Ok(Self::HatchInsertEgg { vip, inven_slot, npc_idx })
+                Ok(Self::HatchInsertEgg {
+                    vip,
+                    inven_slot,
+                    npc_idx,
+                })
             }
             game::HATCH_INCREASE => {
                 let vip = reader.read_u8()?;
                 let npc_idx = reader.read_i32()?;
                 let data_level = reader.read_u8()? as i8;
-                Ok(Self::HatchIncrease { vip, npc_idx, data_level })
+                Ok(Self::HatchIncrease {
+                    vip,
+                    npc_idx,
+                    data_level,
+                })
             }
             game::HATCH_FINISH => {
                 let vip = reader.read_u8()?;
                 let portable_pos = reader.read_u32()?;
                 let name = reader.read_string()?;
                 let npc_idx = reader.read_i32()?;
-                Ok(Self::HatchFinish { vip, portable_pos, name, npc_idx })
+                Ok(Self::HatchFinish {
+                    vip,
+                    portable_pos,
+                    name,
+                    npc_idx,
+                })
             }
             game::HATCH_REMOVE_EGG => {
                 let vip = reader.read_u8()?;
@@ -1890,7 +2365,11 @@ impl TryFrom<RawPacket> for GameRequest {
                 let vip = reader.read_u8()?;
                 let inven_slot = reader.read_u16()?;
                 let npc_idx = reader.read_i32()?;
-                Ok(Self::HatchBackupInsert { vip, inven_slot, npc_idx })
+                Ok(Self::HatchBackupInsert {
+                    vip,
+                    inven_slot,
+                    npc_idx,
+                })
             }
             game::HATCH_BACKUP_CANCEL => {
                 let vip = reader.read_u8()?;
@@ -1903,20 +2382,34 @@ impl TryFrom<RawPacket> for GameRequest {
                 let slot1 = reader.read_i32()?;
                 let slot2 = reader.read_i32()?;
                 let npc_type = reader.read_u32()?;
-                Ok(Self::DigimonArchiveMove { vip, slot1, slot2, npc_type })
+                Ok(Self::DigimonArchiveMove {
+                    vip,
+                    slot1,
+                    slot2,
+                    npc_type,
+                })
             }
             game::DIGIMON_ARCHIVE_LIST => {
                 let vip = reader.read_u8()?;
                 let inven_idx = reader.read_u32()?;
                 let npc_type = reader.read_u32()?;
-                Ok(Self::DigimonArchiveList { vip, inven_idx, npc_type })
+                Ok(Self::DigimonArchiveList {
+                    vip,
+                    inven_idx,
+                    npc_type,
+                })
             }
             game::DIGIMON_ARCHIVE_SWAP => {
                 let npc_idx = reader.read_u32()?;
                 let archive_type = reader.read_i32()?;
                 let src_arr = reader.read_u8()?;
                 let dst_arr = reader.read_u8()?;
-                Ok(Self::DigimonArchiveSwap { npc_idx, archive_type, src_arr, dst_arr })
+                Ok(Self::DigimonArchiveSwap {
+                    npc_idx,
+                    archive_type,
+                    src_arr,
+                    dst_arr,
+                })
             }
             game::INVENTORY_SORT => {
                 let sort_type = reader.read_u8()?;
@@ -1938,12 +2431,19 @@ impl TryFrom<RawPacket> for GameRequest {
                 let item_slot = reader.read_i16()?;
                 let socket_slot = reader.read_u8()?;
                 let chip_item_id = reader.read_i32()?;
-                Ok(Self::ItemSocketIn { item_slot, socket_slot, chip_item_id })
+                Ok(Self::ItemSocketIn {
+                    item_slot,
+                    socket_slot,
+                    chip_item_id,
+                })
             }
             game::ITEM_SOCKET_OUT => {
                 let item_slot = reader.read_i16()?;
                 let socket_slot = reader.read_u8()?;
-                Ok(Self::ItemSocketOut { item_slot, socket_slot })
+                Ok(Self::ItemSocketOut {
+                    item_slot,
+                    socket_slot,
+                })
             }
             game::ITEM_SOCKET_IDENTIFY => {
                 let item_slot = reader.read_i16()?;
@@ -1997,7 +2497,12 @@ impl TryFrom<RawPacket> for GameRequest {
                 for _ in 0..amount {
                     product_ids.push(reader.read_i32()?);
                 }
-                Ok(Self::CashShopBuy { amount, total_price, order_id, product_ids })
+                Ok(Self::CashShopBuy {
+                    amount,
+                    total_price,
+                    order_id,
+                    product_ids,
+                })
             }
             game::CASHSHOP_RELOAD => Ok(Self::CashShopReload),
             game::QUEST_AVAILABLE_LIST => Ok(Self::QuestAvailableList),
@@ -2043,7 +2548,10 @@ impl TryFrom<RawPacket> for GameRequest {
             game::SEAL_SET_FAVORITE => {
                 let card_code = reader.read_u16()?;
                 let bookmark = reader.read_u8()?;
-                Ok(Self::SealSetFavorite { card_code, bookmark })
+                Ok(Self::SealSetFavorite {
+                    card_code,
+                    bookmark,
+                })
             }
             game::ENCYCLOPEDIA_LOAD => Ok(Self::EncyclopediaLoad),
             game::ENCYCLOPEDIA_GET_REWARD => {
@@ -2059,7 +2567,11 @@ impl TryFrom<RawPacket> for GameRequest {
                 let item_slot = reader.read_i16()?;
                 let points = reader.read_i16()?;
                 let item_id = reader.read_i16()?;
-                Ok(Self::ArenaDailyPoints { item_slot, points, item_id })
+                Ok(Self::ArenaDailyPoints {
+                    item_slot,
+                    points,
+                    item_id,
+                })
             }
             game::ARENA_DAILY_RANKING => Ok(Self::ArenaDailyRanking),
             game::ARENA_RANKING_ALL => {
@@ -2110,33 +2622,46 @@ impl TryFrom<RawPacket> for GameRequest {
                 let npc_idx = reader.read_u32()?;
                 let inven_idx = reader.read_u32()?;
                 let reset_count = reader.read_u32()?;
-                Ok(Self::RareMachineRun { npc_idx, inven_idx, reset_count })
+                Ok(Self::RareMachineRun {
+                    npc_idx,
+                    inven_idx,
+                    reset_count,
+                })
             }
             game::PARTY_INVITE => {
-                let target_handler = reader.read_u32()?;
-                Ok(Self::PartyInvite { target_handler })
+                let target_name = reader.read_string()?;
+                Ok(Self::PartyInvite { target_name })
             }
             game::PARTY_INVITE_RESPONSE => {
-                let inviter_handler = reader.read_u32()?;
-                let accepted = reader.read_u8()?;
-                Ok(Self::PartyInviteResponse { inviter_handler, accepted })
+                let result_type = reader.read_i32()?;
+                let inviter_name = reader.read_string()?;
+                Ok(Self::PartyInviteResponse {
+                    result_type,
+                    inviter_name,
+                })
             }
             game::PARTY_CHAT => {
                 let message = reader.read_string()?;
                 Ok(Self::PartyChat { message })
             }
             game::PARTY_KICK => {
-                let member_slot = reader.read_u8()?;
-                Ok(Self::PartyKick { member_slot })
+                let target_name = reader.read_string()?;
+                Ok(Self::PartyKick { target_name })
             }
             game::PARTY_LEAVE => Ok(Self::PartyLeave),
             game::PARTY_CHANGE_MASTER => {
-                let new_leader_slot = reader.read_u8()?;
+                let new_leader_slot = reader.read_i32()?;
                 Ok(Self::PartyChangeMaster { new_leader_slot })
             }
             game::PARTY_CHANGE_LOOT => {
-                let loot_type = reader.read_u8()?;
-                Ok(Self::PartyChangeLoot { loot_type })
+                let loot_type = reader.read_i32()?;
+                let rare_type = reader.read_u8()?;
+                let disp_rare_grade = reader.read_u8()?;
+                Ok(Self::PartyChangeLoot {
+                    loot_type,
+                    rare_type,
+                    disp_rare_grade,
+                })
             }
             game::PARTY_DISMISS => Ok(Self::PartyDismiss),
             game::GUILD_CREATE => {
@@ -2187,7 +2712,10 @@ impl TryFrom<RawPacket> for GameRequest {
             game::TRADE_ADD_ITEM => {
                 let item_slot = reader.read_i16()?;
                 let trade_slot = reader.read_u8()?;
-                Ok(Self::TradeAddItem { item_slot, trade_slot })
+                Ok(Self::TradeAddItem {
+                    item_slot,
+                    trade_slot,
+                })
             }
             game::TRADE_REMOVE_ITEM => {
                 let trade_slot = reader.read_u8()?;
@@ -2254,7 +2782,11 @@ impl TryFrom<RawPacket> for GameRequest {
                 let model_id = reader.read_i32()?;
                 let name = reader.read_string()?;
                 let npc_id = reader.read_i32()?;
-                Ok(Self::HatchSpiritEvolution { model_id, name, npc_id })
+                Ok(Self::HatchSpiritEvolution {
+                    model_id,
+                    name,
+                    npc_id,
+                })
             }
             game::DIGI_SUMMON_PURCHASE => {
                 let npc_idx = reader.read_u32()?;
@@ -2273,7 +2805,11 @@ impl TryFrom<RawPacket> for GameRequest {
                 let category = reader.read_u16()?;
                 let extra_slot = reader.read_u16()?;
                 let inventory_slot = reader.read_u16()?;
-                Ok(Self::ExtraInventoryMove { category, extra_slot, inventory_slot })
+                Ok(Self::ExtraInventoryMove {
+                    category,
+                    extra_slot,
+                    inventory_slot,
+                })
             }
             game::EXTRA_INVENTORY_SORT => {
                 let category = reader.read_u8()?;
@@ -2290,7 +2826,11 @@ impl TryFrom<RawPacket> for GameRequest {
                 let uid = reader.read_u32()?;
                 let evo_unit_idx = reader.read_u8()?;
                 let skill_idx = reader.read_u8()?;
-                Ok(Self::SkillLevelUp { uid, evo_unit_idx, skill_idx })
+                Ok(Self::SkillLevelUp {
+                    uid,
+                    evo_unit_idx,
+                    skill_idx,
+                })
             }
             game::TAMER_CHARGE_XCRYSTAL => Ok(Self::TamerChargeXCrystal),
             game::TAMER_CONSUME_XCRYSTAL => {
@@ -2304,7 +2844,10 @@ impl TryFrom<RawPacket> for GameRequest {
             game::TAMER_SKILL_REQUEST => {
                 let skill_idx = reader.read_u32()?;
                 let target_uid = reader.read_u32()?;
-                Ok(Self::TamerSkillRequest { skill_idx, target_uid })
+                Ok(Self::TamerSkillRequest {
+                    skill_idx,
+                    target_uid,
+                })
             }
             game::TRANSCENDENCE_RECEIVE_EXP => Ok(Self::TranscendenceReceiveExp),
             game::TRANSCENDENCE_SUCCESS => Ok(Self::TranscendenceSuccess),
@@ -2317,7 +2860,11 @@ impl TryFrom<RawPacket> for GameRequest {
                 let model_id = reader.read_i32()?;
                 let name = reader.read_string()?;
                 let npc_id = reader.read_i32()?;
-                Ok(Self::SpiritCraft { model_id, name, npc_id })
+                Ok(Self::SpiritCraft {
+                    model_id,
+                    name,
+                    npc_id,
+                })
             }
             other => Err(ProtocolError::InvalidGamePacketType(other)),
         }
@@ -2455,16 +3002,19 @@ mod tests {
                 partner_handler: 21_000,
                 active_buffs: vec![ActiveBuffSnapshot {
                     buff_id: 500,
+                    buff_class: 1,
                     skill_id: 8001001,
                     remaining_seconds: 60,
                 }],
                 partner_active_buffs: vec![ActiveBuffSnapshot {
                     buff_id: 600,
+                    buff_class: 1,
                     skill_id: 8002001,
                     remaining_seconds: 30,
                 }],
                 partner_active_debuffs: vec![ActiveBuffSnapshot {
                     buff_id: 700,
+                    buff_class: 1,
                     skill_id: 8003001,
                     remaining_seconds: 15,
                 }],
@@ -2522,6 +3072,7 @@ mod tests {
                 handler: 44_001,
                 active_debuffs: vec![ActiveBuffSnapshot {
                     buff_id: 88,
+                    buff_class: 1,
                     skill_id: 7001,
                     remaining_seconds: 30,
                 }],
@@ -2678,6 +3229,338 @@ mod tests {
         .encode();
         let raw = PacketReader::from_frame(&packet).expect("frame should decode");
         assert_eq!(raw.packet_type, game::FRIEND_CONNECT);
+    }
+
+    #[test]
+    fn party_invite_packet_uses_expected_opcode() {
+        let packet = PartyInvitePacket {
+            inviter_name: "AdminTamer".to_string(),
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_INVITE);
+    }
+
+    #[test]
+    fn party_created_packet_uses_expected_opcode() {
+        let packet = PartyCreatedPacket {
+            party_id: 77,
+            loot_type: 0,
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_CREATED);
+    }
+
+    #[test]
+    fn party_member_list_packet_uses_expected_opcode() {
+        let packet = PartyMemberListPacket {
+            party_id: 77,
+            my_slot: 1,
+            leader_slot: 0,
+            loot_type: 0,
+            rare_rate: 0,
+            disp_rare_grade: 0,
+            members: vec![PartyMemberListEntry {
+                party_slot: 0,
+                character: CharacterSummary {
+                    name: "AdminTamer".to_string(),
+                    model: DEFAULT_TAMER_MODEL_ID,
+                    level: 70,
+                    partner_current_type: 31_001,
+                    partner_level: 65,
+                    partner_name: "Agumon".to_string(),
+                    map_id: DEFAULT_START_MAP_ID,
+                    channel: 0,
+                    general_handler: 11_000,
+                    partner_handler: 21_000,
+                    ..CharacterSummary::default()
+                },
+            }],
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_MEMBER_LIST);
+    }
+
+    #[test]
+    fn party_leave_packet_uses_expected_opcode() {
+        let packet = PartyLeavePacket { member_slot: 1 }.encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_LEAVE);
+    }
+
+    #[test]
+    fn party_kick_packet_uses_expected_opcode() {
+        let packet = PartyKickPacket { member_slot: 1 }.encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_KICK);
+    }
+
+    #[test]
+    fn party_leader_changed_packet_uses_expected_opcode() {
+        let packet = PartyLeaderChangedPacket { new_leader_slot: 2 }.encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_CHANGE_MASTER);
+    }
+
+    #[test]
+    fn party_change_loot_packet_uses_expected_opcode() {
+        let packet = PartyChangeLootTypePacket {
+            loot_type: 2,
+            rare_type: 3,
+            disp_rare_grade: 4,
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_CHANGE_LOOT);
+    }
+
+    #[test]
+    fn party_member_info_packet_uses_expected_opcode() {
+        let packet = PartyMemberInfoPacket {
+            member_slot: 1,
+            digimon_type: 31_001,
+            tamer_hp: 1000,
+            tamer_max_hp: 1200,
+            tamer_ds: 500,
+            tamer_max_ds: 700,
+            digimon_hp: 800,
+            digimon_max_hp: 900,
+            digimon_ds: 300,
+            digimon_max_ds: 400,
+            tamer_level: 70,
+            digimon_level: 65,
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_MEMBER_INFO);
+    }
+
+    #[test]
+    fn party_member_position_packet_uses_expected_opcode() {
+        let packet = PartyMemberPositionPacket {
+            member_slot: 1,
+            tamer_x: 100,
+            tamer_y: 200,
+            digimon_x: 110,
+            digimon_y: 210,
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_MEMBER_POSITION);
+    }
+
+    #[test]
+    fn party_member_map_change_packet_uses_expected_opcode() {
+        let packet = PartyMemberMapChangePacket {
+            member_slot: 1,
+            map_id: 1,
+            channel: 2,
+            tamer_handler: 11_000,
+            digimon_handler: 21_000,
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_MEMBER_MAP_CHANGE);
+    }
+
+    #[test]
+    fn party_member_digimon_change_packet_uses_expected_opcode() {
+        let packet = PartyMemberDigimonChangePacket {
+            member_slot: 1,
+            digimon_type: 31_001,
+            digimon_name: "Agumon".to_string(),
+            digimon_hp: 800,
+            digimon_max_hp: 900,
+            digimon_ds: 300,
+            digimon_max_ds: 400,
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_MEMBER_DIGIMON_CHANGE);
+    }
+
+    #[test]
+    fn party_member_buff_change_packet_uses_expected_opcode() {
+        let packet = PartyMemberBuffChangePacket {
+            member_slot: 1,
+            buffs: vec![
+                PartyMemberBuffEntry {
+                    status: 1,
+                    buff_code: 700,
+                },
+                PartyMemberBuffEntry {
+                    status: 0,
+                    buff_code: 701,
+                },
+            ],
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_MEMBER_BUFF_CHANGE);
+    }
+
+    #[test]
+    fn party_member_disconnected_packet_uses_expected_opcode() {
+        let packet = PartyMemberDisconnectedPacket { member_slot: 1 }.encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTY_MEMBER_DISCONNECTED);
+    }
+
+    #[test]
+    fn digimon_evolution_fail_packet_uses_expected_opcode() {
+        let packet = DigimonEvolutionFailPacket.encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::EVOLUTION_FAILURE);
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_i32().expect("fail payload"), 0);
+    }
+
+    #[test]
+    fn digimon_evolution_success_packet_uses_expected_opcode() {
+        let packet = DigimonEvolutionSuccessPacket {
+            digimon_handler: 21_000,
+            tamer_handler: 11_000,
+            new_type: 31_005,
+            evolution_slot: 4,
+            hp_rate: 255,
+            parts_type: 0,
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::EVOLUTION);
+    }
+
+    #[test]
+    fn partner_switch_failure_packet_uses_expected_opcode_and_zero_uid() {
+        let packet = PartnerSwitchFailurePacket.encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTNER_SWITCH_RESPONSE);
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u32().expect("uid"), 0);
+    }
+
+    #[test]
+    fn partner_switch_packet_uses_expected_opcode() {
+        let packet = PartnerSwitchPacket {
+            handler: 21_000,
+            old_partner_current_type: 31_001,
+            slot: 2,
+            partner: odmo_types::PartnerSlotSnapshot {
+                slot: 2,
+                digimon_type: 31_002,
+                model: 31_002,
+                level: 11,
+                name: "Greymon".to_string(),
+                active_buffs: vec![ActiveBuffSnapshot {
+                    buff_id: 500,
+                    buff_class: 1,
+                    skill_id: 8_001_001,
+                    remaining_seconds: 30,
+                }],
+                ..odmo_types::PartnerSlotSnapshot::default()
+            },
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::PARTNER_SWITCH_RESPONSE);
+    }
+
+    #[test]
+    fn party_invite_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::PARTY_INVITE);
+        writer.write_string("Matt");
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::PartyInvite {
+                target_name: "Matt".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn partner_evolution_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::EVOLUTION);
+        writer.write_u32(21_000);
+        writer.write_u8(4);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::PartnerEvolution {
+                digimon_handler: 21_000,
+                evolution_slot: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn party_invite_response_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::PARTY_INVITE_RESPONSE);
+        writer.write_i32(1);
+        writer.write_string("AdminTamer");
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::PartyInviteResponse {
+                result_type: 1,
+                inviter_name: "AdminTamer".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn party_kick_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::PARTY_KICK);
+        writer.write_string("Matt");
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::PartyKick {
+                target_name: "Matt".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn party_change_master_request_decodes_int_slot() {
+        let mut writer = PacketWriter::new(game::PARTY_CHANGE_MASTER);
+        writer.write_i32(2);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::PartyChangeMaster { new_leader_slot: 2 }
+        );
+    }
+
+    #[test]
+    fn party_change_loot_request_decodes_full_payload() {
+        let mut writer = PacketWriter::new(game::PARTY_CHANGE_LOOT);
+        writer.write_i32(2);
+        writer.write_u8(3);
+        writer.write_u8(4);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::PartyChangeLoot {
+                loot_type: 2,
+                rare_type: 3,
+                disp_rare_grade: 4,
+            }
+        );
     }
 
     #[test]

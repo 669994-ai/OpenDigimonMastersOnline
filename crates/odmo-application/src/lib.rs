@@ -11,6 +11,7 @@ pub fn bootstrap_message() -> &'static str {
 /// Implemented by service binaries using tokio channels.
 pub trait BroadcastSink: Send + Sync {
     fn send_to(&self, character_id: u64, packet: &[u8]) -> anyhow::Result<()>;
+    fn is_online(&self, character_id: u64) -> bool;
     fn send_to_visible(
         &self,
         map_id: i16,
