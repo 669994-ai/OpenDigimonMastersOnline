@@ -212,6 +212,7 @@ pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
         partner_clone_ct_level: 0,
         partner_clone_ev_level: 0,
         partner_clone_hp_level: 0,
+        ..CharacterSummary::default()
     };
 
     if partner_slots.is_empty() {
@@ -671,6 +672,10 @@ impl CharacterRepository for PgRepository {
     }
     fn update_welcome_flag(&self, _account_id: AccountId, _welcome: bool) -> anyhow::Result<()> {
         // Welcome flag is not yet persisted in the accounts table
+        Ok(())
+    }
+    fn update_partner_type(&self, _character_id: u64, _new_type: i32) -> anyhow::Result<()> {
+        // Partner type evolution not yet persisted in the characters table
         Ok(())
     }
 }

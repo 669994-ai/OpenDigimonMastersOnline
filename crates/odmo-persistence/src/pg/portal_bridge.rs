@@ -1,4 +1,4 @@
-use odmo_application::portal::{PortalStore, SocialNotification, SocialNotificationKind};
+use odmo_application::portal::{PortalStore, SocialNotification};
 use odmo_types::{AccountId, CharacterId, CharacterSummary, GameSessionTicket, TransferTicket};
 
 use super::PgRepository;

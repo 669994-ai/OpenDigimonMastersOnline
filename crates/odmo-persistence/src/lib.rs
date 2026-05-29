@@ -226,6 +226,24 @@ impl JsonRepository {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    /// Apply a mutation to the character with the given id and persist the world.
+    /// Returns Ok(()) silently if the character is not found, mirroring the legacy
+    /// repository behavior.
+    fn mutate_character<F>(&self, character_id: u64, f: F) -> anyhow::Result<()>
+    where
+        F: FnOnce(&mut CharacterSummary),
+    {
+        let mut state = self.state.write().expect("repository poisoned");
+        for characters in state.characters_by_account.values_mut() {
+            if let Some(character) = characters.iter_mut().find(|c| c.id == character_id) {
+                f(character);
+                self.persist(&state)?;
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
 }
 
 impl AccountRepository for JsonRepository {
@@ -583,6 +601,226 @@ impl CharacterRepository for JsonRepository {
     }
     fn update_welcome_flag(&self, _account_id: AccountId, _welcome: bool) -> anyhow::Result<()> {
         Ok(())
+    }
+    fn update_partner_type(&self, _character_id: u64, _new_type: i32) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    // ---- Extended persistence ---------------------------------------------
+
+    fn update_quest_progress(
+        &self,
+        character_id: u64,
+        progress: odmo_types::QuestProgressSnapshot,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.quest_progress = progress)
+    }
+
+    fn update_encyclopedia(
+        &self,
+        character_id: u64,
+        encyclopedia: odmo_types::EncyclopediaSnapshot,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.encyclopedia = encyclopedia)
+    }
+
+    fn update_friend_list(
+        &self,
+        character_id: u64,
+        friends: Vec<odmo_types::FriendListEntry>,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.friend_list = friends)
+    }
+
+    fn update_cash_shop_history(
+        &self,
+        character_id: u64,
+        history: Vec<odmo_types::CashShopHistoryEntry>,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.cash_shop_history = history)
+    }
+
+    fn update_digimon_archive(
+        &self,
+        character_id: u64,
+        archive: Vec<odmo_types::DigimonArchiveEntry>,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.digimon_archive = archive)
+    }
+
+    fn update_hatch_state(
+        &self,
+        character_id: u64,
+        hatch: odmo_types::HatchState,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.hatch_state = hatch)
+    }
+
+    fn update_damage_skin(&self, character_id: u64, skin_id: i32) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.damage_skin_id = skin_id)
+    }
+
+    fn update_current_title(&self, character_id: u64, title_id: u16) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.current_title = title_id)
+    }
+
+    fn update_owned_titles(&self, character_id: u64, owned: Vec<i16>) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.owned_titles = owned)
+    }
+
+    fn update_tamer_model(&self, character_id: u64, model_id: i32) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.model = model_id)
+    }
+
+    fn update_tamer_name(&self, character_id: u64, new_name: &str) -> anyhow::Result<()> {
+        let new_name = new_name.to_string();
+        self.mutate_character(character_id, move |c| c.name = new_name)
+    }
+
+    fn update_tamer_resources(
+        &self,
+        character_id: u64,
+        current_hp: i32,
+        current_ds: i32,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| {
+            c.current_hp = current_hp.clamp(0, c.hp);
+            c.current_ds = current_ds.clamp(0, c.ds);
+        })
+    }
+
+    fn update_inventory_bits(&self, character_id: u64, bits: i64) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| {
+            c.inventory_bits = bits.max(0);
+            c.inventory.bits = c.inventory_bits;
+        })
+    }
+
+    fn update_currencies(
+        &self,
+        character_id: u64,
+        premium: i32,
+        silk: i32,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| {
+            c.premium = premium.max(0);
+            c.silk = silk.max(0);
+        })
+    }
+
+    fn update_seal_list(
+        &self,
+        character_id: u64,
+        seal_list: odmo_types::SealListSnapshot,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.seal_list = seal_list)
+    }
+
+    fn update_active_buffs(
+        &self,
+        character_id: u64,
+        buffs: Vec<odmo_types::ActiveBuffSnapshot>,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.active_buffs = buffs)
+    }
+
+    fn update_deck_buff(&self, character_id: u64, deck_buff_id: i32) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| {
+            c.active_deck_buff = deck_buff_id;
+            c.deck_buff_id = deck_buff_id;
+        })
+    }
+
+    fn update_reward_storage(
+        &self,
+        character_id: u64,
+        items: Vec<odmo_types::ItemRecord>,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.reward_storage = items)
+    }
+
+    fn update_gift_storage(
+        &self,
+        character_id: u64,
+        items: Vec<odmo_types::ItemRecord>,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.gift_storage = items)
+    }
+
+    fn update_npc_repurchase_log(
+        &self,
+        character_id: u64,
+        items: Vec<odmo_types::ItemRecord>,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.npc_repurchase_log = items)
+    }
+
+    fn update_tamer_shop(
+        &self,
+        character_id: u64,
+        listings: Vec<odmo_types::ConsignedShopListing>,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.tamer_shop_listings = listings)
+    }
+
+    fn update_season_pass(
+        &self,
+        character_id: u64,
+        state: odmo_types::SeasonPassState,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.season_pass = state)
+    }
+
+    fn update_partner_resources(
+        &self,
+        character_id: u64,
+        current_hp: i32,
+        current_ds: i32,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| {
+            c.partner_current_hp = current_hp.clamp(0, c.partner_hp);
+            c.partner_current_ds = current_ds.clamp(0, c.partner_ds);
+        })
+    }
+
+    fn update_partner_name(&self, character_id: u64, new_name: &str) -> anyhow::Result<()> {
+        let new_name = new_name.to_string();
+        self.mutate_character(character_id, move |c| {
+            c.partner_name = new_name.clone();
+            if let Some(slot) = c
+                .partner_slots
+                .iter_mut()
+                .find(|p| p.slot == c.partner_current_slot)
+            {
+                slot.name = new_name;
+            }
+        })
+    }
+
+    fn update_partner_memory_skills(
+        &self,
+        character_id: u64,
+        skills: [i32; 4],
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| c.partner_memory_skills = skills)
+    }
+
+    fn search_characters_by_name(
+        &self,
+        name_fragment: &str,
+        limit: u32,
+    ) -> anyhow::Result<Vec<CharacterSummary>> {
+        let state = self.state.read().expect("repository poisoned");
+        let needle = name_fragment.to_ascii_lowercase();
+        let limit = limit.max(1) as usize;
+        Ok(state
+            .characters_by_account
+            .values()
+            .flatten()
+            .filter(|c| c.name.to_ascii_lowercase().contains(&needle))
+            .take(limit)
+            .cloned()
+            .collect())
     }
 }
 

@@ -124,6 +124,220 @@ pub trait CharacterRepository: Send + Sync {
     ) -> anyhow::Result<()>;
     fn update_character_state(&self, character_id: u64, state: u8) -> anyhow::Result<()>;
     fn update_welcome_flag(&self, account_id: AccountId, welcome: bool) -> anyhow::Result<()>;
+    fn update_partner_type(&self, character_id: u64, new_type: i32) -> anyhow::Result<()>;
+
+    // ---- Extended persistence (Onda completa) -----------------------------
+
+    /// Replace the character's quest progress.
+    fn update_quest_progress(
+        &self,
+        _character_id: u64,
+        _progress: odmo_types::QuestProgressSnapshot,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's encyclopedia.
+    fn update_encyclopedia(
+        &self,
+        _character_id: u64,
+        _encyclopedia: odmo_types::EncyclopediaSnapshot,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's friend list.
+    fn update_friend_list(
+        &self,
+        _character_id: u64,
+        _friends: Vec<odmo_types::FriendListEntry>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's cash shop history.
+    fn update_cash_shop_history(
+        &self,
+        _character_id: u64,
+        _history: Vec<odmo_types::CashShopHistoryEntry>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's digimon archive (storage of dormant partners).
+    fn update_digimon_archive(
+        &self,
+        _character_id: u64,
+        _archive: Vec<odmo_types::DigimonArchiveEntry>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's hatch state.
+    fn update_hatch_state(
+        &self,
+        _character_id: u64,
+        _state: odmo_types::HatchState,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Set the character's damage skin id.
+    fn update_damage_skin(&self, _character_id: u64, _skin_id: i32) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Set the character's currently equipped title.
+    fn update_current_title(&self, _character_id: u64, _title_id: u16) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Set the character's owned titles.
+    fn update_owned_titles(
+        &self,
+        _character_id: u64,
+        _owned: Vec<i16>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Set the character's tamer model id.
+    fn update_tamer_model(&self, _character_id: u64, _model_id: i32) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Set the character's name.
+    fn update_tamer_name(&self, _character_id: u64, _new_name: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Set the character's HP/DS state (current and max).
+    fn update_tamer_resources(
+        &self,
+        _character_id: u64,
+        _current_hp: i32,
+        _current_ds: i32,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's bits balance.
+    fn update_inventory_bits(&self, _character_id: u64, _bits: i64) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's premium / silk balances.
+    fn update_currencies(
+        &self,
+        _character_id: u64,
+        _premium: i32,
+        _silk: i32,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's seal list.
+    fn update_seal_list(
+        &self,
+        _character_id: u64,
+        _seal_list: odmo_types::SealListSnapshot,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's active buffs.
+    fn update_active_buffs(
+        &self,
+        _character_id: u64,
+        _buffs: Vec<odmo_types::ActiveBuffSnapshot>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's deck buff id.
+    fn update_deck_buff(&self, _character_id: u64, _deck_buff_id: i32) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's reward storage.
+    fn update_reward_storage(
+        &self,
+        _character_id: u64,
+        _items: Vec<odmo_types::ItemRecord>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's gift storage.
+    fn update_gift_storage(
+        &self,
+        _character_id: u64,
+        _items: Vec<odmo_types::ItemRecord>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's NPC repurchase log.
+    fn update_npc_repurchase_log(
+        &self,
+        _character_id: u64,
+        _items: Vec<odmo_types::ItemRecord>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's tamer-shop listings.
+    fn update_tamer_shop(
+        &self,
+        _character_id: u64,
+        _listings: Vec<odmo_types::ConsignedShopListing>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the character's season pass state.
+    fn update_season_pass(
+        &self,
+        _character_id: u64,
+        _state: odmo_types::SeasonPassState,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the partner's HP/DS state.
+    fn update_partner_resources(
+        &self,
+        _character_id: u64,
+        _current_hp: i32,
+        _current_ds: i32,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the partner's name.
+    fn update_partner_name(&self, _character_id: u64, _new_name: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Replace the partner's memory skill at the given slot.
+    fn update_partner_memory_skills(
+        &self,
+        _character_id: u64,
+        _skills: [i32; 4],
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    // ---- Cross-character lookups -----------------------------------------
+
+    /// Search by partial name fragment for friend search.
+    fn search_characters_by_name(
+        &self,
+        _name_fragment: &str,
+        _limit: u32,
+    ) -> anyhow::Result<Vec<CharacterSummary>> {
+        Ok(Vec::new())
+    }
 }
 
 pub trait CharacterAccountRepository: Send + Sync {
@@ -671,6 +885,13 @@ mod tests {
             &self,
             _account_id: AccountId,
             _welcome: bool,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn update_partner_type(
+            &self,
+            _character_id: u64,
+            _new_type: i32,
         ) -> anyhow::Result<()> {
             Ok(())
         }

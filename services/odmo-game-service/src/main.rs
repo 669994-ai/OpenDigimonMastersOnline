@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
         .compact()
         .init();
 
-    let bind = std::env::var("ODMO_GAME_BIND").unwrap_or_else(|_| "127.0.0.1:7003".to_string());
+    let bind = std::env::var("ODMO_GAME_BIND").unwrap_or_else(|_| "127.0.0.1:7607".to_string());
     let portal_state_dir = std::env::var("ODMO_PORTAL_STATE_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir().join("odmo-portal"));
@@ -93,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
     let game_server_port: i32 = std::env::var("ODMO_GAME_PORT")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(7003);
+        .unwrap_or(7607);
 
     let broadcast = Arc::new(SessionBroadcast::new());
 

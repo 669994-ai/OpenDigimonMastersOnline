@@ -19,13 +19,13 @@ async fn main() -> anyhow::Result<()> {
         .compact()
         .init();
 
-    let bind = std::env::var("ODMO_ACCOUNT_BIND").unwrap_or_else(|_| "127.0.0.1:7001".to_string());
+    let bind = std::env::var("ODMO_ACCOUNT_BIND").unwrap_or_else(|_| "127.0.0.1:7029".to_string());
     let character_host =
         std::env::var("ODMO_CHARACTER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let character_port = std::env::var("ODMO_CHARACTER_PORT")
         .ok()
         .and_then(|value| value.parse().ok())
-        .unwrap_or(7002);
+        .unwrap_or(7050);
     let portal_state_dir = std::env::var("ODMO_PORTAL_STATE_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir().join("odmo-portal"));

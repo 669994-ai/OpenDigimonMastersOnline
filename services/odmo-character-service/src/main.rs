@@ -20,12 +20,12 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let bind =
-        std::env::var("ODMO_CHARACTER_BIND").unwrap_or_else(|_| "127.0.0.1:7002".to_string());
+        std::env::var("ODMO_CHARACTER_BIND").unwrap_or_else(|_| "127.0.0.1:7050".to_string());
     let game_host = std::env::var("ODMO_GAME_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let game_port = std::env::var("ODMO_GAME_PORT")
         .ok()
         .and_then(|value| value.parse().ok())
-        .unwrap_or(7003);
+        .unwrap_or(7607);
     let portal_state_dir = std::env::var("ODMO_PORTAL_STATE_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir().join("odmo-portal"));

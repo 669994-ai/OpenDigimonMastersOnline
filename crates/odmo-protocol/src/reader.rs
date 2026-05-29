@@ -96,6 +96,14 @@ impl PacketReader {
         Ok(u32::from_le_bytes(buf))
     }
 
+    pub fn read_u64(&mut self) -> Result<u64, ProtocolError> {
+        let mut buf = [0_u8; 8];
+        self.cursor
+            .read_exact(&mut buf)
+            .map_err(|_| ProtocolError::UnexpectedEof)?;
+        Ok(u64::from_le_bytes(buf))
+    }
+
     pub fn read_i32(&mut self) -> Result<i32, ProtocolError> {
         let mut buf = [0_u8; 4];
         self.cursor

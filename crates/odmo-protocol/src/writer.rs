@@ -17,6 +17,10 @@ impl PacketWriter {
         self.buffer.push(value);
     }
 
+    pub fn write_i8(&mut self, value: i8) {
+        self.buffer.push(value as u8);
+    }
+
     pub fn write_i16(&mut self, value: i16) {
         self.buffer.extend_from_slice(&value.to_le_bytes());
     }
@@ -30,6 +34,10 @@ impl PacketWriter {
     }
 
     pub fn write_i64(&mut self, value: i64) {
+        self.buffer.extend_from_slice(&value.to_le_bytes());
+    }
+
+    pub fn write_u64(&mut self, value: u64) {
         self.buffer.extend_from_slice(&value.to_le_bytes());
     }
 

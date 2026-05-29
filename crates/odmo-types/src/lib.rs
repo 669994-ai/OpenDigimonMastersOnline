@@ -684,6 +684,40 @@ pub struct CharacterSummary {
     pub partner_clone_ct_level: u16,
     pub partner_clone_ev_level: u16,
     pub partner_clone_hp_level: u16,
+
+    // ---- Extended state (Onda completa) ------------------------------------
+    /// Quest progress (in-progress quests + bitmap of completed).
+    pub quest_progress: QuestProgressSnapshot,
+    /// Encyclopedia entries.
+    pub encyclopedia: EncyclopediaSnapshot,
+    /// Friend list with annotations and favorite flags.
+    pub friend_list: Vec<FriendListEntry>,
+    /// Cash shop purchase history (most recent first).
+    pub cash_shop_history: Vec<CashShopHistoryEntry>,
+    /// Digimon archive (dormant partner storage).
+    pub digimon_archive: Vec<DigimonArchiveEntry>,
+    /// Hatch incubator state.
+    pub hatch_state: HatchState,
+    /// Damage skin id currently equipped.
+    pub damage_skin_id: i32,
+    /// Tamer's currently equipped skill memory chips (slot index -> skill id).
+    pub partner_memory_skills: [i32; 4],
+    /// Active deck buff id (encyclopedia deck buff currently chosen).
+    pub active_deck_buff: i32,
+    /// Owned titles bitmap (title id -> owned).
+    pub owned_titles: Vec<i16>,
+    /// Reroll counters consumed today.
+    pub jump_booster_count: i32,
+    /// Season pass state.
+    pub season_pass: SeasonPassState,
+    /// Personal/tamer shop listings posted.
+    pub tamer_shop_listings: Vec<ConsignedShopListing>,
+    /// Repurchase log (last 10 sold items).
+    pub npc_repurchase_log: Vec<ItemRecord>,
+    /// Reward storage (mission/event rewards waiting to be claimed).
+    pub reward_storage: Vec<ItemRecord>,
+    /// Gift storage (premium gifts).
+    pub gift_storage: Vec<ItemRecord>,
 }
 
 impl Default for CharacterSummary {
@@ -807,6 +841,23 @@ impl Default for CharacterSummary {
             partner_clone_ct_level: 0,
             partner_clone_ev_level: 0,
             partner_clone_hp_level: 0,
+
+            quest_progress: QuestProgressSnapshot::default(),
+            encyclopedia: EncyclopediaSnapshot::default(),
+            friend_list: Vec::new(),
+            cash_shop_history: Vec::new(),
+            digimon_archive: Vec::new(),
+            hatch_state: HatchState::default(),
+            damage_skin_id: 0,
+            partner_memory_skills: [0; 4],
+            active_deck_buff: 0,
+            owned_titles: Vec::new(),
+            jump_booster_count: 0,
+            season_pass: SeasonPassState::default(),
+            tamer_shop_listings: Vec::new(),
+            npc_repurchase_log: Vec::new(),
+            reward_storage: Vec::new(),
+            gift_storage: Vec::new(),
         }
     }
 }
@@ -815,4 +866,370 @@ impl Default for CharacterSummary {
 pub struct GameServerTarget {
     pub address: String,
     pub port: u16,
+}
+
+
+// ---------------------------------------------------------------------------
+// Quest progress (per character)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct InProgressQuest {
+    pub quest_id: i16,
+    /// Goals 0..4. Each value is the cumulative progress count for that goal index.
+    pub goals: [i16; 5],
+}
+
+impl Default for InProgressQuest {
+    fn default() -> Self {
+        Self {
+            quest_id: 0,
+            goals: [0; 5],
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QuestProgressSnapshot {
+    pub in_progress: Vec<InProgressQuest>,
+    /// Bitmap of completed quests (one bit per quest id, packed into i32 array).
+    pub completed_data: Vec<i32>,
+    /// Bitmap of daily quests already cleared today.
+    pub daily_quest_data: Vec<i32>,
+    /// Last day-of-year that the daily set was reset.
+    pub daily_reset_day: i32,
+}
+
+impl Default for QuestProgressSnapshot {
+    fn default() -> Self {
+        Self {
+            in_progress: Vec::new(),
+            completed_data: vec![0; 256],
+            daily_quest_data: vec![0; 32],
+            daily_reset_day: 0,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Encyclopedia (per character)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EncyclopediaEvolutionEntry {
+    pub digimon_base_type: i32,
+    pub slot_level: u8,
+    pub unlocked: bool,
+}
+
+impl Default for EncyclopediaEvolutionEntry {
+    fn default() -> Self {
+        Self {
+            digimon_base_type: 0,
+            slot_level: 1,
+            unlocked: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EncyclopediaEntry {
+    pub digimon_evolution_id: i64,
+    pub level: u8,
+    pub size: i16,
+    pub reward_allowed: bool,
+    pub reward_received: bool,
+    pub deck_buff: bool,
+    pub evolutions: Vec<EncyclopediaEvolutionEntry>,
+}
+
+impl Default for EncyclopediaEntry {
+    fn default() -> Self {
+        Self {
+            digimon_evolution_id: 0,
+            level: 1,
+            size: 12_000,
+            reward_allowed: false,
+            reward_received: false,
+            deck_buff: false,
+            evolutions: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EncyclopediaSnapshot {
+    pub entries: Vec<EncyclopediaEntry>,
+}
+
+impl Default for EncyclopediaSnapshot {
+    fn default() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Friend list (per character)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FriendListEntry {
+    pub character_id: CharacterId,
+    pub name: String,
+    pub annotation: String,
+    pub favorite: bool,
+}
+
+impl Default for FriendListEntry {
+    fn default() -> Self {
+        Self {
+            character_id: 0,
+            name: String::new(),
+            annotation: String::new(),
+            favorite: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cash shop history (per character/account)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CashShopHistoryEntry {
+    pub order_id: u32,
+    pub product_id: i32,
+    pub amount: i16,
+    pub price: i32,
+    pub purchased_at_unix: u64,
+}
+
+impl Default for CashShopHistoryEntry {
+    fn default() -> Self {
+        Self {
+            order_id: 0,
+            product_id: 0,
+            amount: 0,
+            price: 0,
+            purchased_at_unix: 0,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cash shop catalog (server-wide)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CashShopProduct {
+    pub product_id: i32,
+    pub item_id: i32,
+    pub amount: i16,
+    pub price_premium: i32,
+    pub price_silk: i32,
+}
+
+impl Default for CashShopProduct {
+    fn default() -> Self {
+        Self {
+            product_id: 0,
+            item_id: 0,
+            amount: 1,
+            price_premium: 0,
+            price_silk: 0,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tamer/personal shop state (consigned shop = warehouse-shop)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ConsignedShopListing {
+    pub listing_id: u32,
+    pub seller_id: CharacterId,
+    pub seller_name: String,
+    pub item_id: i32,
+    pub amount: i16,
+    pub price_per_unit: i64,
+    pub created_at_unix: u64,
+}
+
+impl Default for ConsignedShopListing {
+    fn default() -> Self {
+        Self {
+            listing_id: 0,
+            seller_id: 0,
+            seller_name: String::new(),
+            item_id: 0,
+            amount: 0,
+            price_per_unit: 0,
+            created_at_unix: 0,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Trade session
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TradeSlotEntry {
+    pub trade_slot: u8,
+    pub item_record: ItemRecord,
+}
+
+impl Default for TradeSlotEntry {
+    fn default() -> Self {
+        Self {
+            trade_slot: 0,
+            item_record: ItemRecord::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TradeSideState {
+    pub character_id: CharacterId,
+    pub items: Vec<TradeSlotEntry>,
+    pub money: i64,
+    pub locked: bool,
+    pub final_confirmed: bool,
+}
+
+impl Default for TradeSideState {
+    fn default() -> Self {
+        Self {
+            character_id: 0,
+            items: Vec::new(),
+            money: 0,
+            locked: false,
+            final_confirmed: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Arena / PvP rankings (per character)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ArenaRankingEntry {
+    pub character_id: CharacterId,
+    pub character_name: String,
+    pub character_model: i32,
+    pub level: u8,
+    pub points: i32,
+    pub kills: i32,
+    pub deaths: i32,
+}
+
+impl Default for ArenaRankingEntry {
+    fn default() -> Self {
+        Self {
+            character_id: 0,
+            character_name: String::new(),
+            character_model: 0,
+            level: 1,
+            points: 0,
+            kills: 0,
+            deaths: 0,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hatch (incubator) state (per character)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HatchState {
+    /// Whether an egg is currently in the incubator.
+    pub egg_inserted: bool,
+    /// Item id of the inserted egg.
+    pub egg_item_id: i32,
+    /// 0..3 = increase percentage step.
+    pub increase_level: i8,
+    /// True when the egg is on the backup slot.
+    pub backup_active: bool,
+}
+
+impl Default for HatchState {
+    fn default() -> Self {
+        Self {
+            egg_inserted: false,
+            egg_item_id: 0,
+            increase_level: 0,
+            backup_active: false,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Digimon archive (storage of dormant partners)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigimonArchiveEntry {
+    pub archive_slot: u8,
+    pub partner: PartnerSlotSnapshot,
+}
+
+impl Default for DigimonArchiveEntry {
+    fn default() -> Self {
+        Self {
+            archive_slot: 0,
+            partner: PartnerSlotSnapshot::default(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Buff state (active buffs/debuffs)
+// ---------------------------------------------------------------------------
+//
+// `ActiveBuffSnapshot` already exists. Below is the helper for buff updates that
+// the application layer uses to add/remove/extend buffs.
+
+// ---------------------------------------------------------------------------
+// Membership / season pass / time-charge state
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SeasonPassState {
+    pub current_level: i32,
+    pub current_experience: i32,
+    pub purchased_premium: bool,
+    pub claimed_mission_ids: Vec<i32>,
+    pub claimed_season_levels: Vec<i32>,
+}
+
+impl Default for SeasonPassState {
+    fn default() -> Self {
+        Self {
+            current_level: 1,
+            current_experience: 0,
+            purchased_premium: false,
+            claimed_mission_ids: Vec::new(),
+            claimed_season_levels: Vec::new(),
+        }
+    }
 }
