@@ -125,6 +125,14 @@ pub trait CharacterRepository: Send + Sync {
     fn update_character_state(&self, character_id: u64, state: u8) -> anyhow::Result<()>;
     fn update_welcome_flag(&self, account_id: AccountId, welcome: bool) -> anyhow::Result<()>;
     fn update_partner_type(&self, character_id: u64, new_type: i32) -> anyhow::Result<()>;
+    fn update_partner_roster(
+        &self,
+        _character_id: u64,
+        _partner_current_slot: u8,
+        _partner_slots: Vec<odmo_types::PartnerSlotSnapshot>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 
     // ---- Extended persistence (Onda completa) -----------------------------
 
@@ -193,11 +201,7 @@ pub trait CharacterRepository: Send + Sync {
     }
 
     /// Set the character's owned titles.
-    fn update_owned_titles(
-        &self,
-        _character_id: u64,
-        _owned: Vec<i16>,
-    ) -> anyhow::Result<()> {
+    fn update_owned_titles(&self, _character_id: u64, _owned: Vec<i16>) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -888,11 +892,7 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
-        fn update_partner_type(
-            &self,
-            _character_id: u64,
-            _new_type: i32,
-        ) -> anyhow::Result<()> {
+        fn update_partner_type(&self, _character_id: u64, _new_type: i32) -> anyhow::Result<()> {
             Ok(())
         }
     }

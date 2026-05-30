@@ -14,41 +14,43 @@ use odmo_protocol::{
     ArenaRankingDailyLoadPacket, ArenaRankingDailyUpdatePointsPacket, ArenaRankingInfoPacket,
     AvailableChannelsPacket, BurningEventPacket, CashShopCoinsPacket, CastSkillPacket,
     ChangeTamerModelPacket, DailyCheckEventInfoPacket, DailyCheckEventInfoRow,
-    DailyCheckEventItemResultPacket, DigimonEvolutionFailPacket, DigimonWalkPacket,
+    DailyCheckEventItemResultPacket, DigiSummonPurchaseResponsePacket,
+    DigiSummonSyncResponsePacket, DigimonEvolutionFailPacket, DigimonWalkPacket,
     DungeonArenaNextStagePacket, EncyclopediaDeckBuffUsePacket, EncyclopediaLoadPacket,
     EncyclopediaReceiveRewardItemPacket, GameConnectionPacket, GameInitialInfoPacket, GameRequest,
     GiftStorageRetrievePacket, GuildAuthorityUpdatePacket, GuildCreateFailPacket,
     GuildCreateSuccessPacket, GuildDeletePacket, GuildHistoricPacket, GuildInformationPacket,
     GuildInviteAcceptPacket, GuildInviteDenyPacket, GuildInviteFailPacket,
     GuildInviteSuccessPacket, GuildMemberKickPacket, GuildMemberQuitPacket, GuildMessagePacket,
-    GuildNoticeUpdatePacket, GuildPromotionDemotionPacket, HitPacket, HitType, InventoryType,
-    ItemConsumeFailPacket, ItemIdentifyPacket, ItemMoveFailPacket, ItemMoveSuccessPacket,
-    ItemRerollPacket, ItemReturnPacket, ItemSocketIdentifyPacket, ItemSocketInPacket,
-    ItemSocketOutPacket, ItemStoragePacket, KillOnHitPacket, KillOnSkillPacket, LoadBuffsPacket,
-    LoadDropsPacket, LoadInventoryPacket, LoadMobBuffsPacket, LoadMobsPacket, LoadTamerPacket,
-    LocalMapSwapPacket, MapSwapPacket, MembershipPacket, MissHitPacket,
-    ModernArenaOldRankingInfoPacket, ModernArenaRankingInfoPacket, MonsterRespawnTimerPacket,
-    NpcPurchaseResultPacket, NpcSellResultPacket, PartnerSkillErrorPacket,
-    PartnerSwitchFailurePacket, PartnerSwitchPacket, PartyChangeLootTypePacket, PartyCreatedPacket,
-    PartyInvitePacket, PartyInviteResultPacket, PartyJoinPacket, PartyKickPacket,
-    PartyLeaderChangedPacket, PartyLeavePacket, PartyMemberBuffChangePacket, PartyMemberBuffEntry,
-    PartyMemberDisconnectedPacket, PartyMemberInfoPacket, PartyMemberListEntry,
-    PartyMemberListPacket, PartyMemberMapChangePacket, PartyMemberPositionPacket, PickBitsPacket,
-    PickItemFailPacket, PickItemFailReason, PickItemPacket, QuestAvailableListPacket,
-    QuestGoalUpdatePacket, RecompenseGainPacket, RemoveBuffPacket, SealsPacket,
-    ServerExperiencePacket, SplitItemPacket, TamerAttendancePacket, TamerChangeNamePacket,
-    TamerRelationsPacket, TamerWalkPacket, TamerXaiResourcesPacket, TimeRewardPacket,
-    TradeAcceptPacket, TradeAddItemPacket, TradeAddMoneyPacket, TradeCancelPacket,
-    TradeConfirmationPacket, TradeFinalConfirmationPacket, TradeInventoryLockPacket,
-    TradeInventoryUnlockPacket, TradeRemoveItemPacket, TradeRequestErrorPacket,
-    TradeRequestSuccessPacket, UnloadDropsPacket, UnloadMobsPacket, UnloadTamerPacket,
-    UpdateCurrentTitlePacket, UpdateMovementSpeedPacket, UpdateStatusPacket, XaiInfoPacket,
+    GuildNoticeUpdatePacket, GuildPromotionDemotionPacket, HatchSpiritEvolutionResultPacket,
+    HitPacket, HitType, InventoryType, ItemConsumeFailPacket, ItemIdentifyPacket,
+    ItemMoveFailPacket, ItemMoveSuccessPacket, ItemRerollPacket, ItemReturnPacket,
+    ItemSocketIdentifyPacket, ItemSocketInPacket, ItemSocketOutPacket, ItemStoragePacket,
+    KillOnHitPacket, KillOnSkillPacket, LoadBuffsPacket, LoadDropsPacket, LoadInventoryPacket,
+    LoadMobBuffsPacket, LoadMobsPacket, LoadTamerPacket, LocalMapSwapPacket, MapSwapPacket,
+    MembershipPacket, MissHitPacket, ModernArenaOldRankingInfoPacket, ModernArenaRankingInfoPacket,
+    MonsterRespawnTimerPacket, NpcPurchaseResultPacket, NpcSellResultPacket,
+    PartnerSkillErrorPacket, PartnerSwitchFailurePacket, PartnerSwitchPacket,
+    PartyChangeLootTypePacket, PartyCreatedPacket, PartyInvitePacket, PartyInviteResultPacket,
+    PartyJoinPacket, PartyKickPacket, PartyLeaderChangedPacket, PartyLeavePacket,
+    PartyMemberBuffChangePacket, PartyMemberBuffEntry, PartyMemberDisconnectedPacket,
+    PartyMemberInfoPacket, PartyMemberListEntry, PartyMemberListPacket, PartyMemberMapChangePacket,
+    PartyMemberPositionPacket, PickBitsPacket, PickItemFailPacket, PickItemFailReason,
+    PickItemPacket, QuestAvailableListPacket, QuestGoalUpdatePacket, RecompenseGainPacket,
+    RemoveBuffPacket, SealsPacket, ServerExperiencePacket, SpiritCraftResultPacket,
+    SplitItemPacket, TamerAttendancePacket, TamerChangeNamePacket, TamerRelationsPacket,
+    TamerWalkPacket, TamerXaiResourcesPacket, TimeRewardPacket, TradeAcceptPacket,
+    TradeAddItemPacket, TradeAddMoneyPacket, TradeCancelPacket, TradeConfirmationPacket,
+    TradeFinalConfirmationPacket, TradeInventoryLockPacket, TradeInventoryUnlockPacket,
+    TradeRemoveItemPacket, TradeRequestErrorPacket, TradeRequestSuccessPacket, UnloadDropsPacket,
+    UnloadMobsPacket, UnloadTamerPacket, UpdateCurrentTitlePacket, UpdateMovementSpeedPacket,
+    UpdateStatusPacket, XaiInfoPacket,
     game::{FriendConnectPacket, GuildRankPacket, SkillUpdateCooldownPacket},
 };
 use odmo_types::{AccountId, ItemRecord};
 
 use crate::{
-    character::CharacterRepository,
+    character::{CharacterAccountRepository, CharacterRepository},
     portal::{PortalBridge, SocialNotification, SocialNotificationKind},
 };
 
@@ -62,6 +64,15 @@ const PARTY_INVITE_OFFLINE: i32 = -2;
 const PARTY_INVITE_REJECTED: i32 = -1;
 const PARTY_INVITE_ALREADY_IN_PARTY: i32 = 0;
 const PARTY_INVITE_ACCEPTED: i32 = 1;
+const DIGI_SUMMON_SUCCESS: u8 = 0;
+const DIGI_SUMMON_NO_PRODUCTS: u8 = 1;
+const DIGI_SUMMON_INVALID_PRODUCT: u8 = 2;
+const DIGI_SUMMON_NOT_ENOUGH_TICKET: u8 = 3;
+const DIGI_SUMMON_INVENTORY_FULL: u8 = 4;
+const EXTRA_EVOLUTION_ITEM_TO_DIGIMON: u16 = 1;
+const EXTRA_EVOLUTION_DIGIMON_TO_ITEM: u16 = 2;
+const EXTRA_EVOLUTION_NEED_ALL: u16 = 1;
+const EXTRA_EVOLUTION_NEED_ONE: u16 = 2;
 
 #[derive(Debug, Clone)]
 struct PendingPartyInvite {
@@ -292,17 +303,35 @@ pub trait NpcShopRepository: Send + Sync {
     fn shop_by_npc(&self, npc_id: i32, map_id: i16) -> anyhow::Result<Option<NpcShopDefinition>>;
 }
 
+pub trait DigiSummonRepository: Send + Sync {
+    fn digi_summon_products(&self) -> anyhow::Result<Vec<odmo_types::DigiSummonProduct>>;
+}
+
+pub trait ExtraEvolutionRepository: Send + Sync {
+    fn extra_evolution_npcs(&self) -> anyhow::Result<Vec<odmo_types::ExtraEvolutionNpc>>;
+}
+
 pub trait GameRepository:
-    CharacterRepository + MapMobRepository + MapDropRepository + PortalRepository + NpcShopRepository
+    CharacterRepository
+    + CharacterAccountRepository
+    + MapMobRepository
+    + MapDropRepository
+    + PortalRepository
+    + NpcShopRepository
+    + DigiSummonRepository
+    + ExtraEvolutionRepository
 {
 }
 
 impl<T> GameRepository for T where
     T: CharacterRepository
+        + CharacterAccountRepository
         + MapMobRepository
         + MapDropRepository
         + PortalRepository
         + NpcShopRepository
+        + DigiSummonRepository
+        + ExtraEvolutionRepository
 {
 }
 
@@ -1519,16 +1548,7 @@ impl GameApplication {
                     ])
                 }
             }
-            // DigiSummonSyncRequest — empty request, respond with empty sync response
-            GameRequest::DigiSummonSyncRequest => {
-                // The client expects a DigiSummonSyncResponse (opcode 3702) with result=0 and count=0.
-                let mut writer = odmo_protocol::writer::PacketWriter::new(
-                    odmo_protocol::opcode::game::DIGI_SUMMON_SYNC_RESPONSE,
-                );
-                writer.write_u8(0); // result = 0 (success)
-                writer.write_u16(0); // product count = 0
-                Ok(vec![writer.finalize()])
-            }
+            GameRequest::DigiSummonSyncRequest => self.handle_digi_summon_sync(session),
             // ChannelInfo — client echoes back the channel info sent during ComplementarInformation.
             // No second response needed.
             GameRequest::ChannelInfo => Ok(vec![]),
@@ -1774,32 +1794,31 @@ impl GameApplication {
                     .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
                 if character.partner_handler == 0 {
-                    return Ok(vec![PartnerSkillErrorPacket {
-                        attacker_handler: 0,
-                        parameter: 0,
-                        value: skill_slot,
-                        value2: 0,
-                        context: 0,
-                    }
-                    .encode()]);
+                    return Ok(vec![
+                        PartnerSkillErrorPacket {
+                            attacker_handler: 0,
+                            parameter: 0,
+                            value: skill_slot,
+                            value2: 0,
+                            context: 0,
+                        }
+                        .encode(),
+                    ]);
                 }
                 if skill_slot > 5 {
-                    return Ok(vec![PartnerSkillErrorPacket {
-                        attacker_handler: character.partner_handler,
-                        parameter: 1,
-                        value: skill_slot,
-                        value2: 0,
-                        context: 0,
-                    }
-                    .encode()]);
+                    return Ok(vec![
+                        PartnerSkillErrorPacket {
+                            attacker_handler: character.partner_handler,
+                            parameter: 1,
+                            value: skill_slot,
+                            value2: 0,
+                            context: 0,
+                        }
+                        .encode(),
+                    ]);
                 }
 
-                self.handle_partner_combat(
-                    session,
-                    &character,
-                    target_handler,
-                    Some(skill_slot),
-                )
+                self.handle_partner_combat(session, &character, target_handler, Some(skill_slot))
             }
             // PartnerAttack — apply damage to the target mob and broadcast the hit.
             GameRequest::PartnerAttack {
@@ -1814,11 +1833,13 @@ impl GameApplication {
                     .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
                 if character.partner_handler == 0 {
-                    return Ok(vec![MissHitPacket {
-                        attacker_handler: 0,
-                        target_handler,
-                    }
-                    .encode()]);
+                    return Ok(vec![
+                        MissHitPacket {
+                            attacker_handler: 0,
+                            target_handler,
+                        }
+                        .encode(),
+                    ]);
                 }
 
                 self.handle_partner_combat(session, &character, target_handler, None)
@@ -1828,9 +1849,7 @@ impl GameApplication {
                 digimon_handler,
                 evolution_slot,
             } => {
-                let character_id = session
-                    .character_id
-                    .ok_or(GameFlowError::Unauthenticated)?;
+                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
                 let character = self
                     .repository
                     .character_by_id(character_id)
@@ -1849,9 +1868,7 @@ impl GameApplication {
 
                 // Update the partner's evolution type in the database
                 let new_type = evolution_slot as i32; // Simplified: slot maps to type
-                let _ = self
-                    .repository
-                    .update_partner_type(character_id, new_type);
+                let _ = self.repository.update_partner_type(character_id, new_type);
 
                 // Send success response
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
@@ -2000,9 +2017,7 @@ impl GameApplication {
                 Ok(vec![writer.finalize()])
             }
             // ItemReroll — re-roll the accessory stats on the target item.
-            GameRequest::ItemReroll { item_slot } => {
-                self.handle_item_reroll(session, item_slot)
-            }
+            GameRequest::ItemReroll { item_slot } => self.handle_item_reroll(session, item_slot),
             // ItemSocketIn — insert a chip into the target item socket. The legacy
             // server consumes the chip from the inventory and updates the item's socket
             // payload. Without the chip asset table we charge a small bits cost (the
@@ -2014,7 +2029,12 @@ impl GameApplication {
                 src_inven_pos,
                 dst_inven_pos,
                 socket_order,
-            } => self.handle_item_socket_in(session, dst_inven_pos as i16, socket_order, src_inven_pos as i32),
+            } => self.handle_item_socket_in(
+                session,
+                dst_inven_pos as i16,
+                socket_order,
+                src_inven_pos as i32,
+            ),
             // ItemSocketOut — extract the chip at `socket_slot` from the target item.
             GameRequest::ItemSocketOut {
                 vip: _,
@@ -2086,11 +2106,13 @@ impl GameApplication {
             // QuestAvailableList — return quest ids the character can accept from the
             // queried NPC. Without quest asset data we return an empty list, which the
             // modern client renders as "no quests available right now" without crashing.
-            GameRequest::QuestAvailableList { npc_id } => Ok(vec![QuestAvailableListPacket {
-                npc_id,
-                quest_ids: Vec::new(),
-            }
-            .encode()]),
+            GameRequest::QuestAvailableList { npc_id } => Ok(vec![
+                QuestAvailableListPacket {
+                    npc_id,
+                    quest_ids: Vec::new(),
+                }
+                .encode(),
+            ]),
             // QuestAccept — register the quest in the character's quest progress.
             GameRequest::QuestAccept { quest_id } => self.handle_quest_accept(session, quest_id),
             // QuestDeliver — mark the quest as completed in the character's progress.
@@ -2171,33 +2193,37 @@ impl GameApplication {
             // signaling the run is over (legacy: tamers are teleported back to the lobby).
             GameRequest::DungeonSurrender => Ok(Vec::new()),
             // BurningEvent — return the active burning-event multiplier.
-            GameRequest::BurningEvent => Ok(vec![BurningEventPacket {
-                exp_rate: 1000,
-                next_day_rate: 100,
-                exp_target: 1,
-            }
-            .encode()]),
+            GameRequest::BurningEvent => Ok(vec![
+                BurningEventPacket {
+                    exp_rate: 1000,
+                    next_day_rate: 100,
+                    exp_target: 1,
+                }
+                .encode(),
+            ]),
             // DailyCheckEvent — return the daily-check info table.
-            GameRequest::DailyCheckEvent => Ok(vec![DailyCheckEventInfoPacket {
-                rows: vec![DailyCheckEventInfoRow {
-                    group_id: 1,
-                    current_day: 1,
-                    next_left_seconds: seconds_until_next_day(),
-                    claimed_days: vec![0u8; 4],
-                }],
-            }
-            .encode()]),
+            GameRequest::DailyCheckEvent => Ok(vec![
+                DailyCheckEventInfoPacket {
+                    rows: vec![DailyCheckEventInfoRow {
+                        group_id: 1,
+                        current_day: 1,
+                        next_left_seconds: seconds_until_next_day(),
+                        claimed_days: vec![0u8; 4],
+                    }],
+                }
+                .encode(),
+            ]),
             // DailyCheckEventRequest — claim today's reward.
-            GameRequest::DailyCheckEventRequest { event_no } => {
-                Ok(vec![DailyCheckEventItemResultPacket {
+            GameRequest::DailyCheckEventRequest { event_no } => Ok(vec![
+                DailyCheckEventItemResultPacket {
                     result: 1,
                     group_id: event_no,
                     current_day: 1,
                     next_left_seconds: seconds_until_next_day(),
                     items: Vec::new(),
                 }
-                .encode()])
-            }
+                .encode(),
+            ]),
             // JoinEventQueue — register the character in the event queue. The legacy
             // event server is not yet ported; we acknowledge silently (the modern
             // client polls separately for queue status).
@@ -2385,19 +2411,17 @@ impl GameApplication {
                 skill_idx,
                 target_uid,
             } => self.handle_tamer_skill_request(session, skill_idx, target_uid),
-            GameRequest::TranscendenceReceiveExp => {
-                self.handle_transcendence_receive_exp(session)
-            }
+            GameRequest::TranscendenceReceiveExp => self.handle_transcendence_receive_exp(session),
             GameRequest::TranscendenceSuccess => self.handle_transcendence_success(session),
             GameRequest::TimeChargeResult { charge_type } => {
                 self.handle_time_charge_result(session, charge_type)
             }
             GameRequest::WarpGateDungeon => self.handle_warp_gate_dungeon(session),
             GameRequest::SpiritCraft {
-                model_id,
-                name,
+                slot,
+                validation,
                 npc_id,
-            } => self.handle_spirit_craft(session, model_id, name, npc_id),
+            } => self.handle_spirit_craft(session, slot, validation, npc_id),
         }?;
 
         responses.extend(request_responses);
@@ -2423,9 +2447,8 @@ impl GameApplication {
 
         // Reject if the character has insufficient premium currency.
         if character.premium < total_price {
-            let mut writer = odmo_protocol::writer::PacketWriter::new(
-                odmo_protocol::opcode::game::CASHSHOP_BUY,
-            );
+            let mut writer =
+                odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::CASHSHOP_BUY);
             writer.write_u8(0); // failure
             return Ok(vec![writer.finalize()]);
         }
@@ -2470,9 +2493,8 @@ impl GameApplication {
             .update_gift_storage(character_id, gifts)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::CASHSHOP_BUY,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::CASHSHOP_BUY);
         writer.write_u8(1); // success
         writer.write_u16(order_id as u16);
         Ok(vec![
@@ -2496,11 +2518,13 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        Ok(vec![CashShopCoinsPacket {
-            premium: character.premium,
-            silk: character.silk,
-        }
-        .encode()])
+        Ok(vec![
+            CashShopCoinsPacket {
+                premium: character.premium,
+                silk: character.silk,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_cash_shop_buy_history(
@@ -2535,9 +2559,8 @@ impl GameApplication {
         _session: &GameSession,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
         // Pure UI open — return an empty listing envelope so the client renders.
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::CONSIGNSHOP_OPEN,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::CONSIGNSHOP_OPEN);
         writer.write_u16(0);
         Ok(vec![writer.finalize()])
     }
@@ -2553,9 +2576,8 @@ impl GameApplication {
             .character_by_id(shop_id as u64)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::CONSIGNSHOP_VIEW,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::CONSIGNSHOP_VIEW);
         if let Some(seller) = seller {
             writer.write_u16(seller.tamer_shop_listings.len().min(u16::MAX as usize) as u16);
             for listing in &seller.tamer_shop_listings {
@@ -2648,10 +2670,7 @@ impl GameApplication {
         self.handle_consigned_shop_retrieve(session, item_slot)
     }
 
-    fn handle_tamer_shop_list(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_tamer_shop_list(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
             .repository
@@ -2659,9 +2678,8 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::TAMER_SHOP_LIST,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::TAMER_SHOP_LIST);
         writer.write_u16(character.tamer_shop_listings.len().min(u16::MAX as usize) as u16);
         for listing in &character.tamer_shop_listings {
             writer.write_u32(listing.listing_id);
@@ -2710,10 +2728,7 @@ impl GameApplication {
         Ok(Vec::new())
     }
 
-    fn handle_friend_list(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_friend_list(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
             .repository
@@ -2751,7 +2766,11 @@ impl GameApplication {
         );
         writer.write_i32(character.season_pass.current_level);
         writer.write_i32(character.season_pass.current_experience);
-        writer.write_u8(if character.season_pass.purchased_premium { 1 } else { 0 });
+        writer.write_u8(if character.season_pass.purchased_premium {
+            1
+        } else {
+            0
+        });
         writer.write_u16(
             character
                 .season_pass
@@ -2801,7 +2820,9 @@ impl GameApplication {
         }
 
         let mut state = character.season_pass.clone();
-        state.current_experience = state.current_experience.saturating_add(exp_per_block * count);
+        state.current_experience = state
+            .current_experience
+            .saturating_add(exp_per_block * count);
         // Bump level every 1000 EXP.
         while state.current_experience >= 1000 && state.current_level < 100 {
             state.current_experience -= 1000;
@@ -2901,9 +2922,8 @@ impl GameApplication {
             .update_character_map(character_id, character.map_id, character.x, character.y)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::CHANGE_CHANNEL,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::CHANGE_CHANNEL);
         writer.write_u8(channel);
         writer.write_u8(1); // success
         Ok(vec![writer.finalize()])
@@ -2913,64 +2933,373 @@ impl GameApplication {
 
     fn handle_hatch_spirit_evolution(
         &self,
-        _session: &GameSession,
+        session: &GameSession,
         model_id: i32,
         name: String,
         npc_id: i32,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
-        // Without the spirit-evolution asset table we acknowledge the request with the
-        // failure result so the client UI exits the dialog. Real spirit evolution would
-        // create a new partner slot keyed by the model_id and consume the NPC item.
-        let _ = (model_id, npc_id, name);
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::HATCH_SPIRIT_EVOLUTION,
-        );
-        writer.write_u8(0);
-        Ok(vec![writer.finalize()])
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+        let Some(npc) = self
+            .repository
+            .extra_evolution_npcs()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .into_iter()
+            .find(|npc| npc.npc_id == npc_id)
+        else {
+            return Ok(Vec::new());
+        };
+
+        let Some(recipe) = npc
+            .recipes
+            .iter()
+            .find(|recipe| {
+                recipe.exchange_type == EXTRA_EVOLUTION_ITEM_TO_DIGIMON
+                    && recipe.object_id == model_id
+            })
+            .cloned()
+        else {
+            return Ok(Vec::new());
+        };
+
+        if character.inventory.bits < recipe.price {
+            return Ok(Vec::new());
+        }
+
+        let next_slot = (1..=character.digimon_slots).find(|slot| {
+            !character
+                .partner_slots
+                .iter()
+                .any(|partner| partner.slot == *slot)
+        });
+        let Some(next_slot) = next_slot else {
+            return Ok(Vec::new());
+        };
+
+        let original_inventory = character.inventory.clone();
+        let original_bits = character.inventory_bits;
+        let mut consumed_items = Vec::new();
+
+        if !consume_item_material_groups(
+            &mut character.inventory,
+            recipe.way_type,
+            &recipe.main_materials,
+            &recipe.sub_materials,
+            &mut consumed_items,
+        ) {
+            return Ok(Vec::new());
+        }
+
+        character.inventory.bits -= recipe.price;
+        character.inventory_bits = (character.inventory_bits - recipe.price).max(0);
+
+        let new_partner = default_partner_for_type(model_id, next_slot, name.clone());
+        let mut partner_slots = character.partner_slots.clone();
+        partner_slots.push(new_partner.clone());
+
+        self.repository
+            .update_inventory(character_id, character.inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        self.repository
+            .update_inventory_bits(character_id, character.inventory_bits)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        self.repository
+            .update_partner_roster(character_id, character.partner_current_slot, partner_slots)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let mut hatch_finish =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::HATCH_FINISH);
+        hatch_finish.write_u8(1);
+        hatch_finish.write_u8(next_slot);
+        hatch_finish.write_string(&name);
+
+        let consumed_packet_items = consumed_items
+            .iter()
+            .map(|item| {
+                (
+                    item.amount.clamp(1, u8::MAX as i32) as u8,
+                    item.item_id as u32,
+                )
+            })
+            .collect();
+
+        let _ = original_inventory;
+        let _ = original_bits;
+
+        Ok(vec![
+            hatch_finish.finalize(),
+            HatchSpiritEvolutionResultPacket {
+                digimon_id: model_id as u32,
+                remaining_bits: character.inventory_bits,
+                consumed_items: consumed_packet_items,
+            }
+            .encode(),
+            LoadInventoryPacket {
+                inventory: character.inventory,
+                inventory_type: InventoryType::Inventory,
+            }
+            .encode(),
+        ])
+    }
+
+    fn handle_digi_summon_sync(
+        &self,
+        _session: &GameSession,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let products = self
+            .repository
+            .digi_summon_products()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        let result = if products.is_empty() {
+            DIGI_SUMMON_NO_PRODUCTS
+        } else {
+            DIGI_SUMMON_SUCCESS
+        };
+        Ok(vec![
+            DigiSummonSyncResponsePacket { result, products }.encode(),
+        ])
     }
 
     fn handle_digi_summon_purchase(
         &self,
         session: &GameSession,
         product_id: i32,
-        _ticket_slot: i32,
+        ticket_slot: i32,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
-        let _character = self
+        let mut character = self
             .repository
             .character_by_id(character_id)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+        let products = self
+            .repository
+            .digi_summon_products()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        // The gotcha product table is not yet ported, so we acknowledge the
-        // purchase as a failure (result=1) but with a fully shaped response
-        // that the client `RecvDigiSummonPurchase` parser accepts:
-        //   [u1 result][n4 product_id][u2 reward_count=0]
-        //   [u2 product_sync_count=0][u2 reward_info_count=0][n8 reserved=0]
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::DIGI_SUMMON_PURCHASE,
-        );
-        writer.write_u8(1); // result: failure (no asset table yet)
-        writer.write_i32(product_id);
-        writer.write_u16(0); // reward_count
-        writer.write_u16(0); // product_sync_count
-        writer.write_u16(0); // reward_info_count
-        writer.write_i64(0); // reserved
-        Ok(vec![writer.finalize()])
+        if products.is_empty() {
+            return Ok(vec![
+                DigiSummonPurchaseResponsePacket {
+                    result: DIGI_SUMMON_NO_PRODUCTS,
+                    product_id,
+                    rewards: Vec::new(),
+                    products,
+                }
+                .encode(),
+            ]);
+        }
+
+        let Some(product) = products
+            .iter()
+            .find(|product| product.product_id == product_id)
+        else {
+            return Ok(vec![
+                DigiSummonPurchaseResponsePacket {
+                    result: DIGI_SUMMON_INVALID_PRODUCT,
+                    product_id,
+                    rewards: Vec::new(),
+                    products,
+                }
+                .encode(),
+            ]);
+        };
+
+        let Some((ticket_index, ticket)) =
+            find_usable_digi_summon_ticket(&character.inventory, product, ticket_slot)
+        else {
+            return Ok(vec![
+                DigiSummonPurchaseResponsePacket {
+                    result: DIGI_SUMMON_NOT_ENOUGH_TICKET,
+                    product_id,
+                    rewards: Vec::new(),
+                    products,
+                }
+                .encode(),
+            ]);
+        };
+
+        let original_inventory = character.inventory.clone();
+        let Some(_) =
+            consume_inventory_item_at(&mut character.inventory, ticket_index, ticket.cost.max(0))
+        else {
+            return Ok(vec![
+                DigiSummonPurchaseResponsePacket {
+                    result: DIGI_SUMMON_NOT_ENOUGH_TICKET,
+                    product_id,
+                    rewards: Vec::new(),
+                    products,
+                }
+                .encode(),
+            ]);
+        };
+
+        let rewards = roll_digi_summon_rewards(product);
+        for reward in &rewards {
+            if !add_stackable_inventory_item(
+                &mut character.inventory,
+                reward.item_id,
+                reward.amount.max(1),
+            ) {
+                character.inventory = original_inventory.clone();
+                return Ok(vec![
+                    DigiSummonPurchaseResponsePacket {
+                        result: DIGI_SUMMON_INVENTORY_FULL,
+                        product_id,
+                        rewards: Vec::new(),
+                        products,
+                    }
+                    .encode(),
+                ]);
+            }
+        }
+
+        self.repository
+            .update_inventory(character_id, character.inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        Ok(vec![
+            LoadInventoryPacket {
+                inventory: character.inventory,
+                inventory_type: InventoryType::Inventory,
+            }
+            .encode(),
+            DigiSummonPurchaseResponsePacket {
+                result: DIGI_SUMMON_SUCCESS,
+                product_id,
+                rewards,
+                products,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_spirit_craft(
         &self,
-        _session: &GameSession,
-        _model_id: i32,
-        _name: String,
-        _npc_id: i32,
+        session: &GameSession,
+        slot: u8,
+        validation: String,
+        npc_id: i32,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::SPIRIT_CRAFT,
-        );
-        writer.write_u8(0);
-        Ok(vec![writer.finalize()])
+        let account_id = session.account_id.ok_or(GameFlowError::Unauthenticated)?;
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let account = self
+            .repository
+            .account_by_id(account_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::Unauthenticated)?;
+        if validation != account.email
+            && account.secondary_password.as_deref() != Some(validation.as_str())
+        {
+            let mut writer = odmo_protocol::writer::PacketWriter::new(
+                odmo_protocol::opcode::game::PARTNER_DELETE_RESPONSE,
+            );
+            writer.write_i32(-1);
+            return Ok(vec![writer.finalize()]);
+        }
+
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+        let Some(npc) = self
+            .repository
+            .extra_evolution_npcs()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .into_iter()
+            .find(|npc| npc.npc_id == npc_id)
+        else {
+            return Ok(Vec::new());
+        };
+
+        let Some(target_partner) = character
+            .partner_slots
+            .iter()
+            .find(|partner| partner.slot == slot)
+            .cloned()
+        else {
+            return Ok(Vec::new());
+        };
+
+        let Some(recipe) = npc
+            .recipes
+            .iter()
+            .find(|recipe| {
+                recipe.exchange_type == EXTRA_EVOLUTION_DIGIMON_TO_ITEM
+                    && recipe.main_materials.iter().any(|material| {
+                        material.material_id == target_partner.digimon_type
+                            && target_partner.level as i32 >= recipe.need_material_value
+                    })
+            })
+            .cloned()
+        else {
+            return Ok(Vec::new());
+        };
+
+        if character.inventory.bits < recipe.price {
+            return Ok(Vec::new());
+        }
+
+        let original_inventory = character.inventory.clone();
+        let mut consumed_items = Vec::new();
+        if !consume_item_material_groups(
+            &mut character.inventory,
+            recipe.way_type,
+            &[],
+            &recipe.sub_materials,
+            &mut consumed_items,
+        ) {
+            return Ok(Vec::new());
+        }
+
+        character.inventory.bits -= recipe.price;
+        character.inventory_bits = (character.inventory_bits - recipe.price).max(0);
+        if !add_stackable_inventory_item(&mut character.inventory, recipe.object_id, 1) {
+            character.inventory = original_inventory;
+            return Ok(Vec::new());
+        }
+
+        let mut partner_slots = character.partner_slots.clone();
+        partner_slots.retain(|partner| partner.slot != slot);
+
+        self.repository
+            .update_inventory(character_id, character.inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        self.repository
+            .update_inventory_bits(character_id, character.inventory_bits)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        self.repository
+            .update_partner_roster(character_id, character.partner_current_slot, partner_slots)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let consumed_packet_items = consumed_items
+            .iter()
+            .map(|item| {
+                (
+                    item.amount.clamp(1, u8::MAX as i32) as u8,
+                    item.item_id as u32,
+                )
+            })
+            .collect();
+
+        Ok(vec![
+            SpiritCraftResultPacket {
+                slot,
+                remaining_bits: character.inventory_bits,
+                consumed_items: consumed_packet_items,
+                gained_items: vec![(1, recipe.object_id as u32)],
+            }
+            .encode(),
+            LoadInventoryPacket {
+                inventory: character.inventory,
+                inventory_type: InventoryType::Inventory,
+            }
+            .encode(),
+        ])
     }
 
     // ----- Account warehouse ----------------------------------------------------------
@@ -2986,20 +3315,23 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        let warehouse = character
-            .account_warehouse
-            .clone()
-            .unwrap_or_else(|| odmo_types::InventorySnapshot {
-                bits: 0,
-                size: character.account_warehouse_size,
-                items: Vec::new(),
-            });
+        let warehouse =
+            character
+                .account_warehouse
+                .clone()
+                .unwrap_or_else(|| odmo_types::InventorySnapshot {
+                    bits: 0,
+                    size: character.account_warehouse_size,
+                    items: Vec::new(),
+                });
 
-        Ok(vec![LoadInventoryPacket {
-            inventory: warehouse,
-            inventory_type: InventoryType::AccountWarehouse,
-        }
-        .encode()])
+        Ok(vec![
+            LoadInventoryPacket {
+                inventory: warehouse,
+                inventory_type: InventoryType::AccountWarehouse,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_retrieve_account_warehouse(
@@ -3014,14 +3346,15 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        let mut warehouse = character
-            .account_warehouse
-            .clone()
-            .unwrap_or_else(|| odmo_types::InventorySnapshot {
-                bits: 0,
-                size: character.account_warehouse_size,
-                items: Vec::new(),
-            });
+        let mut warehouse =
+            character
+                .account_warehouse
+                .clone()
+                .unwrap_or_else(|| odmo_types::InventorySnapshot {
+                    bits: 0,
+                    size: character.account_warehouse_size,
+                    items: Vec::new(),
+                });
         let mut inventory = character.inventory.clone();
 
         let idx = item_slot as usize;
@@ -3033,10 +3366,8 @@ impl GameApplication {
             return Ok(Vec::new());
         };
 
-        let claimed = std::mem::replace(
-            &mut warehouse.items[idx],
-            odmo_types::ItemRecord::new(0, 0),
-        );
+        let claimed =
+            std::mem::replace(&mut warehouse.items[idx], odmo_types::ItemRecord::new(0, 0));
         inventory.items[target_slot] = claimed;
 
         self.repository
@@ -3055,13 +3386,12 @@ impl GameApplication {
         &self,
         _session: &GameSession,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
-        Ok(vec![MonsterRespawnTimerPacket { rows: Vec::new() }.encode()])
+        Ok(vec![
+            MonsterRespawnTimerPacket { rows: Vec::new() }.encode(),
+        ])
     }
 
-    fn handle_jump_booster(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_jump_booster(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
             .repository
@@ -3094,9 +3424,8 @@ impl GameApplication {
             .update_partner_memory_skills(character_id, memory_skills)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::SKILL_LEVEL_UP,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::SKILL_LEVEL_UP);
         writer.write_u32(character.partner_handler);
         writer.write_u8(skill_idx);
         writer.write_i32(memory_skills[slot]);
@@ -3115,11 +3444,7 @@ impl GameApplication {
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
         // Refill the xgauge to its max defined by the xai snapshot.
-        let max = character
-            .xai
-            .as_ref()
-            .map(|x| x.max_xgauge)
-            .unwrap_or(2000);
+        let max = character.xai.as_ref().map(|x| x.max_xgauge).unwrap_or(2000);
         let mut writer = odmo_protocol::writer::PacketWriter::new(
             odmo_protocol::opcode::game::TAMER_XAI_RESOURCES,
         );
@@ -3205,12 +3530,14 @@ impl GameApplication {
 
         // Without the tamer-skill asset table we acknowledge with a cooldown packet so
         // the modern client UI grays out the skill icon.
-        Ok(vec![SkillUpdateCooldownPacket {
-            handler: character.general_handler as i32,
-            current_type: character.partner_current_type,
-            cooldowns: vec![(skill_idx as i32, 5)],
-        }
-        .encode()])
+        Ok(vec![
+            SkillUpdateCooldownPacket {
+                handler: character.general_handler as i32,
+                current_type: character.partner_current_type,
+                cooldowns: vec![(skill_idx as i32, 5)],
+            }
+            .encode(),
+        ])
         .map(|v| {
             // Drop the unused target_uid argument so the compiler doesn't warn.
             let _ = target_uid;
@@ -3669,9 +3996,8 @@ impl GameApplication {
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
         // The party-chat S→C packet shape is `[u32 sender_handler][string sender_name][string message]`.
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::PARTY_CHAT,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::PARTY_CHAT);
         writer.write_u32(character.general_handler);
         writer.write_string(&character.name);
         writer.write_string(&message);
@@ -3685,10 +4011,7 @@ impl GameApplication {
         Ok(Vec::new())
     }
 
-    fn handle_party_dismiss(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_party_dismiss(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let Some((party_id, slot)) = self.party_context_for_member(character_id) else {
             return Ok(Vec::new());
@@ -4093,30 +4416,36 @@ impl GameApplication {
             // Target left visibility window or never existed; respond with miss/skill error
             // to keep the client consistent without crashing the runtime.
             if let Some(slot) = skill_slot {
-                return Ok(vec![PartnerSkillErrorPacket {
+                return Ok(vec![
+                    PartnerSkillErrorPacket {
+                        attacker_handler,
+                        parameter: 2,
+                        value: slot,
+                        value2: 0,
+                        context: target_handler as i32,
+                    }
+                    .encode(),
+                ]);
+            }
+            return Ok(vec![
+                MissHitPacket {
                     attacker_handler,
-                    parameter: 2,
-                    value: slot,
-                    value2: 0,
-                    context: target_handler as i32,
+                    target_handler,
                 }
-                .encode()]);
-            }
-            return Ok(vec![MissHitPacket {
-                attacker_handler,
-                target_handler,
-            }
-            .encode()]);
+                .encode(),
+            ]);
         };
 
         if mob.current_hp <= 0 {
             // Already dead; nothing to broadcast besides a courteous miss to keep the
             // client side consistent.
-            return Ok(vec![MissHitPacket {
-                attacker_handler,
-                target_handler,
-            }
-            .encode()]);
+            return Ok(vec![
+                MissHitPacket {
+                    attacker_handler,
+                    target_handler,
+                }
+                .encode(),
+            ]);
         }
 
         let damage = compute_partner_damage(character, &mob, skill_slot);
@@ -4304,13 +4633,15 @@ impl GameApplication {
         // Reject empty or oversized names. Legacy limits names to 16 characters.
         let trimmed = new_name.trim();
         if trimmed.is_empty() || trimmed.len() > 16 {
-            return Ok(vec![TamerChangeNamePacket {
-                result: 2, // failure: invalid length
-                item_slot: -1,
-                old_name: character.name.clone(),
-                new_name: trimmed.to_string(),
-            }
-            .encode()]);
+            return Ok(vec![
+                TamerChangeNamePacket {
+                    result: 2, // failure: invalid length
+                    item_slot: -1,
+                    old_name: character.name.clone(),
+                    new_name: trimmed.to_string(),
+                }
+                .encode(),
+            ]);
         }
 
         // Reject duplicates.
@@ -4320,13 +4651,15 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
         if let Some(other) = conflict {
             if other.id != character.id {
-                return Ok(vec![TamerChangeNamePacket {
-                    result: 3, // failure: name taken
-                    item_slot: -1,
-                    old_name: character.name.clone(),
-                    new_name: trimmed.to_string(),
-                }
-                .encode()]);
+                return Ok(vec![
+                    TamerChangeNamePacket {
+                        result: 3, // failure: name taken
+                        item_slot: -1,
+                        old_name: character.name.clone(),
+                        new_name: trimmed.to_string(),
+                    }
+                    .encode(),
+                ]);
             }
         }
 
@@ -4406,9 +4739,10 @@ impl GameApplication {
             return Ok(Vec::new());
         }
 
-        progress
-            .in_progress
-            .push(odmo_types::InProgressQuest { quest_id, ..Default::default() });
+        progress.in_progress.push(odmo_types::InProgressQuest {
+            quest_id,
+            ..Default::default()
+        });
 
         self.repository
             .update_quest_progress(character_id, progress)
@@ -4474,9 +4808,8 @@ impl GameApplication {
         // items belong to the cancelled quest, so we return an empty list (count = 0)
         // matching the legacy "quest had no supplies" branch. The wire shape is:
         //   [u2 deleteItemTotalCount = 0]
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::QUEST_GIVE_UP,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::QUEST_GIVE_UP);
         writer.write_u16(0);
         Ok(vec![writer.finalize()])
     }
@@ -4502,7 +4835,11 @@ impl GameApplication {
             return Ok(Vec::new());
         }
 
-        let Some(quest) = progress.in_progress.iter_mut().find(|q| q.quest_id == quest_id) else {
+        let Some(quest) = progress
+            .in_progress
+            .iter_mut()
+            .find(|q| q.quest_id == quest_id)
+        else {
             return Ok(Vec::new());
         };
 
@@ -4514,20 +4851,19 @@ impl GameApplication {
             .update_quest_progress(character_id, progress)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        Ok(vec![QuestGoalUpdatePacket {
-            quest_id,
-            goal_index: cond_index,
-            current_goal_value: current,
-        }
-        .encode()])
+        Ok(vec![
+            QuestGoalUpdatePacket {
+                quest_id,
+                goal_index: cond_index,
+                current_goal_value: current,
+            }
+            .encode(),
+        ])
     }
 
     // ----- Combat status helpers ----------------------------------------------------
 
-    fn handle_die_confirm(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_die_confirm(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
             .repository
@@ -4551,10 +4887,7 @@ impl GameApplication {
 
         // Reload the updated character to broadcast the status to peers.
         if let Ok(Some(updated)) = self.repository.character_by_id(character_id) {
-            let status = UpdateStatusPacket {
-                character: updated,
-            }
-            .encode();
+            let status = UpdateStatusPacket { character: updated }.encode();
             if let Some(broadcast) = &self.broadcast {
                 let _ = broadcast.send_to_visible(
                     character.map_id,
@@ -4645,12 +4978,15 @@ impl GameApplication {
 
         // Sort the slot vector in-place by item_id ascending. Empty slots (item_id == 0)
         // are pushed to the back so the UI shows packed inventory first.
-        character.inventory.items.sort_by(|a, b| match (a.item_id, b.item_id) {
-            (0, 0) => std::cmp::Ordering::Equal,
-            (0, _) => std::cmp::Ordering::Greater,
-            (_, 0) => std::cmp::Ordering::Less,
-            (left, right) => left.cmp(&right),
-        });
+        character
+            .inventory
+            .items
+            .sort_by(|a, b| match (a.item_id, b.item_id) {
+                (0, 0) => std::cmp::Ordering::Equal,
+                (0, _) => std::cmp::Ordering::Greater,
+                (_, 0) => std::cmp::Ordering::Less,
+                (left, right) => left.cmp(&right),
+            });
 
         // Renumber the slot indices so the inventory is dense — `ItemRecord` does not
         // expose an explicit slot field; the slot is the array index, so the sort above
@@ -4670,11 +5006,13 @@ impl GameApplication {
             3 => InventoryType::ExtraInventory,
             _ => InventoryType::Inventory,
         };
-        Ok(vec![LoadInventoryPacket {
-            inventory,
-            inventory_type: inv_type,
-        }
-        .encode()])
+        Ok(vec![
+            LoadInventoryPacket {
+                inventory,
+                inventory_type: inv_type,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_item_identify(
@@ -4699,14 +5037,16 @@ impl GameApplication {
         // the asset table we surface a default identification (power=0, reroll_left=5,
         // four blank stats). The modern client renders this as a freshly identified
         // accessory with no enchant rolled.
-        Ok(vec![ItemIdentifyPacket {
-            slot: item_slot,
-            power: 0,
-            reroll_left: 5,
-            types: [0; 4],
-            values: [0; 4],
-        }
-        .encode()])
+        Ok(vec![
+            ItemIdentifyPacket {
+                slot: item_slot,
+                power: 0,
+                reroll_left: 5,
+                types: [0; 4],
+                values: [0; 4],
+            }
+            .encode(),
+        ])
     }
 
     fn handle_item_reroll(
@@ -4723,30 +5063,34 @@ impl GameApplication {
 
         let idx = item_slot as usize;
         if item_slot < 0 || idx >= character.inventory.items.len() {
-            return Ok(vec![ItemRerollPacket {
-                result: 0,
-                accessory_slot: item_slot,
-                power: 0,
-                reroll_left: 0,
-                types: [0; 4],
-                values: [0; 4],
-            }
-            .encode()]);
+            return Ok(vec![
+                ItemRerollPacket {
+                    result: 0,
+                    accessory_slot: item_slot,
+                    power: 0,
+                    reroll_left: 0,
+                    types: [0; 4],
+                    values: [0; 4],
+                }
+                .encode(),
+            ]);
         }
 
         // Real reroll requires accessory asset data; we acknowledge with a successful
         // result and leave the stats blank. The legacy server consumes a "reroll counter"
         // slot from the item's record on success — that field stays where the modern
         // client expects it (in the item record blob) and we leave the value untouched.
-        Ok(vec![ItemRerollPacket {
-            result: 1,
-            accessory_slot: item_slot,
-            power: 0,
-            reroll_left: 4,
-            types: [0; 4],
-            values: [0; 4],
-        }
-        .encode()])
+        Ok(vec![
+            ItemRerollPacket {
+                result: 1,
+                accessory_slot: item_slot,
+                power: 0,
+                reroll_left: 4,
+                types: [0; 4],
+                values: [0; 4],
+            }
+            .encode(),
+        ])
     }
 
     fn handle_item_socket_in(
@@ -4775,7 +5119,12 @@ impl GameApplication {
             .update_inventory_bits(character_id, new_bits)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        Ok(vec![ItemSocketInPacket { money: new_bits as i32 }.encode()])
+        Ok(vec![
+            ItemSocketInPacket {
+                money: new_bits as i32,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_item_socket_out(
@@ -4802,7 +5151,12 @@ impl GameApplication {
             .update_inventory_bits(character_id, new_bits)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        Ok(vec![ItemSocketOutPacket { money: new_bits as i32 }.encode()])
+        Ok(vec![
+            ItemSocketOutPacket {
+                money: new_bits as i32,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_item_socket_identify(
@@ -4828,11 +5182,13 @@ impl GameApplication {
             .update_inventory_bits(character_id, new_bits)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        Ok(vec![ItemSocketIdentifyPacket {
-            power: 0,
-            money: new_bits as i32,
-        }
-        .encode()])
+        Ok(vec![
+            ItemSocketIdentifyPacket {
+                power: 0,
+                money: new_bits as i32,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_item_return(
@@ -4868,11 +5224,13 @@ impl GameApplication {
             .update_inventory_bits(character_id, new_bits)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        Ok(vec![ItemReturnPacket {
-            received_bits: refund,
-            previous_bits,
-        }
-        .encode()])
+        Ok(vec![
+            ItemReturnPacket {
+                received_bits: refund,
+                previous_bits,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_load_gift_storage(
@@ -4886,11 +5244,13 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        Ok(vec![ItemStoragePacket {
-            opcode: odmo_protocol::opcode::game::LOAD_GIFT_STORAGE,
-            items: character.gift_storage.clone(),
-        }
-        .encode()])
+        Ok(vec![
+            ItemStoragePacket {
+                opcode: odmo_protocol::opcode::game::LOAD_GIFT_STORAGE,
+                items: character.gift_storage.clone(),
+            }
+            .encode(),
+        ])
     }
 
     fn handle_gift_storage_retrieve(
@@ -4942,11 +5302,13 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        Ok(vec![ItemStoragePacket {
-            opcode: odmo_protocol::opcode::game::LOAD_REWARD_STORAGE,
-            items: character.reward_storage.clone(),
-        }
-        .encode()])
+        Ok(vec![
+            ItemStoragePacket {
+                opcode: odmo_protocol::opcode::game::LOAD_REWARD_STORAGE,
+                items: character.reward_storage.clone(),
+            }
+            .encode(),
+        ])
     }
 
     fn handle_recompense_gain(
@@ -5077,9 +5439,8 @@ impl GameApplication {
                 .map_err(|error| GameFlowError::Storage(error.to_string()))?;
         }
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::TAMER_SHOP_BUY,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::TAMER_SHOP_BUY);
         writer.write_u8(1);
         Ok(vec![writer.finalize()])
     }
@@ -5140,9 +5501,8 @@ impl GameApplication {
             .update_hatch_state(character_id, hatch)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::HATCH_INSERT_EGG,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::HATCH_INSERT_EGG);
         writer.write_u8(1);
         writer.write_i32(egg.item_id);
         Ok(vec![writer.finalize()])
@@ -5175,9 +5535,8 @@ impl GameApplication {
             .update_hatch_state(character_id, hatch.clone())
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::HATCH_INCREASE,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::HATCH_INCREASE);
         writer.write_u8(1);
         writer.write_i8(hatch.increase_level);
         Ok(vec![writer.finalize()])
@@ -5205,8 +5564,8 @@ impl GameApplication {
 
         // Find an empty partner slot.
         let mut partner_slots = character.partner_slots.clone();
-        let next_slot = (1..=character.digimon_slots)
-            .find(|s| !partner_slots.iter().any(|p| p.slot == *s));
+        let next_slot =
+            (1..=character.digimon_slots).find(|s| !partner_slots.iter().any(|p| p.slot == *s));
 
         let Some(slot) = next_slot else {
             let mut writer = odmo_protocol::writer::PacketWriter::new(
@@ -5251,9 +5610,8 @@ impl GameApplication {
             let _ = c;
         }
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::HATCH_FINISH,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::HATCH_FINISH);
         writer.write_u8(1);
         writer.write_u8(slot);
         writer.write_string(&name);
@@ -5365,10 +5723,7 @@ impl GameApplication {
         else if slot1 < 0 && slot2 > 0 {
             let src_archive = (-slot1) as u8;
             let dst_slot = slot2 as u8;
-            if let Some(pos) = archive
-                .iter()
-                .position(|e| e.archive_slot == src_archive)
-            {
+            if let Some(pos) = archive.iter().position(|e| e.archive_slot == src_archive) {
                 let mut entry = archive.remove(pos);
                 entry.partner.slot = dst_slot;
                 roster.push(entry.partner);
@@ -5451,10 +5806,7 @@ impl GameApplication {
 
     // ----- Ride mode + partner rename ------------------------------------------------
 
-    fn handle_ride_mode_start(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_ride_mode_start(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
             .repository
@@ -5467,9 +5819,8 @@ impl GameApplication {
         // emit the activation packet so peers see the partner mounted.
         let evolution_type = character.partner_current_type;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::RIDE_MODE_START,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::RIDE_MODE_START);
         writer.write_u8(1); // success
         writer.write_u32(character.partner_handler);
         writer.write_i32(evolution_type);
@@ -5499,10 +5850,7 @@ impl GameApplication {
         Ok(Vec::new())
     }
 
-    fn handle_ride_mode_stop(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_ride_mode_stop(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
             .repository
@@ -5510,9 +5858,8 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::RIDE_MODE_STOP,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::RIDE_MODE_STOP);
         writer.write_u32(character.partner_handler);
         let packet = writer.finalize();
         if let Some(broadcast) = &self.broadcast {
@@ -5672,8 +6019,14 @@ impl GameApplication {
         };
 
         // Echo the accept packet to both sides so the trade window opens.
-        let to_target = TradeAcceptPacket { target_handler: inviter.general_handler }.encode();
-        let to_inviter = TradeAcceptPacket { target_handler: target.general_handler }.encode();
+        let to_target = TradeAcceptPacket {
+            target_handler: inviter.general_handler,
+        }
+        .encode();
+        let to_inviter = TradeAcceptPacket {
+            target_handler: target.general_handler,
+        }
+        .encode();
         if let Some(broadcast) = &self.broadcast {
             let _ = broadcast.send_to(inviter.id, &to_inviter);
         }
@@ -5682,10 +6035,7 @@ impl GameApplication {
         Ok(vec![to_target])
     }
 
-    fn handle_trade_cancel(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_trade_cancel(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let trade_session_id = {
             let runtime = self.trade_runtime.read().expect("trade runtime poisoned");
@@ -5718,7 +6068,10 @@ impl GameApplication {
         };
 
         if let Some((other_id, other_handler)) = other_id {
-            let cancel = TradeCancelPacket { target_handler: other_handler }.encode();
+            let cancel = TradeCancelPacket {
+                target_handler: other_handler,
+            }
+            .encode();
             if let Some(broadcast) = &self.broadcast {
                 let _ = broadcast.send_to(other_id, &cancel);
             }
@@ -5775,12 +6128,8 @@ impl GameApplication {
                 return None;
             }
             let trade_slot = mine.items.len() as u8;
-            mine.items.push((
-                trade_slot,
-                item.item_id,
-                amount as i16,
-                inven_pos as i32,
-            ));
+            mine.items
+                .push((trade_slot, item.item_id, amount as i16, inven_pos as i32));
             sess.confirmed_a = false;
             sess.confirmed_b = false;
             Some((theirs.character_id, trade_slot))
@@ -5929,11 +6278,7 @@ impl GameApplication {
         Ok(vec![mine])
     }
 
-
-    fn handle_trade_confirm(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_trade_confirm(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
             .repository
@@ -6000,10 +6345,7 @@ impl GameApplication {
         Ok(vec![mine])
     }
 
-    fn handle_trade_lock(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_trade_lock(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
             .repository
@@ -6036,13 +6378,12 @@ impl GameApplication {
         if let Some(broadcast) = &self.broadcast {
             let _ = broadcast.send_to(other_id, &to_other);
         }
-        Ok(vec![TradeInventoryLockPacket { target_handler: 0 }.encode()])
+        Ok(vec![
+            TradeInventoryLockPacket { target_handler: 0 }.encode(),
+        ])
     }
 
-    fn handle_trade_unlock(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_trade_unlock(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
             .repository
@@ -6076,7 +6417,9 @@ impl GameApplication {
         if let Some(broadcast) = &self.broadcast {
             let _ = broadcast.send_to(other_id, &to_other);
         }
-        Ok(vec![TradeInventoryUnlockPacket { target_handler: 0 }.encode()])
+        Ok(vec![
+            TradeInventoryUnlockPacket { target_handler: 0 }.encode(),
+        ])
     }
 
     /// Commit a confirmed trade: move items + bits between both sides atomically.
@@ -6090,8 +6433,12 @@ impl GameApplication {
             let Some(sess) = runtime.sessions.remove(&id) else {
                 return Ok(());
             };
-            runtime.session_by_character.remove(&sess.side_a.character_id);
-            runtime.session_by_character.remove(&sess.side_b.character_id);
+            runtime
+                .session_by_character
+                .remove(&sess.side_a.character_id);
+            runtime
+                .session_by_character
+                .remove(&sess.side_b.character_id);
             sess
         };
 
@@ -6127,7 +6474,8 @@ impl GameApplication {
             );
             // Insert into b.
             if let Some(target_slot) = b.inventory.items.iter().position(|i| i.item_id == 0) {
-                b.inventory.items[target_slot] = odmo_types::ItemRecord::new(*item_id, *amount as i32);
+                b.inventory.items[target_slot] =
+                    odmo_types::ItemRecord::new(*item_id, *amount as i32);
             } else {
                 // No room on b — drop the trade by re-inserting on a.
                 a.inventory.items[src_idx] = removed;
@@ -6147,7 +6495,8 @@ impl GameApplication {
                 odmo_types::ItemRecord::new(0, 0),
             );
             if let Some(target_slot) = a.inventory.items.iter().position(|i| i.item_id == 0) {
-                a.inventory.items[target_slot] = odmo_types::ItemRecord::new(*item_id, *amount as i32);
+                a.inventory.items[target_slot] =
+                    odmo_types::ItemRecord::new(*item_id, *amount as i32);
             } else {
                 b.inventory.items[src_idx] = removed;
                 return Ok(());
@@ -6210,9 +6559,8 @@ impl GameApplication {
             .update_seal_list(character_id, seal_list)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::SEAL_OPEN,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::SEAL_OPEN);
         writer.write_i16(seal_idx);
         writer.write_u8(1);
         Ok(vec![writer.finalize()])
@@ -6236,9 +6584,8 @@ impl GameApplication {
             .update_seal_list(character_id, seal_list)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::SEAL_CLOSE,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::SEAL_CLOSE);
         writer.write_i16(seal_idx);
         writer.write_u8(1);
         Ok(vec![writer.finalize()])
@@ -6262,9 +6609,8 @@ impl GameApplication {
             .update_seal_list(character_id, seal_list)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        let mut writer = odmo_protocol::writer::PacketWriter::new(
-            odmo_protocol::opcode::game::SEAL_SET_LEADER,
-        );
+        let mut writer =
+            odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::SEAL_SET_LEADER);
         writer.write_u16(card_code);
         writer.write_u8(1);
         Ok(vec![writer.finalize()])
@@ -6335,10 +6681,12 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        Ok(vec![EncyclopediaLoadPacket {
-            entries: character.encyclopedia.entries.clone(),
-        }
-        .encode()])
+        Ok(vec![
+            EncyclopediaLoadPacket {
+                entries: character.encyclopedia.entries.clone(),
+            }
+            .encode(),
+        ])
     }
 
     fn handle_encyclopedia_get_reward(
@@ -6377,11 +6725,13 @@ impl GameApplication {
             .update_encyclopedia(character_id, encyclopedia)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        Ok(vec![EncyclopediaReceiveRewardItemPacket {
-            item_id: 0,
-            amount: 0,
-        }
-        .encode()])
+        Ok(vec![
+            EncyclopediaReceiveRewardItemPacket {
+                item_id: 0,
+                amount: 0,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_encyclopedia_deck_buff(
@@ -6409,11 +6759,13 @@ impl GameApplication {
         // The legacy server computes HP/AS deltas from the deck buff asset; without
         // the asset table we send neutral values (1.0× multiplier) so the modern
         // client UI clears the deck-buff dialog without crashing.
-        Ok(vec![EncyclopediaDeckBuffUsePacket {
-            deck_buff_hp: 0,
-            deck_buff_as: 0,
-        }
-        .encode()])
+        Ok(vec![
+            EncyclopediaDeckBuffUsePacket {
+                deck_buff_hp: 0,
+                deck_buff_as: 0,
+            }
+            .encode(),
+        ])
     }
 
     // ----- Arena slice -----------------------------------------------------------------
@@ -6426,10 +6778,12 @@ impl GameApplication {
         // The arena ranking table is not yet persisted in the Rust port. We accept
         // the request and echo back a points total derived from the increment so the
         // modern client UI updates without a desync.
-        Ok(vec![ArenaRankingDailyUpdatePointsPacket {
-            points: added_points.max(0) as i32,
-        }
-        .encode()])
+        Ok(vec![
+            ArenaRankingDailyUpdatePointsPacket {
+                points: added_points.max(0) as i32,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_arena_daily_ranking(
@@ -6439,11 +6793,13 @@ impl GameApplication {
         // Without an arena ranking persistence layer we report 0 points and the
         // remaining minutes until midnight UTC (legacy daily reset boundary).
         let remaining = (seconds_until_next_day() as i64) / 60;
-        Ok(vec![ArenaRankingDailyLoadPacket {
-            remaining_minutes: remaining,
-            points: 0,
-        }
-        .encode()])
+        Ok(vec![
+            ArenaRankingDailyLoadPacket {
+                remaining_minutes: remaining,
+                points: 0,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_arena_ranking_all(
@@ -6451,11 +6807,13 @@ impl GameApplication {
         _session: &GameSession,
         ranking_type: u8,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
-        Ok(vec![ArenaRankingInfoPacket {
-            ranking_type,
-            entries: Vec::new(),
-        }
-        .encode()])
+        Ok(vec![
+            ArenaRankingInfoPacket {
+                ranking_type,
+                entries: Vec::new(),
+            }
+            .encode(),
+        ])
     }
 
     fn handle_arena_request_rank(
@@ -6463,12 +6821,14 @@ impl GameApplication {
         _session: &GameSession,
         ranking_type: u8,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
-        Ok(vec![ModernArenaRankingInfoPacket {
-            ranking_type,
-            entries: Vec::new(),
-            tamer_position: 0,
-        }
-        .encode()])
+        Ok(vec![
+            ModernArenaRankingInfoPacket {
+                ranking_type,
+                entries: Vec::new(),
+                tamer_position: 0,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_arena_request_old_rank(
@@ -6476,23 +6836,27 @@ impl GameApplication {
         _session: &GameSession,
         ranking_type: u8,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
-        Ok(vec![ModernArenaOldRankingInfoPacket {
-            ranking_type,
-            entries: Vec::new(),
-        }
-        .encode()])
+        Ok(vec![
+            ModernArenaOldRankingInfoPacket {
+                ranking_type,
+                entries: Vec::new(),
+            }
+            .encode(),
+        ])
     }
 
     fn handle_dungeon_next_stage(
         &self,
         _session: &GameSession,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
-        Ok(vec![DungeonArenaNextStagePacket {
-            current_stage: 1,
-            npc_id: 0,
-            remain_time: 0,
-        }
-        .encode()])
+        Ok(vec![
+            DungeonArenaNextStagePacket {
+                current_stage: 1,
+                npc_id: 0,
+                remain_time: 0,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_extra_inventory_move(
@@ -7053,33 +7417,39 @@ impl GameApplication {
 
         let trimmed = guild_name.trim().to_string();
         if trimmed.is_empty() {
-            return Ok(vec![GuildCreateFailPacket {
-                leader_name: character.name.clone(),
-                guild_name,
-            }
-            .encode()]);
+            return Ok(vec![
+                GuildCreateFailPacket {
+                    leader_name: character.name.clone(),
+                    guild_name,
+                }
+                .encode(),
+            ]);
         }
 
         let mut runtime = self.guild_runtime.write().expect("guild runtime poisoned");
 
         // Reject if character is already in a guild or the name is taken.
         if runtime.guild_by_member.contains_key(&character.id) {
-            return Ok(vec![GuildCreateFailPacket {
-                leader_name: character.name.clone(),
-                guild_name: trimmed,
-            }
-            .encode()]);
+            return Ok(vec![
+                GuildCreateFailPacket {
+                    leader_name: character.name.clone(),
+                    guild_name: trimmed,
+                }
+                .encode(),
+            ]);
         }
         if runtime
             .guilds
             .values()
             .any(|room| room.name.eq_ignore_ascii_case(&trimmed))
         {
-            return Ok(vec![GuildCreateFailPacket {
-                leader_name: character.name.clone(),
-                guild_name: trimmed,
-            }
-            .encode()]);
+            return Ok(vec![
+                GuildCreateFailPacket {
+                    leader_name: character.name.clone(),
+                    guild_name: trimmed,
+                }
+                .encode(),
+            ]);
         }
 
         let guild_id = runtime.alloc_id();
@@ -7117,12 +7487,18 @@ impl GameApplication {
             guild_name: trimmed,
         }
         .encode();
-        let info = guild_snapshot
-            .as_ref()
-            .map(|guild| GuildInformationPacket { guild: guild.clone() }.encode());
-        let history = guild_snapshot
-            .as_ref()
-            .map(|guild| GuildHistoricPacket { entries: guild.historic.clone() }.encode());
+        let info = guild_snapshot.as_ref().map(|guild| {
+            GuildInformationPacket {
+                guild: guild.clone(),
+            }
+            .encode()
+        });
+        let history = guild_snapshot.as_ref().map(|guild| {
+            GuildHistoricPacket {
+                entries: guild.historic.clone(),
+            }
+            .encode()
+        });
         let rank = GuildRankPacket { position: 0 }.encode();
 
         let mut responses = vec![success];
@@ -7136,10 +7512,7 @@ impl GameApplication {
         Ok(responses)
     }
 
-    fn handle_guild_delete(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_guild_delete(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let (guild_name, member_ids) = {
             let mut runtime = self.guild_runtime.write().expect("guild runtime poisoned");
@@ -7190,11 +7563,13 @@ impl GameApplication {
 
         let trimmed = target_name.trim().to_string();
         if trimmed.is_empty() {
-            return Ok(vec![GuildInviteFailPacket {
-                reason: 4, // invalid target
-                target_name,
-            }
-            .encode()]);
+            return Ok(vec![
+                GuildInviteFailPacket {
+                    reason: 4, // invalid target
+                    target_name,
+                }
+                .encode(),
+            ]);
         }
 
         let target = match self
@@ -7204,29 +7579,35 @@ impl GameApplication {
         {
             Some(character) => character,
             None => {
-                return Ok(vec![GuildInviteFailPacket {
-                    reason: 4,
-                    target_name: trimmed,
-                }
-                .encode()]);
+                return Ok(vec![
+                    GuildInviteFailPacket {
+                        reason: 4,
+                        target_name: trimmed,
+                    }
+                    .encode(),
+                ]);
             }
         };
 
         let (guild_id, guild_name) = {
             let runtime = self.guild_runtime.read().expect("guild runtime poisoned");
             let Some(guild_id) = runtime.guild_by_member.get(&inviter.id).copied() else {
-                return Ok(vec![GuildInviteFailPacket {
-                    reason: 4,
-                    target_name: trimmed,
-                }
-                .encode()]);
+                return Ok(vec![
+                    GuildInviteFailPacket {
+                        reason: 4,
+                        target_name: trimmed,
+                    }
+                    .encode(),
+                ]);
             };
             let Some(guild) = runtime.guilds.get(&guild_id) else {
-                return Ok(vec![GuildInviteFailPacket {
-                    reason: 4,
-                    target_name: trimmed,
-                }
-                .encode()]);
+                return Ok(vec![
+                    GuildInviteFailPacket {
+                        reason: 4,
+                        target_name: trimmed,
+                    }
+                    .encode(),
+                ]);
             };
             // Inviter must have at least Member rank.
             if guild
@@ -7237,29 +7618,35 @@ impl GameApplication {
                 .unwrap_or(5)
                 > 4
             {
-                return Ok(vec![GuildInviteFailPacket {
-                    reason: 4,
-                    target_name: trimmed,
-                }
-                .encode()]);
+                return Ok(vec![
+                    GuildInviteFailPacket {
+                        reason: 4,
+                        target_name: trimmed,
+                    }
+                    .encode(),
+                ]);
             }
             if runtime.guild_by_member.contains_key(&target.id) {
-                return Ok(vec![GuildInviteFailPacket {
-                    reason: 1, // already in a guild
-                    target_name: trimmed,
-                }
-                .encode()]);
+                return Ok(vec![
+                    GuildInviteFailPacket {
+                        reason: 1, // already in a guild
+                        target_name: trimmed,
+                    }
+                    .encode(),
+                ]);
             }
             (guild_id, guild.name.clone())
         };
 
         if let Some(broadcast) = &self.broadcast {
             if !broadcast.is_online(target.id) {
-                return Ok(vec![GuildInviteFailPacket {
-                    reason: 2, // offline
-                    target_name: trimmed,
-                }
-                .encode()]);
+                return Ok(vec![
+                    GuildInviteFailPacket {
+                        reason: 2, // offline
+                        target_name: trimmed,
+                    }
+                    .encode(),
+                ]);
             }
         }
 
@@ -7287,12 +7674,14 @@ impl GameApplication {
             let _ = broadcast.send_to(target.id, &invite);
         }
 
-        Ok(vec![GuildInviteSuccessPacket {
-            target_name: target.name,
-            guild_id,
-            guild_name,
-        }
-        .encode()])
+        Ok(vec![
+            GuildInviteSuccessPacket {
+                target_name: target.name,
+                guild_id,
+                guild_name,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_guild_invite_accept(
@@ -7317,11 +7706,13 @@ impl GameApplication {
                     return Ok(vec![]);
                 };
                 if guild.members.len() >= 64 {
-                    return Ok(vec![GuildInviteFailPacket {
-                        reason: 3, // capacity
-                        target_name: character.name.clone(),
-                    }
-                    .encode()]);
+                    return Ok(vec![
+                        GuildInviteFailPacket {
+                            reason: 3, // capacity
+                            target_name: character.name.clone(),
+                        }
+                        .encode(),
+                    ]);
                 }
                 guild.members.push(GuildRoomMember {
                     character_id: character.id,
@@ -7361,7 +7752,9 @@ impl GameApplication {
                 (guild.name.clone(), mem_packet, recipients)
             };
             let _ = guild_name;
-            runtime.guild_by_member.insert(character.id, target_guild_id);
+            runtime
+                .guild_by_member
+                .insert(character.id, target_guild_id);
             let snapshot = self.snapshot_guild(&runtime, target_guild_id);
             (
                 recipients
@@ -7470,11 +7863,7 @@ impl GameApplication {
                 };
                 let target_name = guild.members[idx].name.clone();
                 guild.members.remove(idx);
-                let member_ids: Vec<u64> = guild
-                    .members
-                    .iter()
-                    .map(|m| m.character_id)
-                    .collect();
+                let member_ids: Vec<u64> = guild.members.iter().map(|m| m.character_id).collect();
                 (target_name, member_ids, guild.name.clone())
             };
             runtime.guild_by_member.remove(&target_id);
@@ -7504,10 +7893,7 @@ impl GameApplication {
         Ok(vec![packet])
     }
 
-    fn handle_guild_leave(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_guild_leave(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
             .repository
@@ -7631,10 +8017,7 @@ impl GameApplication {
         Ok(vec![packet])
     }
 
-    fn handle_guild_history(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_guild_history(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let entries = {
             let runtime = self.guild_runtime.read().expect("guild runtime poisoned");
@@ -7664,12 +8047,14 @@ impl GameApplication {
         if !in_guild {
             return Ok(vec![]);
         }
-        Ok(vec![GuildAuthorityUpdatePacket {
-            authority_class: 4,
-            title: title.clone(),
-            duty: title,
-        }
-        .encode()])
+        Ok(vec![
+            GuildAuthorityUpdatePacket {
+                authority_class: 4,
+                title: title.clone(),
+                duty: title,
+            }
+            .encode(),
+        ])
     }
 
     fn handle_guild_authority(
@@ -7918,6 +8303,237 @@ fn apply_runtime_drop_state(mut drop: odmo_types::DropSummary) -> odmo_types::Dr
     drop
 }
 
+fn current_unix_nanos() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos()
+}
+
+fn find_usable_digi_summon_ticket(
+    inventory: &odmo_types::InventorySnapshot,
+    product: &odmo_types::DigiSummonProduct,
+    requested_slot: i32,
+) -> Option<(usize, odmo_types::DigiSummonTicket)> {
+    if requested_slot >= 0 {
+        let requested_slot = requested_slot as usize;
+        if let Some(slot_item) = inventory.items.get(requested_slot) {
+            if let Some(ticket) = product.tickets.iter().find(|ticket| {
+                ticket.item_id == slot_item.item_id && slot_item.amount >= ticket.cost
+            }) {
+                return Some((requested_slot, ticket.clone()));
+            }
+        }
+    }
+
+    for ticket in &product.tickets {
+        if let Some((index, _)) = inventory
+            .items
+            .iter()
+            .enumerate()
+            .find(|(_, item)| item.item_id == ticket.item_id && item.amount >= ticket.cost)
+        {
+            return Some((index, ticket.clone()));
+        }
+    }
+
+    None
+}
+
+fn roll_digi_summon_rewards(
+    product: &odmo_types::DigiSummonProduct,
+) -> Vec<odmo_types::DigiSummonReward> {
+    let rewards: Vec<_> = product
+        .rewards
+        .iter()
+        .filter(|reward| reward.item_id > 0)
+        .cloned()
+        .collect();
+    if rewards.is_empty() {
+        return Vec::new();
+    }
+
+    let draw_count = product.draw_count.max(1) as usize;
+    let mut results = Vec::with_capacity(draw_count);
+    for draw_index in 0..draw_count {
+        results.push(pick_weighted_digi_summon_reward(&rewards, draw_index));
+    }
+    results
+}
+
+fn pick_weighted_digi_summon_reward(
+    rewards: &[odmo_types::DigiSummonReward],
+    draw_index: usize,
+) -> odmo_types::DigiSummonReward {
+    let total_weight: i32 = rewards.iter().map(|reward| reward.weight.max(0)).sum();
+    if total_weight <= 0 {
+        let index = (current_unix_nanos() as usize).wrapping_add(draw_index) % rewards.len();
+        return rewards[index].clone();
+    }
+
+    let mut roll = ((current_unix_nanos() + draw_index as u128) % total_weight as u128) as i32 + 1;
+    for reward in rewards {
+        roll -= reward.weight.max(0);
+        if roll <= 0 {
+            return reward.clone();
+        }
+    }
+
+    rewards.last().cloned().unwrap_or_default()
+}
+
+fn consume_inventory_item_at(
+    inventory: &mut odmo_types::InventorySnapshot,
+    slot_index: usize,
+    amount: i32,
+) -> Option<odmo_types::ItemRecord> {
+    if amount <= 0 {
+        return None;
+    }
+    let item = inventory.items.get_mut(slot_index)?;
+    if item.item_id <= 0 || item.amount < amount {
+        return None;
+    }
+
+    let consumed = odmo_types::ItemRecord::new(item.item_id, amount);
+    item.amount -= amount;
+    if item.amount <= 0 {
+        *item = odmo_types::ItemRecord::default();
+    } else {
+        item.sync_record();
+    }
+    Some(consumed)
+}
+
+fn add_stackable_inventory_item(
+    inventory: &mut odmo_types::InventorySnapshot,
+    item_id: i32,
+    amount: i32,
+) -> bool {
+    if item_id <= 0 || amount <= 0 {
+        return false;
+    }
+
+    if let Some(existing) = inventory
+        .items
+        .iter_mut()
+        .find(|item| item.item_id == item_id && item.amount > 0)
+    {
+        existing.amount = existing.amount.saturating_add(amount);
+        existing.sync_record();
+        return true;
+    }
+
+    if let Some(empty_slot) = inventory
+        .items
+        .iter_mut()
+        .find(|item| item.item_id <= 0 || item.amount <= 0)
+    {
+        *empty_slot = odmo_types::ItemRecord::new(item_id, amount);
+        return true;
+    }
+
+    if inventory.items.len() >= inventory.size as usize {
+        return false;
+    }
+
+    inventory
+        .items
+        .push(odmo_types::ItemRecord::new(item_id, amount));
+    true
+}
+
+fn consume_first_matching_material(
+    inventory: &mut odmo_types::InventorySnapshot,
+    materials: &[odmo_types::ExtraEvolutionMaterial],
+    consumed_items: &mut Vec<odmo_types::ItemRecord>,
+) -> bool {
+    for material in materials {
+        let Some(slot_index) = inventory.items.iter().position(|item| {
+            item.item_id == material.material_id && item.amount >= material.amount
+        }) else {
+            continue;
+        };
+
+        let Some(consumed) =
+            consume_inventory_item_at(inventory, slot_index, material.amount.max(1))
+        else {
+            continue;
+        };
+        consumed_items.push(consumed);
+        return true;
+    }
+
+    false
+}
+
+fn consume_all_materials(
+    inventory: &mut odmo_types::InventorySnapshot,
+    materials: &[odmo_types::ExtraEvolutionMaterial],
+    consumed_items: &mut Vec<odmo_types::ItemRecord>,
+) -> bool {
+    for material in materials {
+        let Some(slot_index) = inventory.items.iter().position(|item| {
+            item.item_id == material.material_id && item.amount >= material.amount
+        }) else {
+            return false;
+        };
+
+        let Some(consumed) =
+            consume_inventory_item_at(inventory, slot_index, material.amount.max(1))
+        else {
+            return false;
+        };
+        consumed_items.push(consumed);
+    }
+
+    true
+}
+
+fn consume_item_material_groups(
+    inventory: &mut odmo_types::InventorySnapshot,
+    way_type: u16,
+    main_materials: &[odmo_types::ExtraEvolutionMaterial],
+    sub_materials: &[odmo_types::ExtraEvolutionMaterial],
+    consumed_items: &mut Vec<odmo_types::ItemRecord>,
+) -> bool {
+    let original_inventory = inventory.clone();
+    let original_consumed_len = consumed_items.len();
+    let success = match way_type {
+        EXTRA_EVOLUTION_NEED_ONE => {
+            consume_first_matching_material(inventory, main_materials, consumed_items)
+                && consume_first_matching_material(inventory, sub_materials, consumed_items)
+        }
+        EXTRA_EVOLUTION_NEED_ALL | _ => {
+            consume_all_materials(inventory, main_materials, consumed_items)
+                && consume_all_materials(inventory, sub_materials, consumed_items)
+        }
+    };
+
+    if success {
+        return true;
+    }
+
+    *inventory = original_inventory;
+    consumed_items.truncate(original_consumed_len);
+    false
+}
+
+fn default_partner_for_type(
+    digimon_type: i32,
+    slot: u8,
+    name: String,
+) -> odmo_types::PartnerSlotSnapshot {
+    odmo_types::PartnerSlotSnapshot {
+        slot,
+        digimon_type,
+        model: digimon_type,
+        level: 1,
+        name,
+        ..odmo_types::PartnerSlotSnapshot::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -7927,22 +8543,29 @@ mod tests {
     };
 
     use super::*;
-    use crate::{character::CharacterRepository, portal::PortalBridge};
+    use crate::{
+        character::{CharacterAccountRepository, CharacterRepository},
+        portal::PortalBridge,
+    };
     use odmo_protocol::PacketReader;
     use odmo_types::{
-        ActiveBuffSnapshot, AttendanceStatus, CharacterConnectionState, CharacterSummary,
-        DEFAULT_ALT_PARTNER_MODEL_ID, DEFAULT_ALT_TAMER_MODEL_ID, DEFAULT_GM_PARTNER_MODEL_ID,
-        DEFAULT_GM_TAMER_MODEL_ID, DEFAULT_PARTNER_MODEL_ID, DEFAULT_START_MAP_ID, DEFAULT_START_X,
-        DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID, DailyRewardStatus, DropSummary, GameSessionTicket,
-        GuildHistoricEntry, GuildMemberSnapshot, GuildSnapshot, MobSummary, RelationEntry,
-        SealListSnapshot, SealRecord, XaiSnapshot,
+        AccessLevel, Account, ActiveBuffSnapshot, AttendanceStatus, CharacterConnectionState,
+        CharacterSummary, DEFAULT_ALT_PARTNER_MODEL_ID, DEFAULT_ALT_TAMER_MODEL_ID,
+        DEFAULT_GM_PARTNER_MODEL_ID, DEFAULT_GM_TAMER_MODEL_ID, DEFAULT_PARTNER_MODEL_ID,
+        DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID,
+        DailyRewardStatus, DropSummary, ExtraEvolutionNpc, GameSessionTicket, GuildHistoricEntry,
+        GuildMemberSnapshot, GuildSnapshot, MobSummary, RelationEntry, SealListSnapshot,
+        SealRecord, XaiSnapshot,
     };
 
     #[derive(Debug)]
     struct InMemoryCharacterRepository {
         characters: RwLock<HashMap<u64, CharacterSummary>>,
+        accounts: HashMap<u64, Account>,
         mobs_by_map: RwLock<HashMap<(i16, u8), Vec<MobSummary>>>,
         drops_by_map: RwLock<HashMap<(i16, u8), Vec<DropSummary>>>,
+        digi_summon_products: Vec<odmo_types::DigiSummonProduct>,
+        extra_evolution_npcs: Vec<ExtraEvolutionNpc>,
     }
 
     #[derive(Debug, Default)]
@@ -8011,6 +8634,15 @@ mod tests {
                             account_id: 1,
                             slot: 0,
                             name: "AdminTamer".to_string(),
+                            inventory: odmo_types::InventorySnapshot {
+                                bits: 0,
+                                size: 30,
+                                items: vec![
+                                    odmo_types::ItemRecord::new(81001, 3),
+                                    odmo_types::ItemRecord::new(81002, 2),
+                                    odmo_types::ItemRecord::default(),
+                                ],
+                            },
                             partner_name: "Agumon".to_string(),
                             general_handler: 11_000,
                             partner_handler: 21_000,
@@ -8165,6 +8797,11 @@ mod tests {
                             account_id: 2,
                             slot: 0,
                             name: "Matt".to_string(),
+                            inventory: odmo_types::InventorySnapshot {
+                                bits: 0,
+                                size: 30,
+                                items: vec![odmo_types::ItemRecord::default()],
+                            },
                             partner_name: "Gabumon".to_string(),
                             model: DEFAULT_GM_TAMER_MODEL_ID,
                             partner_model: DEFAULT_GM_PARTNER_MODEL_ID,
@@ -8180,6 +8817,11 @@ mod tests {
                             account_id: 3,
                             slot: 0,
                             name: "FarAway".to_string(),
+                            inventory: odmo_types::InventorySnapshot {
+                                bits: 0,
+                                size: 30,
+                                items: vec![odmo_types::ItemRecord::default()],
+                            },
                             partner_name: "Patamon".to_string(),
                             model: DEFAULT_ALT_TAMER_MODEL_ID,
                             partner_model: DEFAULT_ALT_PARTNER_MODEL_ID,
@@ -8193,6 +8835,44 @@ mod tests {
                         },
                     ),
                 ])),
+                accounts: HashMap::from([
+                    (
+                        1,
+                        Account {
+                            id: 1,
+                            username: "admin".to_string(),
+                            password_hash: "admin".to_string(),
+                            email: "admin@odmo.local".to_string(),
+                            access_level: AccessLevel::Administrator,
+                            secondary_password: Some("4321".to_string()),
+                            suspension: None,
+                        },
+                    ),
+                    (
+                        2,
+                        Account {
+                            id: 2,
+                            username: "gm".to_string(),
+                            password_hash: "gm".to_string(),
+                            email: "gm@odmo.local".to_string(),
+                            access_level: AccessLevel::GameMaster,
+                            secondary_password: Some("4321".to_string()),
+                            suspension: None,
+                        },
+                    ),
+                    (
+                        3,
+                        Account {
+                            id: 3,
+                            username: "alt".to_string(),
+                            password_hash: "alt".to_string(),
+                            email: "alt@odmo.local".to_string(),
+                            access_level: AccessLevel::Player,
+                            secondary_password: Some("4321".to_string()),
+                            suspension: None,
+                        },
+                    ),
+                ]),
                 mobs_by_map: RwLock::new(HashMap::from([(
                     (DEFAULT_START_MAP_ID, 0),
                     vec![
@@ -8269,6 +8949,66 @@ mod tests {
                         },
                     ],
                 )])),
+                digi_summon_products: vec![odmo_types::DigiSummonProduct {
+                    product_id: 9001,
+                    string_id: 10001,
+                    draw_count: 1,
+                    rank: 1,
+                    remaining_daily_limit: 0,
+                    icon: "digi_summon/sample_box.tga".to_string(),
+                    name: "Sample DigiSummon Box".to_string(),
+                    description: "Demo DigiSummon product used by tests.".to_string(),
+                    tickets: vec![odmo_types::DigiSummonTicket {
+                        item_id: 81001,
+                        cost: 1,
+                    }],
+                    rewards: vec![odmo_types::DigiSummonReward {
+                        item_list_id: 1,
+                        item_id: 5101,
+                        grade: 1,
+                        amount: 1,
+                        weight: 1,
+                        group: 0,
+                        group_code: 0,
+                    }],
+                }],
+                extra_evolution_npcs: vec![ExtraEvolutionNpc {
+                    npc_id: 91001,
+                    recipes: vec![
+                        odmo_types::ExtraEvolutionRecipe {
+                            exchange_type: EXTRA_EVOLUTION_ITEM_TO_DIGIMON,
+                            object_id: 31_004,
+                            material_type: 2,
+                            need_material_value: 0,
+                            price: 500,
+                            way_type: EXTRA_EVOLUTION_NEED_ALL,
+                            main_materials: vec![odmo_types::ExtraEvolutionMaterial {
+                                material_id: 81_001,
+                                amount: 1,
+                            }],
+                            sub_materials: vec![odmo_types::ExtraEvolutionMaterial {
+                                material_id: 81_002,
+                                amount: 1,
+                            }],
+                        },
+                        odmo_types::ExtraEvolutionRecipe {
+                            exchange_type: EXTRA_EVOLUTION_DIGIMON_TO_ITEM,
+                            object_id: 81_003,
+                            material_type: 1,
+                            need_material_value: 10,
+                            price: 250,
+                            way_type: EXTRA_EVOLUTION_NEED_ALL,
+                            main_materials: vec![odmo_types::ExtraEvolutionMaterial {
+                                material_id: 31_002,
+                                amount: 1,
+                            }],
+                            sub_materials: vec![odmo_types::ExtraEvolutionMaterial {
+                                material_id: 81_001,
+                                amount: 1,
+                            }],
+                        },
+                    ],
+                }],
             }
         }
     }
@@ -8468,6 +9208,74 @@ mod tests {
         fn update_partner_type(&self, _character_id: u64, _new_type: i32) -> anyhow::Result<()> {
             Ok(())
         }
+        fn update_inventory_bits(&self, character_id: u64, bits: i64) -> anyhow::Result<()> {
+            let mut guard = self.characters.write().expect("repo poisoned");
+            let character = guard
+                .get_mut(&character_id)
+                .expect("character should exist for bits update");
+            character.inventory_bits = bits.max(0);
+            character.inventory.bits = character.inventory_bits;
+            Ok(())
+        }
+        fn update_partner_roster(
+            &self,
+            character_id: u64,
+            partner_current_slot: u8,
+            partner_slots: Vec<odmo_types::PartnerSlotSnapshot>,
+        ) -> anyhow::Result<()> {
+            let mut guard = self.characters.write().expect("repo poisoned");
+            let character = guard
+                .get_mut(&character_id)
+                .expect("character should exist for roster update");
+            character.partner_current_slot = partner_current_slot;
+            character.partner_slots = partner_slots;
+            if let Some(active_partner) = character
+                .partner_slots
+                .iter()
+                .find(|partner| partner.slot == character.partner_current_slot)
+                .cloned()
+            {
+                character.partner_current_type = active_partner.digimon_type;
+                character.partner_model = active_partner.model;
+                character.partner_level = active_partner.level;
+                character.partner_name = active_partner.name;
+                character.partner_size = active_partner.size;
+                character.partner_hatch_grade = active_partner.hatch_grade;
+                character.partner_hp = active_partner.hp;
+                character.partner_ds = active_partner.ds;
+                character.partner_current_hp = active_partner.current_hp;
+                character.partner_current_ds = active_partner.current_ds;
+                character.partner_de = active_partner.de;
+                character.partner_at = active_partner.at;
+                character.partner_fs = active_partner.fs;
+                character.partner_ev = active_partner.ev;
+                character.partner_cc = active_partner.cc;
+                character.partner_ms = active_partner.ms;
+                character.partner_as = active_partner.as_value;
+                character.partner_ht = active_partner.ht;
+                character.partner_ar = active_partner.ar;
+                character.partner_bl = active_partner.bl;
+                character.partner_clone_level = active_partner.clone_level;
+                character.partner_clone_at_value = active_partner.clone_at_value;
+                character.partner_clone_bl_value = active_partner.clone_bl_value;
+                character.partner_clone_ct_value = active_partner.clone_ct_value;
+                character.partner_clone_ev_value = active_partner.clone_ev_value;
+                character.partner_clone_hp_value = active_partner.clone_hp_value;
+                character.partner_clone_at_level = active_partner.clone_at_level;
+                character.partner_clone_bl_level = active_partner.clone_bl_level;
+                character.partner_clone_ct_level = active_partner.clone_ct_level;
+                character.partner_clone_ev_level = active_partner.clone_ev_level;
+                character.partner_clone_hp_level = active_partner.clone_hp_level;
+                character.partner_active_buffs = active_partner.active_buffs;
+            }
+            Ok(())
+        }
+    }
+
+    impl CharacterAccountRepository for InMemoryCharacterRepository {
+        fn account_by_id(&self, account_id: u64) -> anyhow::Result<Option<Account>> {
+            Ok(self.accounts.get(&account_id).cloned())
+        }
     }
 
     impl PortalRepository for InMemoryCharacterRepository {
@@ -8499,6 +9307,18 @@ mod tests {
             _map_id: i16,
         ) -> anyhow::Result<Option<NpcShopDefinition>> {
             Ok(None)
+        }
+    }
+
+    impl DigiSummonRepository for InMemoryCharacterRepository {
+        fn digi_summon_products(&self) -> anyhow::Result<Vec<odmo_types::DigiSummonProduct>> {
+            Ok(self.digi_summon_products.clone())
+        }
+    }
+
+    impl ExtraEvolutionRepository for InMemoryCharacterRepository {
+        fn extra_evolution_npcs(&self) -> anyhow::Result<Vec<ExtraEvolutionNpc>> {
+            Ok(self.extra_evolution_npcs.clone())
         }
     }
 
@@ -9984,6 +10804,289 @@ mod tests {
         assert_eq!(
             raw.packet_type,
             odmo_protocol::opcode::game::EVOLUTION_FAILURE
+        );
+    }
+
+    #[test]
+    fn digi_summon_sync_returns_catalog() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("digi-summon-sync"),
+            },
+            repo,
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(&mut session, GameRequest::DigiSummonSyncRequest)
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::DIGI_SUMMON_SYNC_RESPONSE
+        );
+        let mut reader = odmo_protocol::PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), DIGI_SUMMON_SUCCESS);
+        assert_eq!(reader.read_u16().expect("count"), 1);
+        assert_eq!(reader.read_i32().expect("product id"), 9001);
+    }
+
+    #[test]
+    fn digi_summon_purchase_consumes_ticket_and_grants_reward() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("digi-summon-purchase"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::DigiSummonPurchase {
+                    product_id: 9001,
+                    ticket_slot: 0,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 2);
+        let inventory_raw = PacketReader::from_frame(&responses[0]).expect("inventory frame");
+        assert_eq!(
+            inventory_raw.packet_type,
+            odmo_protocol::opcode::game::LOAD_INVENTORY
+        );
+
+        let purchase_raw = PacketReader::from_frame(&responses[1]).expect("purchase frame");
+        assert_eq!(
+            purchase_raw.packet_type,
+            odmo_protocol::opcode::game::DIGI_SUMMON_PURCHASE_RESPONSE
+        );
+        let mut reader = odmo_protocol::PacketReader::new(purchase_raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), DIGI_SUMMON_SUCCESS);
+        assert_eq!(reader.read_i32().expect("product id"), 9001);
+        assert_eq!(reader.read_u16().expect("reward count"), 1);
+        assert_eq!(reader.read_i32().expect("reward item"), 5101);
+
+        let stored = repo
+            .character_by_id(100)
+            .expect("lookup")
+            .expect("character should exist");
+        assert_eq!(stored.inventory.items[0].item_id, 81001);
+        assert_eq!(stored.inventory.items[0].amount, 2);
+        assert!(
+            stored
+                .inventory
+                .items
+                .iter()
+                .any(|item| item.item_id == 5101 && item.amount >= 1),
+            "reward item should be present in inventory"
+        );
+    }
+
+    #[test]
+    fn digi_summon_purchase_rolls_back_when_inventory_is_full() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.digi_summon_products = vec![odmo_types::DigiSummonProduct {
+            product_id: 9002,
+            string_id: 10002,
+            draw_count: 1,
+            rank: 1,
+            remaining_daily_limit: 0,
+            icon: String::new(),
+            name: "FullInventoryBox".to_string(),
+            description: String::new(),
+            tickets: vec![odmo_types::DigiSummonTicket {
+                item_id: 81001,
+                cost: 1,
+            }],
+            rewards: vec![odmo_types::DigiSummonReward {
+                item_list_id: 3,
+                item_id: 99999,
+                grade: 1,
+                amount: 1,
+                weight: 1,
+                group: 0,
+                group_code: 0,
+            }],
+        }];
+        {
+            let mut characters = repo.characters.write().expect("repo poisoned");
+            let character = characters.get_mut(&100).expect("demo character");
+            character.inventory.size = 1;
+            character.inventory.items = vec![odmo_types::ItemRecord::new(81001, 2)];
+        }
+        let repo = Arc::new(repo);
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("digi-summon-full"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::DigiSummonPurchase {
+                    product_id: 9002,
+                    ticket_slot: 0,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let purchase_raw = PacketReader::from_frame(&responses[0]).expect("purchase frame");
+        let mut reader = odmo_protocol::PacketReader::new(purchase_raw.payload);
+        assert_eq!(
+            reader.read_u8().expect("result"),
+            DIGI_SUMMON_INVENTORY_FULL
+        );
+
+        let stored = repo
+            .character_by_id(100)
+            .expect("lookup")
+            .expect("character should exist");
+        assert_eq!(stored.inventory.items[0].item_id, 81001);
+        assert_eq!(stored.inventory.items[0].amount, 2);
+        assert!(
+            stored
+                .inventory
+                .items
+                .iter()
+                .all(|item| item.item_id != 99999),
+            "reward should not remain after rollback"
+        );
+    }
+
+    #[test]
+    fn hatch_spirit_evolution_consumes_materials_and_adds_partner_slot() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        {
+            let mut characters = repo.characters.write().expect("repo poisoned");
+            let character = characters.get_mut(&100).expect("demo character");
+            character.inventory.bits = 1_000;
+            character.inventory_bits = 1_000;
+        }
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("digital-fusion-item-to-digimon"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.account_id = Some(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::HatchSpiritEvolution {
+                    model_id: 31_004,
+                    name: "Vmon".to_string(),
+                    npc_id: 91001,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 3);
+        let result_raw = PacketReader::from_frame(&responses[1]).expect("result frame");
+        assert_eq!(
+            result_raw.packet_type,
+            odmo_protocol::opcode::game::HATCH_SPIRIT_EVOLUTION
+        );
+
+        let stored = repo
+            .character_by_id(100)
+            .expect("lookup")
+            .expect("character should exist");
+        assert_eq!(stored.inventory_bits, 500);
+        assert!(
+            stored
+                .inventory
+                .items
+                .iter()
+                .any(|item| item.item_id == 81001 && item.amount == 2),
+            "main material should be consumed once"
+        );
+        assert!(
+            stored
+                .inventory
+                .items
+                .iter()
+                .any(|item| item.item_id == 81002 && item.amount == 1),
+            "sub material should be consumed once"
+        );
+        assert!(
+            stored
+                .partner_slots
+                .iter()
+                .any(|partner| partner.slot == 3 && partner.digimon_type == 31_004),
+            "new partner slot should be appended"
+        );
+    }
+
+    #[test]
+    fn spirit_craft_consumes_sub_material_and_removes_partner() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        {
+            let mut characters = repo.characters.write().expect("repo poisoned");
+            let character = characters.get_mut(&100).expect("demo character");
+            character.inventory.bits = 1_000;
+            character.inventory_bits = 1_000;
+        }
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("digital-fusion-digimon-to-item"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.account_id = Some(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::SpiritCraft {
+                    slot: 2,
+                    validation: "4321".to_string(),
+                    npc_id: 91001,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 2);
+        let result_raw = PacketReader::from_frame(&responses[0]).expect("result frame");
+        assert_eq!(
+            result_raw.packet_type,
+            odmo_protocol::opcode::game::SPIRIT_CRAFT
+        );
+
+        let stored = repo
+            .character_by_id(100)
+            .expect("lookup")
+            .expect("character should exist");
+        assert_eq!(stored.inventory_bits, 750);
+        assert!(
+            stored
+                .inventory
+                .items
+                .iter()
+                .any(|item| item.item_id == 81003 && item.amount >= 1),
+            "crafted item should be added"
+        );
+        assert!(
+            stored.partner_slots.iter().all(|partner| partner.slot != 2),
+            "crafted partner should be removed from roster"
         );
     }
 

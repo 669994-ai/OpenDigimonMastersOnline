@@ -13,14 +13,16 @@ use odmo_application::{
     account::AccountRepository,
     character::{CharacterAccountRepository, CharacterRepository},
     game::{
-        DropCollectionResult, GameRepository, MapDropRepository, MapMobRepository,
-        NpcShopDefinition, NpcShopItem, NpcShopRepository, PortalDefinition, PortalRepository,
+        DigiSummonRepository, DropCollectionResult, ExtraEvolutionRepository, GameRepository,
+        MapDropRepository, MapMobRepository, NpcShopDefinition, NpcShopItem, NpcShopRepository,
+        PortalDefinition, PortalRepository,
     },
 };
 use odmo_types::{
     AccessLevel, Account, AccountId, AccountSuspension, CharacterSummary,
     DEFAULT_GM_PARTNER_MODEL_ID, DEFAULT_GM_TAMER_MODEL_ID, DEFAULT_PARTNER_MODEL_ID,
-    DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID, DropSummary,
+    DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID,
+    DigiSummonProduct, DigiSummonReward, DigiSummonTicket, DropSummary, ExtraEvolutionNpc,
     ItemRecord, MobSummary, PartnerSlotSnapshot, ServerDescriptor,
 };
 use serde::{Deserialize, Serialize};
@@ -605,6 +607,25 @@ impl CharacterRepository for JsonRepository {
     fn update_partner_type(&self, _character_id: u64, _new_type: i32) -> anyhow::Result<()> {
         Ok(())
     }
+    fn update_partner_roster(
+        &self,
+        character_id: u64,
+        partner_current_slot: u8,
+        partner_slots: Vec<odmo_types::PartnerSlotSnapshot>,
+    ) -> anyhow::Result<()> {
+        self.mutate_character(character_id, |c| {
+            c.partner_current_slot = partner_current_slot;
+            c.partner_slots = partner_slots;
+            if let Some(active_partner) = c
+                .partner_slots
+                .iter()
+                .find(|partner| partner.slot == c.partner_current_slot)
+                .cloned()
+            {
+                apply_partner_snapshot(c, &active_partner);
+            }
+        })
+    }
 
     // ---- Extended persistence ---------------------------------------------
 
@@ -696,12 +717,7 @@ impl CharacterRepository for JsonRepository {
         })
     }
 
-    fn update_currencies(
-        &self,
-        character_id: u64,
-        premium: i32,
-        silk: i32,
-    ) -> anyhow::Result<()> {
+    fn update_currencies(&self, character_id: u64, premium: i32, silk: i32) -> anyhow::Result<()> {
         self.mutate_character(character_id, |c| {
             c.premium = premium.max(0);
             c.silk = silk.max(0);
@@ -1017,6 +1033,20 @@ impl NpcShopRepository for JsonRepository {
     }
 }
 
+impl DigiSummonRepository for JsonRepository {
+    fn digi_summon_products(&self) -> anyhow::Result<Vec<DigiSummonProduct>> {
+        let state = self.state.read().expect("repository poisoned");
+        Ok(state.digi_summon_products.clone())
+    }
+}
+
+impl ExtraEvolutionRepository for JsonRepository {
+    fn extra_evolution_npcs(&self) -> anyhow::Result<Vec<ExtraEvolutionNpc>> {
+        let state = self.state.read().expect("repository poisoned");
+        Ok(state.extra_evolution_npcs.clone())
+    }
+}
+
 pub(crate) fn get_npc_shops() -> Vec<NpcShopDefinition> {
     vec![
         NpcShopDefinition {
@@ -1072,6 +1102,8 @@ struct WorldSnapshot {
     characters_by_account: HashMap<AccountId, Vec<CharacterSummary>>,
     mobs_by_map: HashMap<String, Vec<MobSummary>>,
     drops_by_map: HashMap<String, Vec<DropSummary>>,
+    digi_summon_products: Vec<DigiSummonProduct>,
+    extra_evolution_npcs: Vec<ExtraEvolutionNpc>,
     resource_hash_hex: Option<String>,
 }
 
@@ -1087,7 +1119,7 @@ impl WorldSnapshot {
                 password_hash: "admin".to_string(),
                 email: "admin@odmo.local".to_string(),
                 access_level: AccessLevel::Administrator,
-                secondary_password: None,
+                secondary_password: Some("4321".to_string()),
                 suspension: None,
             },
         );
@@ -1116,6 +1148,21 @@ impl WorldSnapshot {
                     remaining_seconds: 3_600,
                     reason: "Policy violation".to_string(),
                 }),
+            },
+        );
+        // Default smoke account used by Tools/client-testing/Run-ClientSmokeTest.ps1
+        // (its -Username default is "ODMO" / "123456"). Ships with a bound partner
+        // so the native auto-login + direct-character-select gate passes.
+        accounts.insert(
+            "ODMO".to_string(),
+            Account {
+                id: 4,
+                username: "ODMO".to_string(),
+                password_hash: "123456".to_string(),
+                email: "smoke@odmo.local".to_string(),
+                access_level: AccessLevel::Player,
+                secondary_password: None,
+                suspension: None,
             },
         );
 
@@ -1207,6 +1254,30 @@ impl WorldSnapshot {
                         ..CharacterSummary::default()
                     }],
                 ),
+                (
+                    4,
+                    vec![CharacterSummary {
+                        id: 300,
+                        account_id: 4,
+                        slot: 0,
+                        name: "SmokeTamer".to_string(),
+                        partner_current_slot: 1,
+                        partner_current_type: DEFAULT_PARTNER_MODEL_ID,
+                        partner_name: "Agumon".to_string(),
+                        partner_slots: vec![PartnerSlotSnapshot {
+                            slot: 1,
+                            digimon_type: DEFAULT_PARTNER_MODEL_ID,
+                            model: DEFAULT_PARTNER_MODEL_ID,
+                            name: "Agumon".to_string(),
+                            ..PartnerSlotSnapshot::default()
+                        }],
+                        general_handler: 13_000,
+                        partner_handler: 23_000,
+                        model: DEFAULT_TAMER_MODEL_ID,
+                        partner_model: DEFAULT_PARTNER_MODEL_ID,
+                        ..CharacterSummary::default()
+                    }],
+                ),
             ]),
             mobs_by_map: HashMap::from([(
                 map_key(DEFAULT_START_MAP_ID, 0),
@@ -1280,6 +1351,84 @@ impl WorldSnapshot {
                     },
                 ],
             )]),
+            digi_summon_products: vec![DigiSummonProduct {
+                product_id: 9001,
+                string_id: 10001,
+                draw_count: 1,
+                rank: 1,
+                remaining_daily_limit: 0,
+                icon: "digi_summon/sample_box.tga".to_string(),
+                name: "Sample DigiSummon Box".to_string(),
+                description: "Demo DigiSummon product used by the Rust smoke environment."
+                    .to_string(),
+                tickets: vec![
+                    DigiSummonTicket {
+                        item_id: 81001,
+                        cost: 1,
+                    },
+                    DigiSummonTicket {
+                        item_id: 81002,
+                        cost: 10,
+                    },
+                ],
+                rewards: vec![
+                    DigiSummonReward {
+                        item_list_id: 1,
+                        item_id: 5101,
+                        grade: 1,
+                        amount: 1,
+                        weight: 80,
+                        group: 0,
+                        group_code: 0,
+                    },
+                    DigiSummonReward {
+                        item_list_id: 2,
+                        item_id: 5102,
+                        grade: 2,
+                        amount: 1,
+                        weight: 20,
+                        group: 0,
+                        group_code: 0,
+                    },
+                ],
+            }],
+            extra_evolution_npcs: vec![ExtraEvolutionNpc {
+                npc_id: 91001,
+                recipes: vec![
+                    odmo_types::ExtraEvolutionRecipe {
+                        exchange_type: 1,
+                        object_id: 31_004,
+                        material_type: 2,
+                        need_material_value: 0,
+                        price: 500,
+                        way_type: 1,
+                        main_materials: vec![odmo_types::ExtraEvolutionMaterial {
+                            material_id: 81_001,
+                            amount: 1,
+                        }],
+                        sub_materials: vec![odmo_types::ExtraEvolutionMaterial {
+                            material_id: 81_002,
+                            amount: 1,
+                        }],
+                    },
+                    odmo_types::ExtraEvolutionRecipe {
+                        exchange_type: 2,
+                        object_id: 81_003,
+                        material_type: 1,
+                        need_material_value: 10,
+                        price: 250,
+                        way_type: 1,
+                        main_materials: vec![odmo_types::ExtraEvolutionMaterial {
+                            material_id: 31_002,
+                            amount: 1,
+                        }],
+                        sub_materials: vec![odmo_types::ExtraEvolutionMaterial {
+                            material_id: 81_001,
+                            amount: 1,
+                        }],
+                    },
+                ],
+            }],
             resource_hash_hex: Some("0123456789ABCDEF".to_string()),
         }
     }

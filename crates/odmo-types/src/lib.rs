@@ -868,7 +868,6 @@ pub struct GameServerTarget {
     pub port: u16,
 }
 
-
 // ---------------------------------------------------------------------------
 // Quest progress (per character)
 // ---------------------------------------------------------------------------
@@ -1047,6 +1046,148 @@ impl Default for CashShopProduct {
             amount: 1,
             price_premium: 0,
             price_silk: 0,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DigiSummon catalog (server-wide random-box data)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigiSummonTicket {
+    pub item_id: i32,
+    pub cost: i32,
+}
+
+impl Default for DigiSummonTicket {
+    fn default() -> Self {
+        Self {
+            item_id: 0,
+            cost: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigiSummonReward {
+    pub item_list_id: i32,
+    pub item_id: i32,
+    pub grade: i32,
+    pub amount: i32,
+    pub weight: i32,
+    pub group: i32,
+    pub group_code: i32,
+}
+
+impl Default for DigiSummonReward {
+    fn default() -> Self {
+        Self {
+            item_list_id: 0,
+            item_id: 0,
+            grade: 0,
+            amount: 1,
+            weight: 0,
+            group: 0,
+            group_code: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigiSummonProduct {
+    pub product_id: i32,
+    pub string_id: i32,
+    pub draw_count: i32,
+    pub rank: i32,
+    pub remaining_daily_limit: i32,
+    pub icon: String,
+    pub name: String,
+    pub description: String,
+    pub tickets: Vec<DigiSummonTicket>,
+    pub rewards: Vec<DigiSummonReward>,
+}
+
+impl Default for DigiSummonProduct {
+    fn default() -> Self {
+        Self {
+            product_id: 0,
+            string_id: 0,
+            draw_count: 0,
+            rank: 0,
+            remaining_daily_limit: 0,
+            icon: String::new(),
+            name: String::new(),
+            description: String::new(),
+            tickets: Vec::new(),
+            rewards: Vec::new(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Extra evolution / digital fusion catalog
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExtraEvolutionMaterial {
+    pub material_id: i32,
+    pub amount: i32,
+}
+
+impl Default for ExtraEvolutionMaterial {
+    fn default() -> Self {
+        Self {
+            material_id: 0,
+            amount: 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExtraEvolutionRecipe {
+    pub exchange_type: u16,
+    pub object_id: i32,
+    pub material_type: u16,
+    pub need_material_value: i32,
+    pub price: i64,
+    pub way_type: u16,
+    pub main_materials: Vec<ExtraEvolutionMaterial>,
+    pub sub_materials: Vec<ExtraEvolutionMaterial>,
+}
+
+impl Default for ExtraEvolutionRecipe {
+    fn default() -> Self {
+        Self {
+            exchange_type: 0,
+            object_id: 0,
+            material_type: 0,
+            need_material_value: 0,
+            price: 0,
+            way_type: 1,
+            main_materials: Vec::new(),
+            sub_materials: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExtraEvolutionNpc {
+    pub npc_id: i32,
+    pub recipes: Vec<ExtraEvolutionRecipe>,
+}
+
+impl Default for ExtraEvolutionNpc {
+    fn default() -> Self {
+        Self {
+            npc_id: 0,
+            recipes: Vec::new(),
         }
     }
 }

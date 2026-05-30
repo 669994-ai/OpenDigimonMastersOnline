@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{fs, path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 use odmo_types::{AccountId, CharacterId, CharacterSummary, GameSessionTicket, TransferTicket};

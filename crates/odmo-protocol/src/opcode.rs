@@ -33,10 +33,15 @@ pub mod game {
     pub const CONNECTION_RESPONSE: i16 = -2;
     pub const COMPLEMENTAR_INFORMATION: i16 = 1001;
     pub const TAMER_MOVIMENTATION: i16 = 1004;
+    // pGame::Sync (1006) is a multiplexed entity channel. The leading byte
+    // discriminates the sub-packet: 1=mob, 3=tamer, 4=unload, 5=tamer-walk,
+    // 6=digimon-walk, 16=buffs. Walk, load/unload and buff packets all ride
+    // opcode 1006; the client switches on that first byte. (pGame::HpRate=1007
+    // is a different, unrelated packet — do not put entity loads there.)
     pub const MAP_ENTITY: i16 = 1006;
-    pub const LOAD_UNLOAD_ENTITY: i16 = 1007;
+    pub const LOAD_UNLOAD_ENTITY: i16 = 1006;
     pub const CONSIGNED_SHOP_ENTITY: i16 = 1008;
-    pub const LOAD_BUFFS: i16 = 1009;
+    pub const LOAD_BUFFS: i16 = 1006;
     pub const NOTICE_MESSAGE: i16 = 1010;
     pub const CHAT_MESSAGE: i16 = 1008;
     pub const CHAT_MESSAGE_RESPONSE: i16 = 1006;
@@ -245,6 +250,7 @@ pub mod game {
     pub const GUILD_AUTHORITY_DATS: i16 = 2117;
     pub const HATCH_SPIRIT_EVOLUTION: i16 = 3240;
     pub const DIGI_SUMMON_PURCHASE: i16 = 3651;
+    pub const DIGI_SUMMON_PURCHASE_RESPONSE: i16 = 3701;
     pub const LOAD_ACCOUNT_WAREHOUSE: i16 = 3930;
     pub const RETRIEVE_ACCOUNT_WAREHOUSE: i16 = 3931;
     pub const PARTY_MEMBER_DISCONNECT: i16 = 2312;

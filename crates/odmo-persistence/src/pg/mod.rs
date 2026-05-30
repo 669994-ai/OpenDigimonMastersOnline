@@ -1,6 +1,8 @@
 mod account_repo;
 mod character_repo;
+mod digi_summon_repo;
 mod drop_repo;
+mod extra_evolution_repo;
 mod mob_repo;
 mod npc_shop_repo;
 mod portal_bridge;
@@ -40,18 +42,21 @@ impl PgRepository {
                 .fetch_optional(&self.pool)
                 .await?;
         if existing.is_some() {
+            self.seed_digi_summon_demo().await?;
+            self.seed_extra_evolution_demo().await?;
             return Ok(());
         }
 
         // Accounts
         sqlx::query(
-            "INSERT INTO accounts (id, username, password_hash, email, access_level) VALUES ($1, $2, $3, $4, $5)",
+            "INSERT INTO accounts (id, username, password_hash, email, access_level, secondary_password) VALUES ($1, $2, $3, $4, $5, $6)",
         )
         .bind(1i64)
         .bind("admin")
         .bind("admin")
         .bind("admin@odmo.local")
         .bind(2i16) // Administrator
+        .bind("4321")
         .execute(&self.pool)
         .await?;
 
@@ -77,6 +82,19 @@ impl PgRepository {
         .bind(0i16) // Player
         .bind(3600i32)
         .bind("Policy violation")
+        .execute(&self.pool)
+        .await?;
+
+        // Default smoke account used by Tools/client-testing/Run-ClientSmokeTest.ps1
+        // (its -Username default is "ODMO" / "123456"). Mirrors the JSON dev seed.
+        sqlx::query(
+            "INSERT INTO accounts (id, username, password_hash, email, access_level) VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(4i64)
+        .bind("ODMO")
+        .bind("123456")
+        .bind("smoke@odmo.local")
+        .bind(0i16) // Player
         .execute(&self.pool)
         .await?;
 
@@ -206,6 +224,54 @@ impl PgRepository {
         .execute(&self.pool)
         .await?;
 
+        // Smoke account character (account 4 = "ODMO"), bound to Agumon so the
+        // native auto-login + direct-character-select smoke gate passes.
+        let smoke_partner_slots = serde_json::json!([
+            {
+                "slot": 1, "digimon_type": DEFAULT_PARTNER_MODEL_ID, "model": DEFAULT_PARTNER_MODEL_ID,
+                "level": 1, "name": "Agumon", "size": 12000, "hatch_grade": 3,
+                "hp": 1000, "ds": 1000, "current_hp": 1000, "current_ds": 1000,
+                "de": 100, "at": 100, "fs": 100, "ev": 0, "cc": 0, "ms": 250, "as_value": 1000,
+                "ht": 0, "ar": 0, "bl": 0, "clone_level": 0,
+                "clone_at_value": 0, "clone_bl_value": 0, "clone_ct_value": 0, "clone_ev_value": 0, "clone_hp_value": 0,
+                "clone_at_level": 0, "clone_bl_level": 0, "clone_ct_level": 0, "clone_ev_level": 0, "clone_hp_level": 0,
+                "active_buffs": []
+            }
+        ]);
+
+        sqlx::query(
+            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, partner_current_slot, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, account_warehouse, seal_list, available_channels, partner_slots) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)",
+        )
+        .bind(300i64)
+        .bind(4i64)
+        .bind(0i16)
+        .bind("SmokeTamer")
+        .bind(DEFAULT_TAMER_MODEL_ID)
+        .bind(1i16)
+        .bind(DEFAULT_START_X)
+        .bind(DEFAULT_START_Y)
+        .bind(DEFAULT_START_MAP_ID)
+        .bind(DEFAULT_START_X)
+        .bind(DEFAULT_START_Y)
+        .bind(1i16)
+        .bind(13000i32)
+        .bind(23000i32)
+        .bind("Agumon")
+        .bind(DEFAULT_PARTNER_MODEL_ID)
+        .bind(0i64)
+        .bind(&default_inv)
+        .bind(&default_warehouse)
+        .bind(&default_inv)
+        .bind(&default_account_warehouse)
+        .bind(&default_seals)
+        .bind(&default_channels)
+        .bind(&smoke_partner_slots)
+        .execute(&self.pool)
+        .await?;
+
+        self.seed_digi_summon_demo().await?;
+        self.seed_extra_evolution_demo().await?;
+
         // Mobs
         sqlx::query(
             "INSERT INTO map_mobs (map_id, channel, handler, type_id, model, name, level, x, y, previous_x, previous_y, current_hp, max_hp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
@@ -291,6 +357,148 @@ impl PgRepository {
         )
         .bind("resource_hash_hex")
         .bind("0123456789ABCDEF")
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn seed_digi_summon_demo(&self) -> anyhow::Result<()> {
+        let existing: Option<(i64,)> =
+            sqlx::query_as("SELECT id FROM digi_summon_products WHERE product_id = $1")
+                .bind(9001i32)
+                .fetch_optional(&self.pool)
+                .await?;
+        if existing.is_some() {
+            return Ok(());
+        }
+
+        sqlx::query(
+            "INSERT INTO digi_summon_products (product_id, string_id, draw_count, rank, remaining_daily_limit, icon, name, description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+        )
+        .bind(9001i32)
+        .bind(10001i32)
+        .bind(1i32)
+        .bind(1i32)
+        .bind(0i32)
+        .bind("digi_summon/sample_box.tga")
+        .bind("Sample DigiSummon Box")
+        .bind("Demo DigiSummon product used by the Rust smoke environment.")
+        .execute(&self.pool)
+        .await?;
+
+        let product_row: (i64,) =
+            sqlx::query_as("SELECT id FROM digi_summon_products WHERE product_id = $1")
+                .bind(9001i32)
+                .fetch_one(&self.pool)
+                .await?;
+
+        sqlx::query(
+            "INSERT INTO digi_summon_tickets (product_row_id, item_id, cost) VALUES ($1,$2,$3), ($1,$4,$5)",
+        )
+        .bind(product_row.0)
+        .bind(81001i32)
+        .bind(1i32)
+        .bind(81002i32)
+        .bind(10i32)
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            "INSERT INTO digi_summon_rewards (product_row_id, item_list_id, item_id, grade, amount, weight, reward_group, group_code) VALUES ($1,$2,$3,$4,$5,$6,$7,$8), ($1,$9,$10,$11,$12,$13,$14,$15)",
+        )
+        .bind(product_row.0)
+        .bind(1i32)
+        .bind(5101i32)
+        .bind(1i32)
+        .bind(1i32)
+        .bind(80i32)
+        .bind(0i32)
+        .bind(0i32)
+        .bind(2i32)
+        .bind(5102i32)
+        .bind(2i32)
+        .bind(1i32)
+        .bind(20i32)
+        .bind(0i32)
+        .bind(0i32)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn seed_extra_evolution_demo(&self) -> anyhow::Result<()> {
+        let existing: Option<(i64,)> =
+            sqlx::query_as("SELECT id FROM extra_evolution_npcs WHERE npc_id = $1")
+                .bind(91001i32)
+                .fetch_optional(&self.pool)
+                .await?;
+        if existing.is_some() {
+            return Ok(());
+        }
+
+        let npc_row: (i64,) =
+            sqlx::query_as("INSERT INTO extra_evolution_npcs (npc_id) VALUES ($1) RETURNING id")
+                .bind(91001i32)
+                .fetch_one(&self.pool)
+                .await?;
+
+        let item_to_digimon_row: (i64,) = sqlx::query_as(
+            "INSERT INTO extra_evolution_recipes \
+             (npc_row_id, exchange_type, object_id, material_type, need_material_value, price, way_type) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id",
+        )
+        .bind(npc_row.0)
+        .bind(1i16)
+        .bind(31004i32)
+        .bind(2i16)
+        .bind(0i32)
+        .bind(500i64)
+        .bind(1i16)
+        .fetch_one(&self.pool)
+        .await?;
+
+        sqlx::query(
+            "INSERT INTO extra_evolution_materials (recipe_row_id, material_scope, material_id, amount) \
+             VALUES ($1,$2,$3,$4), ($1,$5,$6,$7)",
+        )
+        .bind(item_to_digimon_row.0)
+        .bind(1i16)
+        .bind(81001i32)
+        .bind(1i32)
+        .bind(2i16)
+        .bind(81002i32)
+        .bind(1i32)
+        .execute(&self.pool)
+        .await?;
+
+        let digimon_to_item_row: (i64,) = sqlx::query_as(
+            "INSERT INTO extra_evolution_recipes \
+             (npc_row_id, exchange_type, object_id, material_type, need_material_value, price, way_type) \
+             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id",
+        )
+        .bind(npc_row.0)
+        .bind(2i16)
+        .bind(81003i32)
+        .bind(1i16)
+        .bind(10i32)
+        .bind(250i64)
+        .bind(1i16)
+        .fetch_one(&self.pool)
+        .await?;
+
+        sqlx::query(
+            "INSERT INTO extra_evolution_materials (recipe_row_id, material_scope, material_id, amount) \
+             VALUES ($1,$2,$3,$4), ($1,$5,$6,$7)",
+        )
+        .bind(digimon_to_item_row.0)
+        .bind(1i16)
+        .bind(31002i32)
+        .bind(1i32)
+        .bind(2i16)
+        .bind(81001i32)
+        .bind(1i32)
         .execute(&self.pool)
         .await?;
 

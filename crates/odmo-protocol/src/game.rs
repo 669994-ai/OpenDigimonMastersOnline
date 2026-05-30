@@ -1,7 +1,7 @@
 use odmo_types::{
     ActiveBuffSnapshot, AttendanceStatus, ChannelAvailability, CharacterSummary, DailyRewardStatus,
-    DropSummary, GuildHistoricEntry, GuildSnapshot, InventorySnapshot, ItemRecord, MobSummary,
-    RelationEntry, SealListSnapshot, XaiSnapshot,
+    DigiSummonProduct, DigiSummonReward, DropSummary, GuildHistoricEntry, GuildSnapshot,
+    InventorySnapshot, ItemRecord, MobSummary, RelationEntry, SealListSnapshot, XaiSnapshot,
 };
 
 use crate::{
@@ -543,8 +543,8 @@ pub enum GameRequest {
     },
     WarpGateDungeon,
     SpiritCraft {
-        model_id: i32,
-        name: String,
+        slot: u8,
+        validation: String,
         npc_id: i32,
     },
 }
@@ -830,95 +830,130 @@ impl LoadInventoryPacket {
     }
 }
 
+// --- 1006 entity-load framing -------------------------------------------
+//
+// A 1006 entity block is `[u1 action][u2 count](entry)*count[u1 end]`. Each
+// entry opens with a 16-byte header `[u4][u4][u4 kind_handle][u4]` whose third
+// dword packs the entity kind in its high word and the 16-bit map handle in its
+// low word; the client picks a per-kind body parser from that kind. Strings in
+// entity bodies are `[u2 len LE][ASCII]` with no terminator.
+
+/// Entity kinds packed into the high word of an entry header's third dword.
+const ENTITY_KIND_DIGIMON: u16 = 1;
+const ENTITY_KIND_TAMER: u16 = 2;
+const ENTITY_KIND_ITEM: u16 = 3;
+const ENTITY_KIND_MONSTER: u16 = 4;
+
+/// Lifecycle action prefixing a 1006 entity block.
+const ENTITY_ACTION_NEW: u8 = 1;
+const ENTITY_ACTION_IN: u8 = 3;
+
+/// Terminator byte that ends the 1006 dispatcher loop.
+const ENTITY_BLOCK_END: u8 = 0;
+
+/// Equipment slot records carried in a tamer body, plus a trailing visual record.
+const TAMER_EQUIPMENT_SLOTS: usize = 16;
+/// Byte length of one visual slot record.
+const VISUAL_SLOT_LEN: usize = 69;
+/// Fixed number of clone-stat words a digimon body carries.
+const DIGIMON_CLONE_SLOTS: usize = 7;
+/// Maximum string length the client accepts in an entity body.
+const ENTITY_STRING_MAX: usize = 0x200;
+
+/// Write a 1006 entity-body string as `[u2 len LE][ASCII]` (no terminator).
+fn write_entity_string(writer: &mut PacketWriter, value: &str) {
+    let bytes = value.as_bytes();
+    let len = bytes.len().min(ENTITY_STRING_MAX);
+    writer.write_u16(len as u16);
+    writer.write_bytes(&bytes[..len]);
+}
+
+/// Write the 16-byte entry header: position pair, packed kind+handle, reserved.
+fn write_entity_header(writer: &mut PacketWriter, kind: u16, handle: u16, x: i32, y: i32) {
+    writer.write_i32(x);
+    writer.write_i32(y);
+    writer.write_u32((u32::from(kind) << 16) | u32::from(handle));
+    writer.write_u32(0);
+}
+
+/// Resolve a 16-bit map handle, falling back to the entity id when unset.
+fn entity_handle(raw: u32, fallback_id: u64) -> u16 {
+    non_zero_handler(raw, fallback_id) as u16
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoadTamerPacket {
     pub character: CharacterSummary,
 }
 
 impl LoadTamerPacket {
+    /// Encode a peer tamer and its partner digimon as a 1006 `In` block. The
+    /// block carries two typed entries (tamer + digimon) followed by the
+    /// dispatcher terminator the client loop requires.
     pub fn encode(&self) -> Vec<u8> {
+        let c = &self.character;
         let mut writer = PacketWriter::new(game::LOAD_UNLOAD_ENTITY);
-        writer.write_u8(3);
-        writer.write_i16(2);
+        writer.write_u8(ENTITY_ACTION_IN);
+        writer.write_u16(2);
 
-        writer.write_i32(self.character.x);
-        writer.write_i32(self.character.y);
-        writer
-            .write_u32(non_zero_handler(self.character.general_handler, self.character.id) as u32);
-        writer.write_i32(self.character.model);
-        writer.write_i32(self.character.x);
-        writer.write_i32(self.character.y);
-        writer.write_string(&self.character.name);
-        writer.write_u8(self.character.level);
-        writer.write_f32(self.character.z);
-        writer.write_i16(self.character.ms.clamp(i16::MIN as i32, i16::MAX as i32) as i16);
-        writer.write_u8(hp_rate(self.character.current_hp, self.character.hp));
-        writer.write_bytes(&normalized_visual_bytes(&self.character.equipment, 16 * 60));
-        writer.write_bytes(&normalized_visual_bytes(&self.character.digivice, 60));
-        writer.write_i32(self.character.current_condition);
-        writer.write_i32(0);
-        writer.write_i32(non_zero_handler(
-            self.character.partner_handler,
-            self.character.id.saturating_add(10_000),
-        ));
-        writer.write_i16(self.character.size);
-        if let Some(guild) = &self.character.guild {
-            writer.write_u8(1);
-            writer.write_i32(guild.id.min(i32::MAX as u32) as i32);
-            writer.write_string(&guild.name);
-        } else {
-            writer.write_u8(0);
-        }
-        writer.write_i16(self.character.current_title as i16);
+        // --- Tamer entry ---
+        let tamer_handle = entity_handle(c.general_handler, c.id);
+        write_entity_header(&mut writer, ENTITY_KIND_TAMER, tamer_handle, c.x, c.y);
+        writer.write_i32(c.x);
+        writer.write_i32(c.y);
+        write_entity_string(&mut writer, &c.name);
         writer.write_u8(0);
-        writer.write_i16(self.character.seal_list.seal_leader_id);
-        if self.character.current_condition == 1 {
-            writer.write_string(&self.character.shop_name);
+        writer.write_i32(c.model);
+        writer.write_u16(c.size as u16);
+        writer.write_u8(0);
+        writer.write_zeroes(TAMER_EQUIPMENT_SLOTS * VISUAL_SLOT_LEN);
+        writer.write_zeroes(VISUAL_SLOT_LEN);
+        let condition = c.current_condition as u32;
+        writer.write_u32(condition);
+        writer.write_u32(0);
+        writer.write_u32(0);
+        writer.write_u16(c.ms.clamp(0, u16::MAX as i32) as u16);
+        writer.write_u8(0); // no secondary name
+        writer.write_u16(0);
+        writer.write_u8(0);
+        writer.write_u16(c.seal_list.seal_leader_id as u16);
+        if condition & 0x4 != 0 {
+            write_entity_string(&mut writer, &c.shop_name);
         }
-        writer.write_i32(0);
+        writer.write_u32(0);
 
-        writer.write_i32(self.character.partner_x);
-        writer.write_i32(self.character.partner_y);
-        writer.write_i32(non_zero_handler(
-            self.character.partner_handler,
-            self.character.id.saturating_add(10_000),
-        ));
-        writer.write_i32(self.character.partner_current_type);
-        writer.write_i32(self.character.partner_x);
-        writer.write_i32(self.character.partner_y);
-        writer.write_string(&self.character.partner_name);
-        writer.write_i16(self.character.partner_size);
-        writer.write_u8(self.character.partner_level);
-        writer.write_f32(self.character.partner_z);
-        writer.write_i16(
-            self.character
-                .partner_ms
-                .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
+        // --- Partner digimon entry ---
+        let partner_handle = entity_handle(c.partner_handler, c.id.saturating_add(10_000));
+        write_entity_header(
+            &mut writer,
+            ENTITY_KIND_DIGIMON,
+            partner_handle,
+            c.partner_x,
+            c.partner_y,
         );
-        writer.write_i16(
-            self.character
-                .partner_as
-                .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
-        );
-        writer
-            .write_u32(non_zero_handler(self.character.general_handler, self.character.id) as u32);
-        writer.write_u8(hp_rate(
-            self.character.partner_current_hp,
-            self.character.partner_hp,
-        ));
-        writer.write_i32(self.character.partner_condition);
-        writer.write_i16(self.character.partner_clone_level as i16);
-        writer.write_i16(self.character.partner_clone_at_level as i16);
-        writer.write_i16(self.character.partner_clone_bl_level as i16);
-        writer.write_i16(self.character.partner_clone_ct_level as i16);
-        writer.write_i16(0);
-        writer.write_i16(self.character.partner_clone_ev_level as i16);
-        writer.write_i16(0);
-        writer.write_i16(self.character.partner_clone_hp_level as i16);
-        writer.write_i16(0);
-        writer.write_i16(0);
+        writer.write_i32(c.partner_x);
+        writer.write_i32(c.partner_y);
+        write_entity_string(&mut writer, &c.partner_name);
+        writer.write_u16(c.partner_size as u16);
+        writer.write_u8(0);
+        writer.write_i32(c.partner_current_type);
+        writer.write_u16(0);
+        writer.write_u16(0);
+        writer.write_u8(0);
+        writer.write_u32(0);
+        writer.write_u8(0);
+        writer.write_u32(0);
+        writer.write_u16(DIGIMON_CLONE_SLOTS as u16);
+        writer.write_u16(c.partner_clone_level);
+        writer.write_u16(c.partner_clone_at_level);
+        writer.write_u16(c.partner_clone_bl_level);
+        writer.write_u16(c.partner_clone_ct_level);
+        writer.write_u16(c.partner_clone_ev_level);
+        writer.write_u16(c.partner_clone_hp_level);
+        writer.write_u16(0);
+        writer.write_u32(0);
 
-        writer.write_i16(0);
+        writer.write_u8(ENTITY_BLOCK_END);
         writer.finalize()
     }
 }
@@ -929,24 +964,35 @@ pub struct LoadMobsPacket {
 }
 
 impl LoadMobsPacket {
+    /// Encode a monster as a single-entry 1006 block. `New` marks a fresh spawn,
+    /// `In` an entity already present when the viewer arrives.
     pub fn encode(&self) -> Vec<u8> {
+        let m = &self.mob;
         let mut writer = PacketWriter::new(game::LOAD_UNLOAD_ENTITY);
-        writer.write_u8(if self.mob.respawn { 1 } else { 3 });
-        writer.write_i16(1);
-        writer.write_i32(self.mob.previous_x);
-        writer.write_i32(self.mob.previous_y);
-        writer.write_u32(non_zero_handler(self.mob.handler, self.mob.id) as u32);
-        writer.write_i32(self.mob.type_id);
-        writer.write_i32(self.mob.x);
-        writer.write_i32(self.mob.y);
-        writer.write_u8(hp_rate(self.mob.current_hp, self.mob.max_hp));
-        writer.write_i16(self.mob.level as i16);
-        writer.write_i16(2);
-        writer.write_i32(self.mob.grow_stack as i32);
-        writer.write_i32(0);
-        writer.write_u8(self.mob.disposed_objects);
+        writer.write_u8(if m.respawn {
+            ENTITY_ACTION_NEW
+        } else {
+            ENTITY_ACTION_IN
+        });
+        writer.write_u16(1);
+
+        let handle = entity_handle(m.handler, m.id);
+        write_entity_header(
+            &mut writer,
+            ENTITY_KIND_MONSTER,
+            handle,
+            m.previous_x,
+            m.previous_y,
+        );
+        writer.write_i32(m.x);
+        writer.write_i32(m.y);
         writer.write_u8(0);
-        writer.write_i32(0);
+        writer.write_u8(0);
+        writer.write_i32(m.type_id);
+        writer.write_i32(m.max_hp);
+        writer.write_f32(0.0);
+        writer.write_u32(0); // no skill/effect records
+        writer.write_u8(ENTITY_BLOCK_END);
         writer.finalize()
     }
 }
@@ -958,22 +1004,20 @@ pub struct LoadDropsPacket {
 }
 
 impl LoadDropsPacket {
+    /// Encode a ground item as a single-entry 1006 `In` block. The client
+    /// resolves the drop's visuals from the item table, so the body carries only
+    /// the item id and an owner/form flag after the entry header.
     pub fn encode(&self) -> Vec<u8> {
+        let d = &self.drop;
         let mut writer = PacketWriter::new(game::LOAD_UNLOAD_ENTITY);
-        writer.write_u8(3);
-        writer.write_i16(1);
-        writer.write_i32(self.drop.x);
-        writer.write_i32(self.drop.y);
-        writer.write_u32(non_zero_handler(self.drop.handler, self.drop.id) as u32);
-        writer.write_i32(self.drop.item_id);
-        let owner_handler = if self.drop.no_owner {
-            non_zero_handler(self.viewer_handler, self.drop.owner_id)
-        } else {
-            non_zero_handler(self.drop.owner_handler, self.drop.owner_id)
-        };
-        writer.write_i32(owner_handler);
+        writer.write_u8(ENTITY_ACTION_IN);
+        writer.write_u16(1);
+
+        let handle = entity_handle(d.handler, d.id);
+        write_entity_header(&mut writer, ENTITY_KIND_ITEM, handle, d.x, d.y);
+        writer.write_i32(d.item_id);
         writer.write_u8(0);
-        writer.write_i32(0);
+        writer.write_u8(ENTITY_BLOCK_END);
         writer.finalize()
     }
 }
@@ -1210,6 +1254,109 @@ impl CashShopCoinsPacket {
         writer.write_i32(0);
         writer.write_i32(self.silk);
         writer.write_i32(self.premium);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DigiSummonSyncResponsePacket {
+    pub result: u8,
+    pub products: Vec<DigiSummonProduct>,
+}
+
+impl DigiSummonSyncResponsePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::DIGI_SUMMON_SYNC_RESPONSE);
+        writer.write_u8(self.result);
+        writer.write_u16(clamp_u16_len(self.products.len()));
+        for product in &self.products {
+            writer.write_i32(product.product_id);
+            writer.write_i32(product.rank);
+            writer.write_u16(product.draw_count.clamp(0, u16::MAX as i32) as u16);
+            writer.write_i32(product.remaining_daily_limit);
+        }
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DigiSummonPurchaseResponsePacket {
+    pub result: u8,
+    pub product_id: i32,
+    pub rewards: Vec<DigiSummonReward>,
+    pub products: Vec<DigiSummonProduct>,
+}
+
+impl DigiSummonPurchaseResponsePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::DIGI_SUMMON_PURCHASE_RESPONSE);
+        writer.write_u8(self.result);
+        writer.write_i32(self.product_id);
+        writer.write_u16(clamp_u16_len(self.rewards.len()));
+        for reward in &self.rewards {
+            writer.write_i32(reward.item_id);
+            writer.write_u16(reward.amount.clamp(1, u16::MAX as i32) as u16);
+            writer.write_u16(reward.grade.clamp(0, u16::MAX as i32) as u16);
+        }
+
+        writer.write_u16(clamp_u16_len(self.products.len()));
+        for product in &self.products {
+            writer.write_i32(product.product_id);
+            writer.write_i32(product.rank);
+            writer.write_u16(product.draw_count.clamp(0, u16::MAX as i32) as u16);
+            writer.write_i32(product.remaining_daily_limit);
+        }
+
+        writer.write_u16(0); // reward_info_count
+        writer.write_i64(0); // reserved
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HatchSpiritEvolutionResultPacket {
+    pub digimon_id: u32,
+    pub remaining_bits: i64,
+    pub consumed_items: Vec<(u8, u32)>,
+}
+
+impl HatchSpiritEvolutionResultPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::HATCH_SPIRIT_EVOLUTION);
+        writer.write_u32(self.digimon_id);
+        writer.write_i64(self.remaining_bits);
+        for (amount, item_id) in &self.consumed_items {
+            writer.write_u8(*amount);
+            writer.write_u32(*item_id);
+        }
+        writer.write_u8(0);
+        writer.finalize()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpiritCraftResultPacket {
+    pub slot: u8,
+    pub remaining_bits: i64,
+    pub consumed_items: Vec<(u8, u32)>,
+    pub gained_items: Vec<(u8, u32)>,
+}
+
+impl SpiritCraftResultPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::SPIRIT_CRAFT);
+        writer.write_u8(self.slot);
+        writer.write_i64(self.remaining_bits);
+        for (amount, item_id) in &self.consumed_items {
+            writer.write_u8(*amount);
+            writer.write_u32(*item_id);
+        }
+        writer.write_u8(0);
+        for (amount, item_id) in &self.gained_items {
+            writer.write_u8(*amount);
+            writer.write_u32(*item_id);
+        }
+        writer.write_u8(0);
         writer.finalize()
     }
 }
@@ -3155,6 +3302,10 @@ fn clamp_i16_len(len: usize) -> i16 {
     len.min(i16::MAX as usize) as i16
 }
 
+fn clamp_u16_len(len: usize) -> u16 {
+    len.min(u16::MAX as usize) as u16
+}
+
 fn clamp_u8_len(len: usize) -> u8 {
     len.min(u8::MAX as usize) as u8
 }
@@ -3168,25 +3319,6 @@ fn write_active_buff(writer: &mut PacketWriter, buff: &ActiveBuffSnapshot) {
     writer.write_i16(1);
     writer.write_i32(buff.remaining_seconds.max(0));
     writer.write_i32(buff.skill_id);
-}
-
-fn hp_rate(current: i32, maximum: i32) -> u8 {
-    if maximum <= 0 {
-        return 0;
-    }
-
-    ((current.clamp(0, maximum) as i64 * 255) / maximum as i64)
-        .clamp(u8::MIN as i64, u8::MAX as i64) as u8
-}
-
-fn normalized_visual_bytes(bytes: &[u8], expected_len: usize) -> Vec<u8> {
-    let mut data = bytes.to_vec();
-    if data.len() > expected_len {
-        data.truncate(expected_len);
-    } else if data.len() < expected_len {
-        data.resize(expected_len, 0);
-    }
-    data
 }
 
 fn normalized_guild_authorities(guild: &GuildSnapshot) -> Vec<odmo_types::GuildAuthoritySnapshot> {
@@ -3558,13 +3690,20 @@ impl TryFrom<RawPacket> for GameRequest {
             game::PARTNER_ATTACK => {
                 let attacker_handler = reader.read_u32()?;
                 let target_handler = reader.read_u32()?;
-                Ok(Self::PartnerAttack { attacker_handler, target_handler })
+                Ok(Self::PartnerAttack {
+                    attacker_handler,
+                    target_handler,
+                })
             }
             game::PARTNER_SKILL => {
                 let skill_slot = reader.read_u8()?;
                 let attacker_handler = reader.read_u32()?;
                 let target_handler = reader.read_u32()?;
-                Ok(Self::PartnerSkill { skill_slot, attacker_handler, target_handler })
+                Ok(Self::PartnerSkill {
+                    skill_slot,
+                    attacker_handler,
+                    target_handler,
+                })
             }
             game::PARTNER_SWITCH => {
                 let slot = reader.read_u8()?;
@@ -4215,12 +4354,12 @@ impl TryFrom<RawPacket> for GameRequest {
             }
             game::WARP_GATE_DUNGEON => Ok(Self::WarpGateDungeon),
             game::SPIRIT_CRAFT => {
-                let model_id = reader.read_i32()?;
-                let name = reader.read_string()?;
+                let slot = reader.read_u8()?;
+                let validation = reader.read_string()?;
                 let npc_id = reader.read_i32()?;
                 Ok(Self::SpiritCraft {
-                    model_id,
-                    name,
+                    slot,
+                    validation,
                     npc_id,
                 })
             }
@@ -4233,7 +4372,10 @@ impl TryFrom<RawPacket> for GameRequest {
 mod tests {
     use super::*;
     use crate::reader::PacketReader;
-    use odmo_types::{DEFAULT_PARTNER_MODEL_ID, DEFAULT_START_MAP_ID, DEFAULT_TAMER_MODEL_ID};
+    use odmo_types::{
+        DEFAULT_PARTNER_MODEL_ID, DEFAULT_START_MAP_ID, DEFAULT_TAMER_MODEL_ID, DigiSummonProduct,
+        DigiSummonReward,
+    };
 
     #[test]
     fn parse_initial_information_reads_account_id_from_offset_4() {
@@ -4276,6 +4418,65 @@ mod tests {
                 drop_handler: 49_200,
             }
         );
+    }
+
+    #[test]
+    fn digi_summon_sync_response_uses_modern_wire_shape() {
+        let packet = DigiSummonSyncResponsePacket {
+            result: 0,
+            products: vec![DigiSummonProduct {
+                product_id: 9001,
+                rank: 2,
+                draw_count: 3,
+                remaining_daily_limit: 4,
+                ..DigiSummonProduct::default()
+            }],
+        }
+        .encode();
+
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::DIGI_SUMMON_SYNC_RESPONSE);
+        let mut reader = crate::PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), 0);
+        assert_eq!(reader.read_u16().expect("count"), 1);
+        assert_eq!(reader.read_i32().expect("product"), 9001);
+        assert_eq!(reader.read_i32().expect("rank"), 2);
+        assert_eq!(reader.read_u16().expect("draw count"), 3);
+        assert_eq!(reader.read_i32().expect("daily limit"), 4);
+    }
+
+    #[test]
+    fn digi_summon_purchase_response_uses_modern_wire_shape() {
+        let packet = DigiSummonPurchaseResponsePacket {
+            result: 0,
+            product_id: 9001,
+            rewards: vec![DigiSummonReward {
+                item_id: 5101,
+                amount: 2,
+                grade: 5,
+                ..DigiSummonReward::default()
+            }],
+            products: vec![DigiSummonProduct {
+                product_id: 9001,
+                rank: 1,
+                draw_count: 1,
+                remaining_daily_limit: 0,
+                ..DigiSummonProduct::default()
+            }],
+        }
+        .encode();
+
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::DIGI_SUMMON_PURCHASE_RESPONSE);
+        let mut reader = crate::PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), 0);
+        assert_eq!(reader.read_i32().expect("product"), 9001);
+        assert_eq!(reader.read_u16().expect("reward count"), 1);
+        assert_eq!(reader.read_i32().expect("reward item"), 5101);
+        assert_eq!(reader.read_u16().expect("reward amount"), 2);
+        assert_eq!(reader.read_u16().expect("reward grade"), 5);
+        assert_eq!(reader.read_u16().expect("product count"), 1);
+        assert_eq!(reader.read_i32().expect("synced product"), 9001);
     }
 
     #[test]
@@ -4826,6 +5027,48 @@ mod tests {
     }
 
     #[test]
+    fn hatch_spirit_evolution_result_packet_uses_expected_opcode() {
+        let packet = HatchSpiritEvolutionResultPacket {
+            digimon_id: 31_004,
+            remaining_bits: 450,
+            consumed_items: vec![(1, 81_001), (1, 81_002)],
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::HATCH_SPIRIT_EVOLUTION);
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u32().expect("digimon id"), 31_004);
+        assert_eq!(payload.read_u64().expect("bits"), 450);
+        assert_eq!(payload.read_u8().expect("count1"), 1);
+        assert_eq!(payload.read_u32().expect("item1"), 81_001);
+        assert_eq!(payload.read_u8().expect("count2"), 1);
+        assert_eq!(payload.read_u32().expect("item2"), 81_002);
+        assert_eq!(payload.read_u8().expect("end"), 0);
+    }
+
+    #[test]
+    fn spirit_craft_result_packet_uses_expected_opcode() {
+        let packet = SpiritCraftResultPacket {
+            slot: 2,
+            remaining_bits: 250,
+            consumed_items: vec![(1, 81_001)],
+            gained_items: vec![(1, 81_003)],
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::SPIRIT_CRAFT);
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u8().expect("slot"), 2);
+        assert_eq!(payload.read_u64().expect("bits"), 250);
+        assert_eq!(payload.read_u8().expect("consumed count"), 1);
+        assert_eq!(payload.read_u32().expect("consumed item"), 81_001);
+        assert_eq!(payload.read_u8().expect("consumed end"), 0);
+        assert_eq!(payload.read_u8().expect("gained count"), 1);
+        assert_eq!(payload.read_u32().expect("gained item"), 81_003);
+        assert_eq!(payload.read_u8().expect("gained end"), 0);
+    }
+
+    #[test]
     fn party_invite_request_decodes_modern_client_payload() {
         let mut writer = PacketWriter::new(game::PARTY_INVITE);
         writer.write_string("Matt");
@@ -4917,6 +5160,25 @@ mod tests {
                 loot_type: 2,
                 rare_type: 3,
                 disp_rare_grade: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn spirit_craft_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::SPIRIT_CRAFT);
+        writer.write_u8(2);
+        writer.write_string("4321");
+        writer.write_i32(91001);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::SpiritCraft {
+                slot: 2,
+                validation: "4321".to_string(),
+                npc_id: 91001,
             }
         );
     }
@@ -5106,5 +5368,1323 @@ mod tests {
         ];
         let damage = i32::from_le_bytes(damage_bytes);
         assert_eq!(damage, -250);
+    }
+
+    #[test]
+    fn move_item_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::MOVE_ITEM);
+        writer.write_u16(12);
+        writer.write_u16(34);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::MoveItem {
+                origin_slot: 12,
+                destination_slot: 34,
+            }
+        );
+    }
+
+    #[test]
+    fn split_item_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::SPLIT_ITEM);
+        writer.write_u16(5);
+        writer.write_u16(9);
+        writer.write_u16(20);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::SplitItem {
+                origin_slot: 5,
+                destination_slot: 9,
+                amount: 20,
+            }
+        );
+    }
+
+    #[test]
+    fn item_remove_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::ITEM_REMOVE);
+        writer.write_u16(7);
+        writer.write_i32(120);
+        writer.write_i32(-30);
+        writer.write_u16(3);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::RemoveItem {
+                slot: 7,
+                x: 120,
+                y: -30,
+                amount: 3,
+            }
+        );
+    }
+
+    #[test]
+    fn npc_purchase_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::NPC_PURCHASE);
+        writer.write_u8(1);
+        writer.write_i32(9001);
+        writer.write_u8(0x38);
+        writer.write_i32(4);
+        writer.write_u16(2);
+        writer.write_u8(0x38);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::NpcPurchase {
+                vip: 1,
+                npc_id: 9001,
+                marker: 0x38,
+                shop_slot: 4,
+                purchase_count: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn npc_sell_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::NPC_SELL);
+        writer.write_u8(1);
+        writer.write_i32(9001);
+        writer.write_u8(0x38);
+        writer.write_u8(6);
+        writer.write_u16(2);
+        writer.write_u8(0x38);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::NpcSell {
+                vip: 1,
+                npc_id: 9001,
+                marker: 0x38,
+                item_slot: 6,
+                sell_amount: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn item_socket_in_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::ITEM_SOCKET_IN);
+        writer.write_u8(1);
+        writer.write_u32(40_010);
+        writer.write_i32(9001);
+        writer.write_u16(3);
+        writer.write_u16(7);
+        writer.write_u8(2);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::ItemSocketIn {
+                vip: 1,
+                inven_portable_pos: 40_010,
+                npc_idx: 9001,
+                src_inven_pos: 3,
+                dst_inven_pos: 7,
+                socket_order: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn item_socket_out_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::ITEM_SOCKET_OUT);
+        writer.write_u8(1);
+        writer.write_u32(40_010);
+        writer.write_i32(9001);
+        writer.write_u16(3);
+        writer.write_u16(7);
+        writer.write_u8(2);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::ItemSocketOut {
+                vip: 1,
+                inven_portable_pos: 40_010,
+                npc_idx: 9001,
+                src_inven_pos: 3,
+                dst_inven_pos: 7,
+                socket_order: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn item_socket_identify_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::ITEM_SOCKET_IDENTIFY);
+        writer.write_u8(1);
+        writer.write_i32(9001);
+        writer.write_u32(40_010);
+        writer.write_u16(5);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::ItemSocketIdentify {
+                vip: 1,
+                npc_idx: 9001,
+                inven_portable_pos: 40_010,
+                inven_pos: 5,
+            }
+        );
+    }
+
+    #[test]
+    fn partner_attack_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::PARTNER_ATTACK);
+        writer.write_u32(21_000);
+        writer.write_u32(48_500);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::PartnerAttack {
+                attacker_handler: 21_000,
+                target_handler: 48_500,
+            }
+        );
+    }
+
+    #[test]
+    fn partner_skill_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::PARTNER_SKILL);
+        writer.write_u8(2);
+        writer.write_u32(21_000);
+        writer.write_u32(48_500);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::PartnerSkill {
+                skill_slot: 2,
+                attacker_handler: 21_000,
+                target_handler: 48_500,
+            }
+        );
+    }
+
+    #[test]
+    fn partner_switch_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::PARTNER_SWITCH);
+        writer.write_u8(3);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(request, GameRequest::PartnerSwitch { slot: 3 });
+    }
+
+    #[test]
+    fn partner_delete_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::PARTNER_DELETE);
+        writer.write_u8(2);
+        writer.write_string("secret42");
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::PartnerDelete {
+                slot: 2,
+                validation: "secret42".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn open_ride_mode_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::OPEN_RIDE_MODE);
+        writer.write_u32(7);
+        writer.write_i32(101);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::OpenRideMode {
+                evo_unit_idx: 7,
+                item_type: 101,
+            }
+        );
+    }
+
+    #[test]
+    fn ride_mode_start_request_decodes_empty_payload() {
+        let writer = PacketWriter::new(game::RIDE_MODE_START);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(request, GameRequest::RideModeStart);
+    }
+
+    #[test]
+    fn ride_mode_stop_request_decodes_empty_payload() {
+        let writer = PacketWriter::new(game::RIDE_MODE_STOP);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(request, GameRequest::RideModeStop);
+    }
+
+    #[test]
+    fn open_region_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::REGION_UNLOCK);
+        writer.write_u8(5);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(request, GameRequest::RegionUnlock { region_idx: 5 });
+    }
+
+    #[test]
+    fn set_target_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::SET_TARGET);
+        writer.write_u32(21_000);
+        writer.write_u32(48_500);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::SetTarget {
+                attacker_handler: 21_000,
+                target_handler: 48_500,
+            }
+        );
+    }
+
+    #[test]
+    fn away_time_request_decodes_empty_payload() {
+        let writer = PacketWriter::new(game::AWAY_TIME);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(request, GameRequest::AwayTime);
+    }
+
+    #[test]
+    fn change_tamer_model_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::CHANGE_TAMER_MODEL);
+        writer.write_i32(8001);
+        writer.write_i32(4);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::ChangeTamerModel {
+                model_id: 8001,
+                inven_slot: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn cash_shop_reload_request_decodes_empty_payload() {
+        let writer = PacketWriter::new(game::CASHSHOP_RELOAD);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(request, GameRequest::CashShopReload);
+    }
+
+    #[test]
+    fn cash_shop_buy_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::CASHSHOP_BUY);
+        writer.write_u8(2);
+        writer.write_i32(1500);
+        writer.write_u64(0x0102_0304_0506_0708);
+        writer.write_i32(40_010);
+        writer.write_i32(40_020);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::CashShopBuy {
+                amount: 2,
+                total_price: 1500,
+                order_id: 0x0102_0304_0506_0708,
+                product_ids: vec![40_010, 40_020],
+            }
+        );
+    }
+
+    #[test]
+    fn hatch_backup_insert_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::HATCH_BACKUP_INSERT);
+        writer.write_u8(1);
+        writer.write_u32(12);
+        writer.write_i32(9001);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::HatchBackupInsert {
+                vip: 1,
+                inven_slot: 12,
+                npc_idx: 9001,
+            }
+        );
+    }
+}
+
+#[cfg(test)]
+mod sync_1006_exploration {
+    //! Exploration test for the opcode-1006 (pGame::Sync / MAP_ENTITY) entity-load
+    //! misalignment.
+    //!
+    //! This encodes a faithful model of the client's 1006 dispatcher and its
+    //! subtype-3 handler, then asserts every 1006 entity-load payload is consumed
+    //! to its exact end. It is the executable form of the wire contract: the
+    //! dispatcher reads one `subtype` byte; the subtype-3 handler reads a
+    //! `[u2 count]` and then walks `count` fixed 16-byte entries.
+    //!
+    //! Property 1 (Bug Condition): a 1006 sub-packet must be consumed exactly by
+    //! the client parser - no underrun ("need N bytes, have M"), no leftover bytes.
+    //!
+    //! Validates: Requirements 1.1, 1.2, 1.3
+
+    use super::*;
+    use crate::reader::PacketReader;
+    use odmo_types::{CharacterSummary, DropSummary, MobSummary};
+
+    /// Result of running the client parser model over a 1006 payload.
+    #[derive(Debug, PartialEq, Eq)]
+    enum ParseOutcome {
+        /// The handler consumed the payload to its exact end.
+        Exact,
+        /// The handler read past the buffer end (mirrors the client's
+        /// "Insufficient data (need N bytes, have M)" exception).
+        Underrun {
+            need: usize,
+            have: usize,
+            offset: usize,
+        },
+        /// The handler returned before the payload end, leaving bytes unconsumed.
+        Leftover {
+            consumed: usize,
+            total: usize,
+            next_byte: u8,
+        },
+    }
+
+    /// Bounds-checked cursor that mirrors the client's positional reads. A read
+    /// past the end records the shortfall instead of consuming, matching the
+    /// client's `cPacket::pop: Insufficient data` behavior.
+    struct ModelCursor<'a> {
+        buf: &'a [u8],
+        pos: usize,
+        underrun: Option<(usize, usize, usize)>,
+    }
+
+    impl<'a> ModelCursor<'a> {
+        fn new(buf: &'a [u8]) -> Self {
+            Self {
+                buf,
+                pos: 0,
+                underrun: None,
+            }
+        }
+
+        fn take(&mut self, n: usize) -> Option<&'a [u8]> {
+            if self.pos + n > self.buf.len() {
+                self.underrun = Some((n, self.buf.len() - self.pos, self.pos));
+                return None;
+            }
+            let slice = &self.buf[self.pos..self.pos + n];
+            self.pos += n;
+            Some(slice)
+        }
+
+        fn read_u8(&mut self) -> Option<u8> {
+            self.take(1).map(|s| s[0])
+        }
+
+        fn read_u16(&mut self) -> Option<u16> {
+            self.take(2).map(|s| u16::from_le_bytes([s[0], s[1]]))
+        }
+
+        fn read_u32(&mut self) -> Option<u32> {
+            self.take(4)
+                .map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+        }
+
+        /// `[u2 len LE][len ASCII bytes]`, no terminator. The client caps the
+        /// length at 0x200 and treats an out-of-range length as empty; a
+        /// misaligned length that points past the buffer underruns - the
+        /// observed `need N bytes` symptom.
+        fn read_entity_string(&mut self) -> Option<()> {
+            let len = self.read_u16()? as usize;
+            if len != 0 && len <= ENTITY_STRING_MAX {
+                self.take(len)?;
+            }
+            Some(())
+        }
+    }
+
+    /// Consume a digimon (kind 1) body, mirroring `sub_1040E0`'s read order:
+    /// handle pair, name, size, flag, model, two shorts, a flag, then a fixed
+    /// block of post-spawn fields and the `[u2 count] + 7 shorts + u4` clone tail.
+    fn consume_digimon_body(cur: &mut ModelCursor) -> Option<()> {
+        cur.read_u32()?; // handle pair
+        cur.read_u32()?;
+        cur.read_entity_string()?; // name
+        cur.read_u16()?; // size
+        cur.read_u8()?; // flag
+        cur.read_u32()?; // model
+        cur.read_u16()?;
+        cur.read_u16()?;
+        cur.read_u8()?;
+        cur.read_u32()?;
+        cur.read_u8()?;
+        cur.read_u32()?;
+        let clone_count = cur.read_u16()?; // clone-stat count
+        for _ in 0..clone_count {
+            cur.read_u16()?;
+        }
+        cur.read_u32()?; // item/aura id
+        Some(())
+    }
+
+    /// Consume a tamer (kind 2) body, mirroring `sub_1032C0`: handle pair, name,
+    /// flag, model, size, condition flag, the 16x69 equipment block plus a 69-byte
+    /// visual record, three condition/sync dwords, speed, an optional second name,
+    /// a couple of trailing fields, the seal id, an optional shop name when the
+    /// condition bitfield requests it, and a trailing dword.
+    fn consume_tamer_body(cur: &mut ModelCursor) -> Option<()> {
+        cur.read_u32()?; // handle pair
+        cur.read_u32()?;
+        cur.read_entity_string()?; // name
+        cur.read_u8()?; // flag
+        cur.read_u32()?; // model
+        cur.read_u16()?; // size
+        cur.read_u8()?; // condition flag
+        cur.take(TAMER_EQUIPMENT_SLOTS * VISUAL_SLOT_LEN)?; // equipment slots
+        cur.take(VISUAL_SLOT_LEN)?; // trailing visual record
+        let condition = cur.read_u32()?; // condition bitfield
+        cur.read_u32()?;
+        cur.read_u32()?;
+        cur.read_u16()?; // speed
+        let has_second_name = cur.read_u8()?; // secondary-name flag
+        if has_second_name != 0 {
+            cur.read_u32()?;
+            cur.read_entity_string()?;
+        }
+        cur.read_u16()?;
+        cur.read_u8()?;
+        cur.read_u16()?; // seal id
+        if condition & 0x4 != 0 {
+            cur.read_entity_string()?; // shop name
+        }
+        cur.read_u32()?; // trailing
+        Some(())
+    }
+
+    /// Consume an item/drop (kind 3) body, mirroring `sub_103210`:
+    /// `[u4 item_id][u1 form]`.
+    fn consume_item_body(cur: &mut ModelCursor) -> Option<()> {
+        cur.read_u32()?; // item id
+        cur.read_u8()?; // form
+        Some(())
+    }
+
+    /// Consume a monster (kind 4) body, mirroring `sub_104F80`: handle/object
+    /// pair, two flags, type id, HP/scale base, a float, then a skill/effect
+    /// sub-count and that many `[u4][f4][u4][u4]` records.
+    fn consume_monster_body(cur: &mut ModelCursor) -> Option<()> {
+        cur.read_u32()?; // handle/object pair
+        cur.read_u32()?;
+        cur.read_u8()?; // state
+        cur.read_u8()?; // flag
+        cur.read_u32()?; // type id
+        cur.read_u32()?; // HP/scale base
+        cur.read_u32()?; // float
+        let record_count = cur.read_u32()?; // skill/effect count
+        for _ in 0..record_count {
+            cur.read_u32()?;
+            cur.read_u32()?;
+            cur.read_u32()?;
+            cur.read_u32()?;
+        }
+        Some(())
+    }
+
+    /// Consume one typed entry: a 16-byte header whose third dword carries the
+    /// entity kind in its high word, then the kind-specific body. An unknown kind
+    /// consumes no body (the client's `default` branch), which strands the cursor
+    /// and surfaces as leftover/underrun downstream - exactly the drift the bug
+    /// produces.
+    fn consume_entry(cur: &mut ModelCursor) -> Option<()> {
+        cur.read_u32()?; // header word 0
+        cur.read_u32()?; // header word 1
+        let kind_handle = cur.read_u32()?; // header word 2: HIWORD = kind
+        cur.read_u32()?; // header word 3
+        let kind = (kind_handle >> 16) as u16;
+        match kind {
+            1 => consume_digimon_body(cur),
+            2 => consume_tamer_body(cur),
+            3 => consume_item_body(cur),
+            4 => consume_monster_body(cur),
+            _ => Some(()),
+        }
+    }
+
+    /// Model of a `New`/`In` count-framed handler (`sub_102420` / `sub_102630`):
+    /// read `[u2 count]`, then consume `count` typed entries.
+    fn consume_count_framed(cur: &mut ModelCursor) -> Option<()> {
+        let count = cur.read_u16()?;
+        for _ in 0..count {
+            consume_entry(cur)?;
+        }
+        Some(())
+    }
+
+    /// Faithful model of the client 1006 dispatcher `sub_101F50`: a loop that
+    /// reads `[u1 action]`, runs the matching handler, then reads the next action
+    /// byte until a `0x00` terminator ends the block. Returns whether the payload
+    /// was consumed exactly, underran, or left trailing bytes.
+    fn client_parse_1006(payload: &[u8]) -> ParseOutcome {
+        let mut cur = ModelCursor::new(payload);
+        loop {
+            let action = match cur.read_u8() {
+                Some(b) => b,
+                None => {
+                    let (need, have, offset) = cur.underrun.expect("underrun recorded on None");
+                    return ParseOutcome::Underrun { need, have, offset };
+                }
+            };
+
+            if action == ENTITY_BLOCK_END {
+                break;
+            }
+
+            // New (1) and In (3) carry count-framed typed entries; other
+            // lifecycle actions are not produced by these encoders.
+            let handled = match action {
+                ENTITY_ACTION_NEW | ENTITY_ACTION_IN => consume_count_framed(&mut cur),
+                _ => Some(()),
+            };
+
+            if handled.is_none() {
+                let (need, have, offset) = cur.underrun.expect("underrun recorded on None");
+                return ParseOutcome::Underrun { need, have, offset };
+            }
+        }
+
+        if cur.pos == payload.len() {
+            ParseOutcome::Exact
+        } else {
+            ParseOutcome::Leftover {
+                consumed: cur.pos,
+                total: payload.len(),
+                next_byte: payload[cur.pos],
+            }
+        }
+    }
+
+    /// Decode a finalized frame and run the client 1006 parser model over its
+    /// payload (payload starts at frame offset 4, after length + opcode).
+    fn parse_encoded_1006(frame: &[u8]) -> ParseOutcome {
+        let raw = PacketReader::from_frame(frame).expect("frame should decode");
+        assert_eq!(
+            raw.packet_type,
+            game::LOAD_UNLOAD_ENTITY,
+            "opcode must be 1006"
+        );
+        client_parse_1006(&raw.payload)
+    }
+
+    /// Assert exact consumption, formatting the counterexample like the client's
+    /// own diagnostic when the payload is misaligned.
+    fn assert_consumed_exactly(label: &str, frame: &[u8]) {
+        let outcome = parse_encoded_1006(frame);
+        assert!(
+            outcome == ParseOutcome::Exact,
+            "{label}: client 1006 parser did not consume the payload exactly: {outcome:?}"
+        );
+    }
+
+    fn tamer_fixture(seed: u32) -> CharacterSummary {
+        let name = match seed % 3 {
+            0 => String::new(),
+            1 => "Admin".to_string(),
+            _ => "LongTamerName".to_string(),
+        };
+        CharacterSummary {
+            id: 1 + seed as u64,
+            account_id: 1,
+            name,
+            partner_name: "Agumon".to_string(),
+            x: 15_000 + seed as i32,
+            y: 10_000 + seed as i32,
+            level: (1 + seed % 99) as u8,
+            general_handler: if seed % 2 == 0 { 0 } else { 11_000 + seed },
+            partner_handler: if seed % 2 == 0 { 0 } else { 21_000 + seed },
+            partner_current_type: 31_001,
+            ..CharacterSummary::default()
+        }
+    }
+
+    fn mob_fixture(seed: u32) -> MobSummary {
+        MobSummary {
+            id: 900 + seed as u64,
+            handler: if seed % 2 == 0 { 0 } else { 44_000 + seed },
+            type_id: 51_001 + seed as i32,
+            x: 15_000 + seed as i32,
+            y: 10_000 + seed as i32,
+            previous_x: 14_980 + seed as i32,
+            previous_y: 9_980 + seed as i32,
+            level: (1 + seed % 99) as u8,
+            grow_stack: (seed % 7) as u8,
+            disposed_objects: (seed % 5) as u8,
+            respawn: false,
+            ..MobSummary::default()
+        }
+    }
+
+    fn drop_fixture(seed: u32) -> DropSummary {
+        DropSummary {
+            id: 990 + seed as u64,
+            handler: if seed % 2 == 0 { 0 } else { 49_000 + seed },
+            item_id: 20_000 + seed as i32,
+            x: 15_010 + seed as i32,
+            y: 10_020 + seed as i32,
+            owner_id: seed as u64,
+            owner_handler: if seed % 3 == 0 { 0 } else { 60_000 + seed },
+            no_owner: seed % 2 == 0,
+            ..DropSummary::default()
+        }
+    }
+
+    #[test]
+    fn tamer_subtype3_payload_is_consumed_exactly() {
+        let frame = LoadTamerPacket {
+            character: tamer_fixture(1),
+        }
+        .encode();
+        assert_consumed_exactly("LoadTamerPacket (subtype 3)", &frame);
+    }
+
+    #[test]
+    fn mob_subtype3_payload_is_consumed_exactly() {
+        let frame = LoadMobsPacket {
+            mob: mob_fixture(1),
+        }
+        .encode();
+        assert_consumed_exactly("LoadMobsPacket (subtype 3)", &frame);
+    }
+
+    #[test]
+    fn drop_subtype3_payload_is_consumed_exactly() {
+        let frame = LoadDropsPacket {
+            drop: drop_fixture(1),
+            viewer_handler: 11_000,
+        }
+        .encode();
+        assert_consumed_exactly("LoadDropsPacket (subtype 3)", &frame);
+    }
+
+    #[test]
+    fn empty_name_tamer_is_consumed_exactly() {
+        let frame = LoadTamerPacket {
+            character: tamer_fixture(0),
+        }
+        .encode();
+        assert_consumed_exactly("LoadTamerPacket (empty name)", &frame);
+    }
+
+    /// Scoped property: across many generated tamer/mob/drop inputs, every 1006
+    /// entity-load payload must be consumed exactly by the client parser model.
+    /// The first counterexample is reported in the client's own diagnostic shape.
+    ///
+    /// Validates: Requirements 1.1, 1.2, 1.3
+    #[test]
+    fn prop_all_1006_subpackets_consumed_exactly() {
+        for seed in 0..64u32 {
+            let tamer = LoadTamerPacket {
+                character: tamer_fixture(seed),
+            }
+            .encode();
+            assert_consumed_exactly(&format!("LoadTamerPacket seed={seed}"), &tamer);
+
+            let mob = LoadMobsPacket {
+                mob: mob_fixture(seed),
+            }
+            .encode();
+            assert_consumed_exactly(&format!("LoadMobsPacket seed={seed}"), &mob);
+
+            let drop = LoadDropsPacket {
+                drop: drop_fixture(seed),
+                viewer_handler: 11_000 + seed,
+            }
+            .encode();
+            assert_consumed_exactly(&format!("LoadDropsPacket seed={seed}"), &drop);
+        }
+    }
+}
+
+#[cfg(test)]
+mod sync_1006_preservation {
+    //! Preservation tests for the opcode-1006 entity-load misalignment fix.
+    //!
+    //! Property 2 (Preservation): every encoder that is NOT a bug target must
+    //! produce byte-identical output before and after the fix. These tests
+    //! capture the current byte output as golden baselines so the upcoming fix
+    //! is proven not to touch them.
+    //!
+    //! Two groups are covered:
+    //!   1. Non-1006 encoders (distinct opcodes), which the fix never touches.
+    //!   2. The 1006 unload/buff sub-variants, which the client already parses
+    //!      and which the fix must leave alone (only LoadTamer/LoadMobs/LoadDrops
+    //!      are the bug targets).
+    //!
+    //! Validates: Requirements 3.1, 3.2
+
+    use super::*;
+    use odmo_types::{
+        ActiveBuffSnapshot, CharacterSummary, DropSummary, InventorySnapshot, ItemRecord,
+        MobSummary,
+    };
+
+    /// Render bytes as lowercase hex for golden capture and counterexamples.
+    fn to_hex(bytes: &[u8]) -> String {
+        let mut s = String::with_capacity(bytes.len() * 2);
+        for b in bytes {
+            s.push_str(&format!("{b:02x}"));
+        }
+        s
+    }
+
+    // ---- deterministic fixtures -------------------------------------------
+
+    fn inventory_packet() -> LoadInventoryPacket {
+        LoadInventoryPacket {
+            inventory: InventorySnapshot {
+                bits: 0x0102_0304_0506_0708,
+                size: 2,
+                items: vec![ItemRecord::new(5101, 3)],
+            },
+            inventory_type: InventoryType::Inventory,
+        }
+    }
+
+    fn server_experience_packet() -> ServerExperiencePacket {
+        ServerExperiencePacket {
+            experience: 123_456,
+        }
+    }
+
+    fn pick_item_packet() -> PickItemPacket {
+        PickItemPacket {
+            appearance_handler: 11_000,
+            item_id: 5101,
+            amount: 2,
+        }
+    }
+
+    fn pick_bits_packet() -> PickBitsPacket {
+        PickBitsPacket {
+            appearance_handler: 11_000,
+            value: 123,
+        }
+    }
+
+    fn receive_exp_packet() -> ReceiveExpPacket {
+        ReceiveExpPacket {
+            tamer_exp: 1_000,
+            tamer_bonus: 100,
+            tamer_total: 1_100,
+            partner_handler: 21_000,
+            partner_exp: 2_000,
+            partner_bonus: 200,
+            partner_total: 2_200,
+            skill_exp: 50,
+        }
+    }
+
+    fn level_up_packet() -> LevelUpPacket {
+        LevelUpPacket {
+            handler: 11_000,
+            level: 42,
+        }
+    }
+
+    fn tamer_fixture() -> CharacterSummary {
+        CharacterSummary {
+            id: 1,
+            name: "Admin".to_string(),
+            x: 15_000,
+            y: 10_000,
+            general_handler: 11_000,
+            partner_handler: 21_000,
+            partner_x: 15_010,
+            partner_y: 10_020,
+            active_buffs: vec![ActiveBuffSnapshot {
+                buff_id: 500,
+                buff_class: 1,
+                skill_id: 8_001_001,
+                remaining_seconds: 30,
+            }],
+            partner_active_buffs: vec![ActiveBuffSnapshot {
+                buff_id: 600,
+                buff_class: 1,
+                skill_id: 8_002_002,
+                remaining_seconds: 45,
+            }],
+            ..CharacterSummary::default()
+        }
+    }
+
+    fn mob_fixture() -> MobSummary {
+        MobSummary {
+            id: 900,
+            handler: 44_001,
+            type_id: 51_001,
+            x: 15_000,
+            y: 10_000,
+            previous_x: 14_980,
+            previous_y: 9_980,
+            level: 25,
+            active_debuffs: vec![ActiveBuffSnapshot {
+                buff_id: 88,
+                buff_class: 1,
+                skill_id: 7001,
+                remaining_seconds: 30,
+            }],
+            ..MobSummary::default()
+        }
+    }
+
+    fn drop_fixture() -> DropSummary {
+        DropSummary {
+            id: 990,
+            handler: 49_200,
+            item_id: 90_600,
+            owner_handler: 11_000,
+            x: 15_010,
+            y: 10_020,
+            ..DropSummary::default()
+        }
+    }
+
+    fn unload_tamer_packet() -> UnloadTamerPacket {
+        UnloadTamerPacket {
+            character: tamer_fixture(),
+        }
+    }
+
+    fn unload_mobs_packet() -> UnloadMobsPacket {
+        UnloadMobsPacket { mob: mob_fixture() }
+    }
+
+    fn unload_drops_packet() -> UnloadDropsPacket {
+        UnloadDropsPacket {
+            drop: drop_fixture(),
+        }
+    }
+
+    fn load_buffs_packet() -> LoadBuffsPacket {
+        LoadBuffsPacket {
+            character: tamer_fixture(),
+        }
+    }
+
+    fn load_mob_buffs_packet() -> LoadMobBuffsPacket {
+        LoadMobBuffsPacket { mob: mob_fixture() }
+    }
+
+    /// Parse a lowercase-hex string into its byte vector.
+    fn from_hex(hex: &str) -> Vec<u8> {
+        assert!(hex.len().is_multiple_of(2), "hex length must be even");
+        (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).expect("valid hex byte"))
+            .collect()
+    }
+
+    // ---- golden baselines (captured from the current encoders) ------------
+    //
+    // These byte vectors are the baseline F(X). The fix must reproduce them
+    // exactly (F(X) == F'(X)) for every encoder below.
+
+    const GOLDEN_INVENTORY: &str = "9f00893e000000000807060504030201000200ed1306000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a31a";
+    const GOLDEN_SERVER_EXPERIENCE: &str = "1a001e040100000040e20100010000000000000040e20100261a";
+    const GOLDEN_PICK_ITEM: &str = "1500460ff82a0000ed13000002000000000000291a";
+    const GOLDEN_PICK_BITS: &str = "1a00470ff82a00007b000000000000000000000000000000261a";
+    const GOLDEN_RECEIVE_EXP: &str = "4200fa03e80300000000000064000000000000004c0400000000000008520000d007000000000000c800000000000000980800000000000032000000000000007e1a";
+    const GOLDEN_LEVEL_UP: &str = "0b00fb03f82a00002a371a";
+    const GOLDEN_UNLOAD_TAMER: &str =
+        "2500ee03040200f82a0000983a00001027000008520000a23a00002427000000000000191a";
+    const GOLDEN_UNLOAD_MOBS: &str = "1900ee03040100e1ab0000983a00001027000000000000251a";
+    const GOLDEN_UNLOAD_DROPS: &str = "1900ee0304010030c00000a23a00002427000000000000251a";
+    const GOLDEN_LOAD_BUFFS: &str = "3000ee03100100f82a000001f40101001e000000e9157a0001000852000001580201002d000000d2197a000000000c1a";
+    const GOLDEN_LOAD_MOB_BUFFS: &str =
+        "1f00ee0310000000000100e1ab000001580001001e000000591b000000231a";
+
+    /// Assert an encoder reproduces its captured golden bytes, reporting the
+    /// divergence as hex when it does not.
+    fn assert_golden(label: &str, golden_hex: &str, actual: &[u8]) {
+        let expected = from_hex(&golden_hex.replace(' ', ""));
+        assert!(
+            actual == expected.as_slice(),
+            "{label}: encoder output changed.\n expected={}\n actual  ={}",
+            to_hex(&expected),
+            to_hex(actual)
+        );
+    }
+
+    // ---- non-1006 byte-identity (distinct opcodes, never touched) ---------
+
+    #[test]
+    fn load_inventory_matches_golden() {
+        assert_golden(
+            "LoadInventoryPacket",
+            GOLDEN_INVENTORY,
+            &inventory_packet().encode(),
+        );
+    }
+
+    #[test]
+    fn server_experience_matches_golden() {
+        assert_golden(
+            "ServerExperiencePacket",
+            GOLDEN_SERVER_EXPERIENCE,
+            &server_experience_packet().encode(),
+        );
+    }
+
+    #[test]
+    fn pick_item_matches_golden() {
+        assert_golden(
+            "PickItemPacket",
+            GOLDEN_PICK_ITEM,
+            &pick_item_packet().encode(),
+        );
+    }
+
+    #[test]
+    fn pick_bits_matches_golden() {
+        assert_golden(
+            "PickBitsPacket",
+            GOLDEN_PICK_BITS,
+            &pick_bits_packet().encode(),
+        );
+    }
+
+    #[test]
+    fn receive_exp_matches_golden() {
+        assert_golden(
+            "ReceiveExpPacket",
+            GOLDEN_RECEIVE_EXP,
+            &receive_exp_packet().encode(),
+        );
+    }
+
+    #[test]
+    fn level_up_matches_golden() {
+        assert_golden(
+            "LevelUpPacket",
+            GOLDEN_LEVEL_UP,
+            &level_up_packet().encode(),
+        );
+    }
+
+    // ---- already-correct 1006 sub-variants (unload/buff, not bug targets) -
+
+    #[test]
+    fn unload_tamer_matches_golden() {
+        assert_golden(
+            "UnloadTamerPacket",
+            GOLDEN_UNLOAD_TAMER,
+            &unload_tamer_packet().encode(),
+        );
+    }
+
+    #[test]
+    fn unload_mobs_matches_golden() {
+        assert_golden(
+            "UnloadMobsPacket",
+            GOLDEN_UNLOAD_MOBS,
+            &unload_mobs_packet().encode(),
+        );
+    }
+
+    #[test]
+    fn unload_drops_matches_golden() {
+        assert_golden(
+            "UnloadDropsPacket",
+            GOLDEN_UNLOAD_DROPS,
+            &unload_drops_packet().encode(),
+        );
+    }
+
+    #[test]
+    fn load_buffs_matches_golden() {
+        assert_golden(
+            "LoadBuffsPacket",
+            GOLDEN_LOAD_BUFFS,
+            &load_buffs_packet().encode(),
+        );
+    }
+
+    #[test]
+    fn load_mob_buffs_matches_golden() {
+        assert_golden(
+            "LoadMobBuffsPacket",
+            GOLDEN_LOAD_MOB_BUFFS,
+            &load_mob_buffs_packet().encode(),
+        );
+    }
+
+    // ---- frame-wire invariants --------------------------------------------
+
+    /// Verify the frame envelope: `[Length u16 LE][Opcode i16 LE][..][Checksum u16 LE]`,
+    /// with `checksum = length XOR 6716`.
+    fn assert_frame_invariants(label: &str, frame: &[u8], expected_opcode: i16) {
+        assert!(
+            frame.len() >= 6,
+            "{label}: frame too short: {}",
+            frame.len()
+        );
+        let length = u16::from_le_bytes([frame[0], frame[1]]) as usize;
+        assert_eq!(
+            length,
+            frame.len(),
+            "{label}: length field must equal frame size"
+        );
+        let opcode = i16::from_le_bytes([frame[2], frame[3]]);
+        assert_eq!(opcode, expected_opcode, "{label}: opcode mismatch");
+        let checksum = i16::from_le_bytes([frame[length - 2], frame[length - 1]]);
+        let expected = (length as i16) ^ crate::opcode::CHECKSUM_VALIDATION;
+        assert_eq!(checksum, expected, "{label}: checksum mismatch");
+    }
+
+    // ---- property-based determinism over generated inputs -----------------
+    //
+    // There is no fixed F' yet, so the oracle for random inputs is a
+    // deterministic re-encode equality: a pure encoder must produce identical
+    // bytes for identical input, and a well-formed frame envelope every time.
+    // After the fix lands, re-running these proves the non-bug encoders are
+    // still byte-stable for the same inputs.
+
+    fn seeded_string(seed: u32) -> String {
+        match seed % 4 {
+            0 => String::new(),
+            1 => "A".to_string(),
+            2 => "Admin".to_string(),
+            _ => "LongTamerNameXYZ".to_string(),
+        }
+    }
+
+    fn seeded_handler(seed: u32) -> u32 {
+        match seed % 3 {
+            0 => 0,
+            1 => 11_000 + seed,
+            _ => u32::MAX,
+        }
+    }
+
+    fn seeded_i32(seed: u32) -> i32 {
+        match seed % 4 {
+            0 => 0,
+            1 => seed as i32,
+            2 => i32::MAX,
+            _ => i32::MIN,
+        }
+    }
+
+    fn seeded_buffs(seed: u32) -> Vec<ActiveBuffSnapshot> {
+        match seed % 3 {
+            0 => Vec::new(),
+            1 => vec![ActiveBuffSnapshot {
+                buff_id: (seed % u16::MAX as u32) as u16,
+                buff_class: 1,
+                skill_id: seed as i32,
+                remaining_seconds: (seed % 600) as i32,
+            }],
+            _ => vec![
+                ActiveBuffSnapshot {
+                    buff_id: 500,
+                    buff_class: 1,
+                    skill_id: 8_001_001,
+                    remaining_seconds: 30,
+                },
+                ActiveBuffSnapshot {
+                    buff_id: 600,
+                    buff_class: 1,
+                    skill_id: 8_002_002,
+                    remaining_seconds: -5,
+                },
+            ],
+        }
+    }
+
+    /// Property: non-1006 encoders are byte-stable and emit well-formed frames
+    /// across generated inputs (empty strings, boundary handlers, extreme ints).
+    ///
+    /// Validates: Requirements 3.1
+    #[test]
+    fn prop_non_1006_encoders_are_byte_stable() {
+        for seed in 0..96u32 {
+            let server_exp = ServerExperiencePacket {
+                experience: seeded_i32(seed),
+            };
+            let a = server_exp.encode();
+            assert_eq!(
+                a,
+                server_exp.encode(),
+                "ServerExperiencePacket seed={seed} not stable"
+            );
+            assert_frame_invariants("ServerExperiencePacket", &a, game::SERVER_EXPERIENCE);
+
+            let pick = PickItemPacket {
+                appearance_handler: seeded_handler(seed),
+                item_id: seeded_i32(seed),
+                amount: (seed % i16::MAX as u32) as i16,
+            };
+            let b = pick.encode();
+            assert_eq!(b, pick.encode(), "PickItemPacket seed={seed} not stable");
+            assert_frame_invariants("PickItemPacket", &b, game::LOOT_ITEM);
+
+            let bits = PickBitsPacket {
+                appearance_handler: seeded_handler(seed),
+                value: seeded_i32(seed),
+            };
+            let c = bits.encode();
+            assert_eq!(c, bits.encode(), "PickBitsPacket seed={seed} not stable");
+            assert_frame_invariants("PickBitsPacket", &c, game::PICK_BITS);
+
+            let inventory = LoadInventoryPacket {
+                inventory: InventorySnapshot {
+                    bits: seed as i64,
+                    size: (seed % 5) as u16,
+                    items: if seed % 2 == 0 {
+                        Vec::new()
+                    } else {
+                        vec![ItemRecord::new(5101 + seed as i32, (seed % 100) as i32)]
+                    },
+                },
+                inventory_type: InventoryType::Inventory,
+            };
+            let d = inventory.encode();
+            assert_eq!(
+                d,
+                inventory.encode(),
+                "LoadInventoryPacket seed={seed} not stable"
+            );
+            assert_frame_invariants("LoadInventoryPacket", &d, game::LOAD_INVENTORY);
+        }
+    }
+
+    /// Property: the 1006 unload/buff sub-variants (already-correct, not bug
+    /// targets) are byte-stable and emit well-formed 1006 frames across
+    /// generated inputs (empty names, empty buff lists, boundary handlers).
+    ///
+    /// Validates: Requirements 3.2
+    #[test]
+    fn prop_unload_and_buff_encoders_are_byte_stable() {
+        for seed in 0..96u32 {
+            let character = CharacterSummary {
+                id: 1 + seed as u64,
+                name: seeded_string(seed),
+                general_handler: seeded_handler(seed),
+                partner_handler: seeded_handler(seed + 1),
+                x: seeded_i32(seed),
+                y: seeded_i32(seed + 1),
+                partner_x: seeded_i32(seed + 2),
+                partner_y: seeded_i32(seed + 3),
+                active_buffs: seeded_buffs(seed),
+                partner_active_buffs: seeded_buffs(seed + 1),
+                partner_active_debuffs: seeded_buffs(seed + 2),
+                ..CharacterSummary::default()
+            };
+            let mob = MobSummary {
+                id: 900 + seed as u64,
+                handler: seeded_handler(seed),
+                x: seeded_i32(seed),
+                y: seeded_i32(seed + 1),
+                active_debuffs: seeded_buffs(seed),
+                ..MobSummary::default()
+            };
+            let drop = DropSummary {
+                id: 990 + seed as u64,
+                handler: seeded_handler(seed),
+                x: seeded_i32(seed),
+                y: seeded_i32(seed + 1),
+                ..DropSummary::default()
+            };
+
+            let ut = UnloadTamerPacket {
+                character: character.clone(),
+            }
+            .encode();
+            assert_eq!(
+                ut,
+                UnloadTamerPacket {
+                    character: character.clone()
+                }
+                .encode(),
+                "UnloadTamerPacket seed={seed} not stable"
+            );
+            assert_frame_invariants("UnloadTamerPacket", &ut, game::LOAD_UNLOAD_ENTITY);
+
+            let um = UnloadMobsPacket { mob: mob.clone() }.encode();
+            assert_eq!(
+                um,
+                UnloadMobsPacket { mob: mob.clone() }.encode(),
+                "UnloadMobsPacket seed={seed} not stable"
+            );
+            assert_frame_invariants("UnloadMobsPacket", &um, game::LOAD_UNLOAD_ENTITY);
+
+            let ud = UnloadDropsPacket { drop: drop.clone() }.encode();
+            assert_eq!(
+                ud,
+                UnloadDropsPacket { drop: drop.clone() }.encode(),
+                "UnloadDropsPacket seed={seed} not stable"
+            );
+            assert_frame_invariants("UnloadDropsPacket", &ud, game::LOAD_UNLOAD_ENTITY);
+
+            let lb = LoadBuffsPacket {
+                character: character.clone(),
+            }
+            .encode();
+            assert_eq!(
+                lb,
+                LoadBuffsPacket {
+                    character: character.clone()
+                }
+                .encode(),
+                "LoadBuffsPacket seed={seed} not stable"
+            );
+            assert_frame_invariants("LoadBuffsPacket", &lb, game::LOAD_BUFFS);
+
+            let lmb = LoadMobBuffsPacket { mob: mob.clone() }.encode();
+            assert_eq!(
+                lmb,
+                LoadMobBuffsPacket { mob: mob.clone() }.encode(),
+                "LoadMobBuffsPacket seed={seed} not stable"
+            );
+            assert_frame_invariants("LoadMobBuffsPacket", &lmb, game::LOAD_BUFFS);
+        }
     }
 }

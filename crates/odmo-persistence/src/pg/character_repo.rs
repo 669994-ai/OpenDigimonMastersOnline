@@ -678,6 +678,45 @@ impl CharacterRepository for PgRepository {
         // Partner type evolution not yet persisted in the characters table
         Ok(())
     }
+    fn update_partner_roster(
+        &self,
+        character_id: u64,
+        partner_current_slot: u8,
+        partner_slots: Vec<PartnerSlotSnapshot>,
+    ) -> anyhow::Result<()> {
+        let Some(active_partner) = partner_slots
+            .iter()
+            .find(|partner| partner.slot == partner_current_slot)
+            .cloned()
+        else {
+            return Ok(());
+        };
+
+        let partner_slots_json = serde_json::to_value(&partner_slots)?;
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            sqlx::query(
+                "UPDATE characters SET \
+                 partner_current_slot = $1, partner_name = $2, partner_model = $3, partner_current_type = $4, \
+                 partner_level = $5, partner_hp = $6, partner_ds = $7, partner_current_hp = $8, partner_current_ds = $9, \
+                 partner_slots = $10 WHERE id = $11",
+            )
+            .bind(partner_current_slot as i16)
+            .bind(&active_partner.name)
+            .bind(active_partner.model)
+            .bind(active_partner.digimon_type)
+            .bind(active_partner.level as i16)
+            .bind(active_partner.hp)
+            .bind(active_partner.ds)
+            .bind(active_partner.current_hp)
+            .bind(active_partner.current_ds)
+            .bind(&partner_slots_json)
+            .bind(character_id as i64)
+            .execute(&pool)
+            .await?;
+            Ok::<(), anyhow::Error>(())
+        })
+    }
 }
 
 impl CharacterAccountRepository for PgRepository {
