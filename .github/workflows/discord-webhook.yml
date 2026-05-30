@@ -1,0 +1,33 @@
+name: Discord Commit Notification
+
+on:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  discord_notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: tristanbudd/discord-commit-github-action@master
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+          embed-title: "New Commit"
+          embed-description: "A new commit was pushed to Open Digimon Masters Online."
+          embed-colour: "#7289DA"
+          embed-author-name: "Tenshimaru"
+          embed-author-icon-url: "https://avatars.githubusercontent.com/u/61519926?v=4"
+          embed-thumbnail-url: "https://avatars.githubusercontent.com/u/61519926?v=4"
+          embed-footer-text: "Open Digimon Masters Online"
+          embed-footer-icon-url: "https://odmo.dev/img/ODMO%20Icon.png"
+          embed-footer-timestamp: "true"
+          show-commit-message: "true"
+          colour-changes: "true"
+          show-changed-files: "true"
+          show-commit-branch: "true"
+          show-commit-author: "true"
+          show-commit-link: "true"
