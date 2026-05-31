@@ -1,5 +1,6 @@
 mod account_repo;
 mod character_repo;
+mod combine_repo;
 mod digi_summon_repo;
 mod drop_repo;
 mod extra_evolution_repo;
@@ -7,6 +8,7 @@ mod mob_repo;
 mod npc_shop_repo;
 mod portal_bridge;
 mod portal_repo;
+mod random_box_repo;
 
 use std::future::Future;
 
@@ -44,6 +46,7 @@ impl PgRepository {
         if existing.is_some() {
             self.seed_digi_summon_demo().await?;
             self.seed_extra_evolution_demo().await?;
+            self.seed_combine_demo().await?;
             return Ok(());
         }
 
@@ -129,6 +132,7 @@ impl PgRepository {
         let default_account_warehouse = serde_json::json!({"bits": 0, "size": 14, "items": []});
         let default_seals = serde_json::json!({"seal_leader_id": 0, "seals": []});
         let default_channels = serde_json::json!([{"channel": 0, "load": 1}]);
+        let default_encyclopedia = serde_json::json!({"entries": []});
         let admin_partner_slots = serde_json::json!([
             {
                 "slot": 1, "digimon_type": DEFAULT_PARTNER_MODEL_ID, "model": DEFAULT_PARTNER_MODEL_ID,
@@ -165,7 +169,7 @@ impl PgRepository {
         ]);
 
         sqlx::query(
-            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, partner_current_slot, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, account_warehouse, seal_list, available_channels, partner_slots) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)",
+            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, partner_current_slot, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, account_warehouse, seal_list, available_channels, partner_slots, encyclopedia, deck_buff_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)",
         )
         .bind(100i64)
         .bind(1i64)
@@ -191,11 +195,13 @@ impl PgRepository {
         .bind(&default_seals)
         .bind(&default_channels)
         .bind(&admin_partner_slots)
+        .bind(&default_encyclopedia)
+        .bind(0i32)
         .execute(&self.pool)
         .await?;
 
         sqlx::query(
-            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, partner_current_slot, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, account_warehouse, seal_list, available_channels, partner_slots) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)",
+            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, partner_current_slot, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, account_warehouse, seal_list, available_channels, partner_slots, encyclopedia, deck_buff_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)",
         )
         .bind(200i64)
         .bind(2i64)
@@ -221,6 +227,8 @@ impl PgRepository {
         .bind(&default_seals)
         .bind(&default_channels)
         .bind(&gm_partner_slots)
+        .bind(&default_encyclopedia)
+        .bind(0i32)
         .execute(&self.pool)
         .await?;
 
@@ -240,7 +248,7 @@ impl PgRepository {
         ]);
 
         sqlx::query(
-            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, partner_current_slot, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, account_warehouse, seal_list, available_channels, partner_slots) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)",
+            "INSERT INTO characters (id, account_id, slot, name, model, level, current_x, current_y, current_map_id, partner_current_x, partner_current_y, partner_current_slot, general_handler, partner_handler, partner_name, partner_model, bits, inventory, warehouse, extra_inventory, account_warehouse, seal_list, available_channels, partner_slots, encyclopedia, deck_buff_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)",
         )
         .bind(300i64)
         .bind(4i64)
@@ -266,11 +274,14 @@ impl PgRepository {
         .bind(&default_seals)
         .bind(&default_channels)
         .bind(&smoke_partner_slots)
+        .bind(&default_encyclopedia)
+        .bind(0i32)
         .execute(&self.pool)
         .await?;
 
         self.seed_digi_summon_demo().await?;
         self.seed_extra_evolution_demo().await?;
+        self.seed_combine_demo().await?;
 
         // Mobs
         sqlx::query(
@@ -501,6 +512,99 @@ impl PgRepository {
         .bind(1i32)
         .execute(&self.pool)
         .await?;
+
+        Ok(())
+    }
+
+    async fn seed_combine_demo(&self) -> anyhow::Result<()> {
+        // Seed both variants: 0 = Digi Combine, 1 = Union Combine.
+        for variant in [0i16, 1i16] {
+            let existing: Option<(i64,)> =
+                sqlx::query_as("SELECT id FROM combine_ranks WHERE variant = $1 LIMIT 1")
+                    .bind(variant)
+                    .fetch_optional(&self.pool)
+                    .await?;
+            if existing.is_some() {
+                continue;
+            }
+
+            // Rank tier with a small weighted reward pool.
+            let rank_row: (i64,) = sqlx::query_as(
+                "INSERT INTO combine_ranks (variant, ceiling_type, weight) VALUES ($1,$2,$3) RETURNING id",
+            )
+            .bind(variant)
+            .bind(1i16)
+            .bind(100i64)
+            .fetch_one(&self.pool)
+            .await?;
+
+            sqlx::query(
+                "INSERT INTO combine_rank_rewards (rank_row_id, item_id, amount, grade) \
+                 VALUES ($1,$2,$3,$4), ($1,$5,$6,$7)",
+            )
+            .bind(rank_row.0)
+            .bind(5101i32)
+            .bind(1i32)
+            .bind(1i16)
+            .bind(5102i32)
+            .bind(2i32)
+            .bind(2i16)
+            .execute(&self.pool)
+            .await?;
+
+            // Allowed materials referencing one group.
+            sqlx::query(
+                "INSERT INTO combine_items (variant, item_id, group_id) \
+                 VALUES ($1,$2,$3), ($1,$4,$5)",
+            )
+            .bind(variant)
+            .bind(81001i32)
+            .bind(1i32)
+            .bind(81002i32)
+            .bind(1i32)
+            .execute(&self.pool)
+            .await?;
+
+            let group_row: (i64,) = sqlx::query_as(
+                "INSERT INTO combine_groups (variant, group_id) VALUES ($1,$2) RETURNING id",
+            )
+            .bind(variant)
+            .bind(1i32)
+            .fetch_one(&self.pool)
+            .await?;
+
+            sqlx::query(
+                "INSERT INTO combine_group_members (group_row_id, member_id) VALUES ($1,$2), ($1,$3)",
+            )
+            .bind(group_row.0)
+            .bind(81001i32)
+            .bind(81002i32)
+            .execute(&self.pool)
+            .await?;
+
+            // Ceiling tier with its progress entries.
+            let ceil_row: (i64,) = sqlx::query_as(
+                "INSERT INTO combine_ceils (variant, ceiling_type) VALUES ($1,$2) RETURNING id",
+            )
+            .bind(variant)
+            .bind(1i16)
+            .fetch_one(&self.pool)
+            .await?;
+
+            sqlx::query(
+                "INSERT INTO combine_ceil_entries (ceil_row_id, tier, value_a, value_b) \
+                 VALUES ($1,$2,$3,$4), ($1,$5,$6,$7)",
+            )
+            .bind(ceil_row.0)
+            .bind(1i16)
+            .bind(10i16)
+            .bind(100i32)
+            .bind(2i16)
+            .bind(20i16)
+            .bind(200i32)
+            .execute(&self.pool)
+            .await?;
+        }
 
         Ok(())
     }

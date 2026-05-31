@@ -1,7 +1,8 @@
 use odmo_types::{
-    ActiveBuffSnapshot, AttendanceStatus, ChannelAvailability, CharacterSummary, DailyRewardStatus,
-    DigiSummonProduct, DigiSummonReward, DropSummary, GuildHistoricEntry, GuildSnapshot,
-    InventorySnapshot, ItemRecord, MobSummary, RelationEntry, SealListSnapshot, XaiSnapshot,
+    ActiveBuffSnapshot, AttendanceStatus, ChannelAvailability, CharacterSummary,
+    CombineCeilingEntry, CombineItemRef, DailyRewardStatus, DigiCombineReward, DigiSummonProduct,
+    DigiSummonReward, DropSummary, GuildHistoricEntry, GuildSnapshot, InventorySnapshot,
+    ItemRecord, MobSummary, RelationEntry, SealListSnapshot, XaiSnapshot,
 };
 
 use crate::{
@@ -332,6 +333,9 @@ pub enum GameRequest {
     EncyclopediaDeckBuff {
         deck_idx: u32,
     },
+    OtherTamerDetailInfo {
+        target_handler: u32,
+    },
     ArenaDailyPoints {
         item_slot: i16,
         points: i16,
@@ -504,6 +508,8 @@ pub enum GameRequest {
     GuildAuthorityDats {
         target_name: String,
     },
+    /// Item-to-digimon exchange: spend materials to obtain a new partner.
+    /// `[i32 model_id][wstring name][i32 npc_id]`.
     HatchSpiritEvolution {
         model_id: i32,
         name: String,
@@ -512,6 +518,41 @@ pub enum GameRequest {
     DigiSummonPurchase {
         product_id: i32,
         ticket_slot: i32,
+    },
+    /// Digivice combine: open/sync the gacha window (bare body).
+    DigiCombineSyncRequest,
+    /// Digivice combine: submit the selected materials for a roll.
+    DigiCombine {
+        ceiling_type: u8,
+        materials: Vec<CombineItemRef>,
+    },
+    /// Digivice combine: claim the reward for a resolved ceiling tier.
+    DigiCombineRewardClaim {
+        ceiling_type: u8,
+    },
+    /// Union combine: open/sync the gacha window (bare body).
+    UnionCombineSyncRequest,
+    /// Union combine: submit the selected materials for a roll.
+    UnionCombine {
+        ceiling_type: u8,
+        materials: Vec<CombineItemRef>,
+    },
+    /// Union combine: claim the reward for a resolved ceiling tier.
+    UnionCombineRewardClaim {
+        ceiling_type: u8,
+    },
+    /// Random box: open/sync the box window (5-byte body).
+    RandomBoxList {
+        flag: u8,
+        index: i32,
+    },
+    /// Random box: purchase a box entry (15-byte body).
+    RandomBoxPurchase {
+        flag: u8,
+        product_id: i32,
+        item_uid: i32,
+        count: u16,
+        state: i32,
     },
     LoadAccountWarehouse,
     RetrieveAccountWarehouse {
@@ -542,6 +583,9 @@ pub enum GameRequest {
         charge_type: u8,
     },
     WarpGateDungeon,
+    /// Digimon-to-item exchange: delete a partner to obtain materials.
+    /// `[u8 slot][string validation][i32 npc_id]`. The validation string carries
+    /// the account secondary secret and is checked before any mutation.
     SpiritCraft {
         slot: u8,
         validation: String,
@@ -819,10 +863,11 @@ impl LoadInventoryPacket {
         writer.write_i16(self.inventory.size as i16);
 
         for slot in 0..self.inventory.size as usize {
-            let record = self.inventory.items.get(slot).map_or_else(
-                || ItemRecord::default().record,
-                |item| normalize_item_record(item),
-            );
+            let record = self
+                .inventory
+                .items
+                .get(slot)
+                .map_or_else(|| ItemRecord::default().record, normalize_item_record);
             writer.write_bytes(&record);
         }
 
@@ -1307,8 +1352,212 @@ impl DigiSummonPurchaseResponsePacket {
             writer.write_i32(product.remaining_daily_limit);
         }
 
-        writer.write_u16(0); // reward_info_count
-        writer.write_i64(0); // reserved
+        // The detail list carries per-reward item descriptors; empty for the
+        // common purchase result, so emit a zero count followed by the trailer.
+        writer.write_u16(0); // detail_count
+        writer.write_i64(0); // trailer
+        writer.finalize()
+    }
+}
+
+/// Combine sync response: a leading result byte and the ceiling map only.
+///
+/// Digivice combine (3661) and union combine (4301) share this layout; the
+/// target opcode selects which flow the response belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CombineSyncResponsePacket {
+    pub opcode: i16,
+    pub result: u8,
+    pub ceiling: Vec<CombineCeilingEntry>,
+}
+
+impl CombineSyncResponsePacket {
+    /// Build a Digivice combine sync response (opcode 3661).
+    pub fn digi(result: u8, ceiling: Vec<CombineCeilingEntry>) -> Self {
+        Self {
+            opcode: game::DIGI_COMBINE_SYNC,
+            result,
+            ceiling,
+        }
+    }
+
+    /// Build a union combine sync response (opcode 4301).
+    pub fn union(result: u8, ceiling: Vec<CombineCeilingEntry>) -> Self {
+        Self {
+            opcode: game::UNION_COMBINE_SYNC,
+            result,
+            ceiling,
+        }
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(self.opcode);
+        writer.write_u8(self.result);
+        write_combine_ceiling(&mut writer, &self.ceiling);
+        writer.finalize()
+    }
+}
+
+/// Combine result/reward response: result byte, ceiling map, the submitted
+/// material echo list, and the reward detail list.
+///
+/// Digivice combine/reward (3662/3663) and union combine/reward (4302/4303)
+/// share this layout; the target opcode selects which flow the response
+/// belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CombineResultResponsePacket {
+    pub opcode: i16,
+    pub result: u8,
+    pub ceiling: Vec<CombineCeilingEntry>,
+    pub materials: Vec<CombineItemRef>,
+    pub rewards: Vec<DigiCombineReward>,
+}
+
+impl CombineResultResponsePacket {
+    /// Build a Digivice combine result response (opcode 3662).
+    pub fn digi_result(
+        result: u8,
+        ceiling: Vec<CombineCeilingEntry>,
+        materials: Vec<CombineItemRef>,
+        rewards: Vec<DigiCombineReward>,
+    ) -> Self {
+        Self {
+            opcode: game::DIGI_COMBINE,
+            result,
+            ceiling,
+            materials,
+            rewards,
+        }
+    }
+
+    /// Build a Digivice combine reward response (opcode 3663).
+    pub fn digi_reward(
+        result: u8,
+        ceiling: Vec<CombineCeilingEntry>,
+        materials: Vec<CombineItemRef>,
+        rewards: Vec<DigiCombineReward>,
+    ) -> Self {
+        Self {
+            opcode: game::DIGI_COMBINE_REWARD,
+            result,
+            ceiling,
+            materials,
+            rewards,
+        }
+    }
+
+    /// Build a union combine result response (opcode 4302).
+    pub fn union_result(
+        result: u8,
+        ceiling: Vec<CombineCeilingEntry>,
+        materials: Vec<CombineItemRef>,
+        rewards: Vec<DigiCombineReward>,
+    ) -> Self {
+        Self {
+            opcode: game::UNION_COMBINE,
+            result,
+            ceiling,
+            materials,
+            rewards,
+        }
+    }
+
+    /// Build a union combine reward response (opcode 4303).
+    pub fn union_reward(
+        result: u8,
+        ceiling: Vec<CombineCeilingEntry>,
+        materials: Vec<CombineItemRef>,
+        rewards: Vec<DigiCombineReward>,
+    ) -> Self {
+        Self {
+            opcode: game::UNION_COMBINE_REWARD,
+            result,
+            ceiling,
+            materials,
+            rewards,
+        }
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(self.opcode);
+        writer.write_u8(self.result);
+        write_combine_ceiling(&mut writer, &self.ceiling);
+        write_combine_item_list(&mut writer, &self.materials);
+        write_combine_reward_list(&mut writer, &self.rewards);
+        writer.finalize()
+    }
+}
+
+/// Random box list/sync response (opcode 16067).
+///
+/// Layout: a leading field, then a `u1`-counted list of fixed entries. Field
+/// semantics are not yet decoded; the wire widths and order are fixed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RandomBoxListResponsePacket {
+    pub field0: i32,
+    pub entries: Vec<RandomBoxListEntry>,
+}
+
+/// One entry in the random box list response: three 32-bit fields and a
+/// trailing 16-bit field. Semantics are undecoded; widths are fixed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RandomBoxListEntry {
+    pub a: i32,
+    pub b: i32,
+    pub c: i32,
+    pub d: u16,
+}
+
+impl RandomBoxListResponsePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::RANDOM_BOX_LIST);
+        writer.write_i32(self.field0);
+        writer.write_u8(clamp_u8_len(self.entries.len()));
+        for entry in &self.entries {
+            writer.write_i32(entry.a);
+            writer.write_i32(entry.b);
+            writer.write_i32(entry.c);
+            writer.write_u16(entry.d);
+        }
+        writer.finalize()
+    }
+}
+
+/// Random box purchase result response (opcode 16068).
+///
+/// Layout: three leading fields, a `u1`-counted list of 32-bit pairs, a second
+/// `u1`-counted list of `[u64, u16]` pairs, then a trailing `[u64, u16]` summary
+/// block. Field semantics are not yet decoded; the wire widths and order are
+/// fixed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RandomBoxPurchaseResponsePacket {
+    pub field0: i32,
+    pub field1: i32,
+    pub field2: u16,
+    pub list_a: Vec<(i32, i32)>,
+    pub list_b: Vec<(u64, u16)>,
+    pub summary: (u64, u16),
+}
+
+impl RandomBoxPurchaseResponsePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::RANDOM_BOX_PURCHASE);
+        writer.write_i32(self.field0);
+        writer.write_i32(self.field1);
+        writer.write_u16(self.field2);
+        writer.write_u8(clamp_u8_len(self.list_a.len()));
+        for (a, b) in &self.list_a {
+            writer.write_i32(*a);
+            writer.write_i32(*b);
+        }
+        writer.write_u8(clamp_u8_len(self.list_b.len()));
+        for (a, b) in &self.list_b {
+            writer.write_u64(*a);
+            writer.write_u16(*b);
+        }
+        let (summary_a, summary_b) = self.summary;
+        writer.write_u64(summary_a);
+        writer.write_u16(summary_b);
         writer.finalize()
     }
 }
@@ -1321,6 +1570,9 @@ pub struct HatchSpiritEvolutionResultPacket {
 }
 
 impl HatchSpiritEvolutionResultPacket {
+    /// Encode the item-to-digimon result: `[u32 digimon_id][i64 remaining_bits]`
+    /// followed by consumed-item blocks (`[u8 count][u32 item_id]`) terminated by
+    /// a zero count byte.
     pub fn encode(&self) -> Vec<u8> {
         let mut writer = PacketWriter::new(game::HATCH_SPIRIT_EVOLUTION);
         writer.write_u32(self.digimon_id);
@@ -1343,6 +1595,9 @@ pub struct SpiritCraftResultPacket {
 }
 
 impl SpiritCraftResultPacket {
+    /// Encode the digimon-to-item result: `[u8 deleted_slot][i64 remaining_bits]`
+    /// followed by a zero-terminated consumed-item block list and then a
+    /// zero-terminated gained-item block list (each block `[u8 count][u32 item_id]`).
     pub fn encode(&self) -> Vec<u8> {
         let mut writer = PacketWriter::new(game::SPIRIT_CRAFT);
         writer.write_u8(self.slot);
@@ -1978,11 +2233,11 @@ impl EncyclopediaLoadPacket {
             writer.write_i32(entry.digimon_evolution_id as i32);
             writer.write_u16(u16::from(entry.level));
             writer.write_u64(slot_opened);
-            writer.write_i16(0); // EnchantAT
-            writer.write_i16(0); // EnchantBL
-            writer.write_i16(0); // EnchantCT
-            writer.write_i16(0); // EnchantEV
-            writer.write_i16(0); // EnchantHP
+            writer.write_i16(entry.enchant_at);
+            writer.write_i16(entry.enchant_bl);
+            writer.write_i16(entry.enchant_ct);
+            writer.write_i16(entry.enchant_ev);
+            writer.write_i16(entry.enchant_hp);
             writer.write_i16(entry.size);
             // Reward "not allowed" flag = 1 when reward already received.
             writer.write_u8(if entry.reward_received { 1 } else { 0 });
@@ -2020,6 +2275,76 @@ impl EncyclopediaDeckBuffUsePacket {
         let mut writer = PacketWriter::new(game::ENCYCLOPEDIA_DECK_BUFF);
         writer.write_i32(self.deck_buff_hp);
         writer.write_i16(self.deck_buff_as);
+        writer.finalize()
+    }
+}
+
+/// `OtherTamerDetailInfo` response — custom local bridge for the modern DetailInfo family.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OtherTamerDetailInfoPacket {
+    pub valid: bool,
+    pub target_handler: u32,
+    pub tamer_name: String,
+    pub guild_name: String,
+    pub current_title: i32,
+    pub tamer_model: i32,
+    pub tamer_level: i32,
+    pub tamer_size: i32,
+    pub tamer_hp: i32,
+    pub tamer_ds: i32,
+    pub tamer_at: i32,
+    pub tamer_de: i32,
+    pub tamer_ms: i32,
+    pub partner_name: String,
+    pub partner_model: i32,
+    pub partner_type: i32,
+    pub partner_level: i32,
+    pub partner_size: i32,
+    pub partner_hp: i32,
+    pub partner_ds: i32,
+    pub partner_at: i32,
+    pub partner_de: i32,
+    pub partner_as: i32,
+    pub partner_ht: i32,
+    pub partner_ct: i32,
+    pub partner_bl: i32,
+    pub partner_ev: i32,
+    pub partner_clone_level: i32,
+    pub status: String,
+}
+
+impl OtherTamerDetailInfoPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::OTHER_TAMER_DETAIL_INFO_RESPONSE);
+        writer.write_u8(self.valid as u8);
+        writer.write_u32(self.target_handler);
+        writer.write_string(&self.tamer_name);
+        writer.write_string(&self.guild_name);
+        writer.write_i32(self.current_title);
+        writer.write_i32(self.tamer_model);
+        writer.write_i32(self.tamer_level);
+        writer.write_i32(self.tamer_size);
+        writer.write_i32(self.tamer_hp);
+        writer.write_i32(self.tamer_ds);
+        writer.write_i32(self.tamer_at);
+        writer.write_i32(self.tamer_de);
+        writer.write_i32(self.tamer_ms);
+        writer.write_string(&self.partner_name);
+        writer.write_i32(self.partner_model);
+        writer.write_i32(self.partner_type);
+        writer.write_i32(self.partner_level);
+        writer.write_i32(self.partner_size);
+        writer.write_i32(self.partner_hp);
+        writer.write_i32(self.partner_ds);
+        writer.write_i32(self.partner_at);
+        writer.write_i32(self.partner_de);
+        writer.write_i32(self.partner_as);
+        writer.write_i32(self.partner_ht);
+        writer.write_i32(self.partner_ct);
+        writer.write_i32(self.partner_bl);
+        writer.write_i32(self.partner_ev);
+        writer.write_i32(self.partner_clone_level);
+        writer.write_string(&self.status);
         writer.finalize()
     }
 }
@@ -3306,6 +3631,64 @@ fn clamp_u16_len(len: usize) -> u16 {
     len.min(u16::MAX as usize) as u16
 }
 
+/// Wire size of a reward detail node. The leading item fields are decoded; the
+/// remaining bytes are a reserved fixed-size block (stat/option blobs) carried
+/// verbatim and zero-filled when the server has nothing to populate.
+const COMBINE_REWARD_NODE_LEN: usize = 71;
+
+/// Read a `u2 count` followed by `count` material nodes `{u4 item_uid, u2 item_type, u2 count}`.
+fn read_combine_materials(reader: &mut PacketReader) -> Result<Vec<CombineItemRef>, ProtocolError> {
+    let count = reader.read_u16()? as usize;
+    let mut materials = Vec::with_capacity(count);
+    for _ in 0..count {
+        let item_uid = reader.read_u32()?;
+        let item_type = reader.read_u16()?;
+        let node_count = reader.read_u16()?;
+        materials.push(CombineItemRef {
+            item_uid,
+            item_type,
+            count: node_count,
+        });
+    }
+    Ok(materials)
+}
+
+/// Write a `u2 count` followed by the material/echo nodes `{u4 item_uid, u2 item_type, u2 count}`.
+fn write_combine_item_list(writer: &mut PacketWriter, items: &[CombineItemRef]) {
+    writer.write_u16(clamp_u16_len(items.len()));
+    for item in items {
+        writer.write_u32(item.item_uid);
+        writer.write_u16(item.item_type);
+        writer.write_u16(item.count);
+    }
+}
+
+/// Write the ceiling map block: `u2 count` followed by `{u1 tier, u1 value_a, u2 value_b}` entries.
+fn write_combine_ceiling(writer: &mut PacketWriter, entries: &[CombineCeilingEntry]) {
+    writer.write_u16(clamp_u16_len(entries.len()));
+    for entry in entries {
+        writer.write_u8(entry.tier);
+        writer.write_u8(entry.value_a);
+        writer.write_u16(entry.value_b);
+    }
+}
+
+/// Write the reward detail list: `u2 count` followed by fixed-size reward nodes.
+///
+/// Each reward detail node carries the decoded leading item fields
+/// `{n4 item_id, u2 amount, u1 grade}`; the remaining bytes of the fixed-size
+/// node are reserved and emitted as zeros so the wire length matches the node
+/// width the client expects.
+fn write_combine_reward_list(writer: &mut PacketWriter, rewards: &[DigiCombineReward]) {
+    writer.write_u16(clamp_u16_len(rewards.len()));
+    for reward in rewards {
+        writer.write_i32(reward.item_id);
+        writer.write_u16(reward.amount);
+        writer.write_u8(reward.grade);
+        writer.write_zeroes(COMBINE_REWARD_NODE_LEN - 7);
+    }
+}
+
 fn clamp_u8_len(len: usize) -> u8 {
     len.min(u8::MAX as usize) as u8
 }
@@ -3571,12 +3954,9 @@ impl TryFrom<RawPacket> for GameRequest {
                 Ok(Self::RemoveItem { slot, x, y, amount })
             }
             game::NPC_PURCHASE => {
-                // Verified against the modern client binary (sender at 0x1BF736,
-                // packet-build helpers newp=sub_623EA0 / push=sub_46FE0 /
-                // mark=sub_623D60 / endp=sub_623D00). On-wire layout:
+                // On-wire layout:
                 //   [u1 vip][u4 npc_id][u1 marker=0x38][n4 shop_slot][u2 count][u1 marker]
-                // The legacy client source omits the leading vip byte; the binary is
-                // authoritative, so we decode the vip byte first.
+                // The leading vip byte is decoded first; the trailing marker is optional.
                 let vip = reader.read_u8()?;
                 let npc_id = reader.read_i32()?;
                 let marker = reader.read_u8()?;
@@ -3595,7 +3975,6 @@ impl TryFrom<RawPacket> for GameRequest {
                 })
             }
             game::NPC_SELL => {
-                // Verified against the modern client binary (sender at 0x1C1A29).
                 // On-wire layout:
                 //   [u1 vip][u4 npc_id][u1 marker=0x38][u1 inven_slot][u2 count][u1 marker]
                 let vip = reader.read_u8()?;
@@ -3946,13 +4325,9 @@ impl TryFrom<RawPacket> for GameRequest {
                 Ok(Self::ConsignedShopRetrieve { item_slot })
             }
             game::CASHSHOP_BUY => {
-                // Verified against the modern client binary (SendBuyCashItem at
-                // 0xF6142). On-wire layout:
+                // On-wire layout:
                 //   [u1 item_count][n4 total_price][u8 order_id][n4 product_ids[count]]
-                // The shipped binary pushes order_id as a true 8-byte value
-                // (sub_46FE0 len=8). The legacy client source's `typedef uint16_t
-                // uint64` and the legacy C# server's ReadUShort() are both stale;
-                // the binary is authoritative.
+                // order_id is a true 8-byte value, so it is read as a u64.
                 let amount = reader.read_u8()?;
                 let total_price = reader.read_i32()?;
                 let order_id = reader.read_u64()?;
@@ -4015,7 +4390,16 @@ impl TryFrom<RawPacket> for GameRequest {
                 let card_code = reader.read_u16()?;
                 Ok(Self::SealSetLeader { card_code })
             }
-            game::SEAL_REMOVE_LEADER => Ok(Self::SealRemoveLeader),
+            game::SEAL_REMOVE_LEADER => {
+                if reader.remaining_len() == 0 {
+                    // The modern client reuses opcode 3234 with an empty payload
+                    // for EncyclopediaOpen, while SealMaster unset carries a u16.
+                    Ok(Self::EncyclopediaLoad)
+                } else {
+                    let _card_code = reader.read_u16()?;
+                    Ok(Self::SealRemoveLeader)
+                }
+            }
             game::SEAL_SET_FAVORITE => {
                 let card_code = reader.read_u16()?;
                 let bookmark = reader.read_u8()?;
@@ -4032,6 +4416,10 @@ impl TryFrom<RawPacket> for GameRequest {
             game::ENCYCLOPEDIA_DECK_BUFF => {
                 let deck_idx = reader.read_u32()?;
                 Ok(Self::EncyclopediaDeckBuff { deck_idx })
+            }
+            game::OTHER_TAMER_DETAIL_INFO_REQUEST => {
+                let target_handler = reader.read_u32()?;
+                Ok(Self::OtherTamerDetailInfo { target_handler })
             }
             game::ARENA_DAILY_POINTS => {
                 let _skip = reader.read_u16()?; // skip 2 bytes
@@ -4274,7 +4662,7 @@ impl TryFrom<RawPacket> for GameRequest {
             }
             game::HATCH_SPIRIT_EVOLUTION => {
                 let model_id = reader.read_i32()?;
-                let name = reader.read_string()?;
+                let name = reader.read_wide_string()?;
                 let npc_id = reader.read_i32()?;
                 Ok(Self::HatchSpiritEvolution {
                     model_id,
@@ -4283,13 +4671,56 @@ impl TryFrom<RawPacket> for GameRequest {
                 })
             }
             game::DIGI_SUMMON_PURCHASE => {
-                // Modern client `cCliGame::SendDigiSummonPurchase` (cCliGameShop.cpp):
-                //   [n4 ProductID][n4 TicketSlot]
                 let product_id = reader.read_i32()?;
                 let ticket_slot = reader.read_i32()?;
                 Ok(Self::DigiSummonPurchase {
                     product_id,
                     ticket_slot,
+                })
+            }
+            game::DIGI_COMBINE_SYNC => Ok(Self::DigiCombineSyncRequest),
+            game::DIGI_COMBINE => {
+                let ceiling_type = reader.read_u8()?;
+                let materials = read_combine_materials(&mut reader)?;
+                Ok(Self::DigiCombine {
+                    ceiling_type,
+                    materials,
+                })
+            }
+            game::DIGI_COMBINE_REWARD => {
+                let ceiling_type = reader.read_u8()?;
+                Ok(Self::DigiCombineRewardClaim { ceiling_type })
+            }
+            game::UNION_COMBINE_SYNC => Ok(Self::UnionCombineSyncRequest),
+            game::UNION_COMBINE => {
+                let ceiling_type = reader.read_u8()?;
+                let materials = read_combine_materials(&mut reader)?;
+                Ok(Self::UnionCombine {
+                    ceiling_type,
+                    materials,
+                })
+            }
+            game::UNION_COMBINE_REWARD => {
+                let ceiling_type = reader.read_u8()?;
+                Ok(Self::UnionCombineRewardClaim { ceiling_type })
+            }
+            game::RANDOM_BOX_LIST => {
+                let flag = reader.read_u8()?;
+                let index = reader.read_i32()?;
+                Ok(Self::RandomBoxList { flag, index })
+            }
+            game::RANDOM_BOX_PURCHASE => {
+                let flag = reader.read_u8()?;
+                let product_id = reader.read_i32()?;
+                let item_uid = reader.read_i32()?;
+                let count = reader.read_u16()?;
+                let state = reader.read_i32()?;
+                Ok(Self::RandomBoxPurchase {
+                    flag,
+                    product_id,
+                    item_uid,
+                    count,
+                    state,
                 })
             }
             game::LOAD_ACCOUNT_WAREHOUSE => Ok(Self::LoadAccountWarehouse),
@@ -4373,8 +4804,8 @@ mod tests {
     use super::*;
     use crate::reader::PacketReader;
     use odmo_types::{
-        DEFAULT_PARTNER_MODEL_ID, DEFAULT_START_MAP_ID, DEFAULT_TAMER_MODEL_ID, DigiSummonProduct,
-        DigiSummonReward,
+        CombineCeilingEntry, CombineItemRef, DEFAULT_PARTNER_MODEL_ID, DEFAULT_START_MAP_ID,
+        DEFAULT_TAMER_MODEL_ID, DigiCombineReward, DigiSummonProduct, DigiSummonReward,
     };
 
     #[test]
@@ -4436,6 +4867,8 @@ mod tests {
 
         let raw = PacketReader::from_frame(&packet).expect("frame should decode");
         assert_eq!(raw.packet_type, game::DIGI_SUMMON_SYNC_RESPONSE);
+        // [u8 result][u16 count] + one 14-byte product = 17 bytes.
+        assert_eq!(raw.payload.len(), 17);
         let mut reader = crate::PacketReader::new(raw.payload);
         assert_eq!(reader.read_u8().expect("result"), 0);
         assert_eq!(reader.read_u16().expect("count"), 1);
@@ -4443,6 +4876,23 @@ mod tests {
         assert_eq!(reader.read_i32().expect("rank"), 2);
         assert_eq!(reader.read_u16().expect("draw count"), 3);
         assert_eq!(reader.read_i32().expect("daily limit"), 4);
+    }
+
+    #[test]
+    fn digi_summon_sync_response_empty_list_round_trips() {
+        let packet = DigiSummonSyncResponsePacket {
+            result: 0,
+            products: Vec::new(),
+        }
+        .encode();
+
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::DIGI_SUMMON_SYNC_RESPONSE);
+        // [u8 result][u16 count] with no products = 3 bytes.
+        assert_eq!(raw.payload.len(), 3);
+        let mut reader = crate::PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), 0);
+        assert_eq!(reader.read_u16().expect("count"), 0);
     }
 
     #[test]
@@ -4468,6 +4918,10 @@ mod tests {
 
         let raw = PacketReader::from_frame(&packet).expect("frame should decode");
         assert_eq!(raw.packet_type, game::DIGI_SUMMON_PURCHASE_RESPONSE);
+        // [u8 result][i32 product][u16 reward_count] + one 8-byte reward
+        // + [u16 product_count] + one 14-byte product + [u16 detail_count]
+        // + [i64 trailer] = 41 bytes.
+        assert_eq!(raw.payload.len(), 41);
         let mut reader = crate::PacketReader::new(raw.payload);
         assert_eq!(reader.read_u8().expect("result"), 0);
         assert_eq!(reader.read_i32().expect("product"), 9001);
@@ -4477,6 +4931,209 @@ mod tests {
         assert_eq!(reader.read_u16().expect("reward grade"), 5);
         assert_eq!(reader.read_u16().expect("product count"), 1);
         assert_eq!(reader.read_i32().expect("synced product"), 9001);
+        assert_eq!(reader.read_i32().expect("synced rank"), 1);
+        assert_eq!(reader.read_u16().expect("synced draw count"), 1);
+        assert_eq!(reader.read_i32().expect("synced daily limit"), 0);
+        assert_eq!(reader.read_u16().expect("detail count"), 0);
+        assert_eq!(reader.read_u64().expect("trailer"), 0);
+    }
+
+    #[test]
+    fn digi_summon_purchase_response_empty_lists_round_trip() {
+        let packet = DigiSummonPurchaseResponsePacket {
+            result: 1,
+            product_id: 9001,
+            rewards: Vec::new(),
+            products: Vec::new(),
+        }
+        .encode();
+
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::DIGI_SUMMON_PURCHASE_RESPONSE);
+        // [u8 result][i32 product][u16 reward_count=0][u16 product_count=0]
+        // [u16 detail_count=0][i64 trailer] = 19 bytes.
+        assert_eq!(raw.payload.len(), 19);
+        let mut reader = crate::PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), 1);
+        assert_eq!(reader.read_i32().expect("product"), 9001);
+        assert_eq!(reader.read_u16().expect("reward count"), 0);
+        assert_eq!(reader.read_u16().expect("product count"), 0);
+        assert_eq!(reader.read_u16().expect("detail count"), 0);
+        assert_eq!(reader.read_u64().expect("trailer"), 0);
+    }
+
+    #[test]
+    fn random_box_list_request_round_trips() {
+        let mut payload = Vec::new();
+        payload.push(1_u8); // flag
+        payload.extend_from_slice(&(42_i32).to_le_bytes()); // index
+
+        let request = GameRequest::try_from(RawPacket {
+            length: 0,
+            packet_type: game::RANDOM_BOX_LIST,
+            payload,
+        })
+        .expect("request should parse");
+
+        assert_eq!(request, GameRequest::RandomBoxList { flag: 1, index: 42 });
+    }
+
+    #[test]
+    fn random_box_purchase_request_round_trips() {
+        let mut payload = Vec::new();
+        payload.push(1_u8); // flag
+        payload.extend_from_slice(&(9001_i32).to_le_bytes()); // product_id
+        payload.extend_from_slice(&(7777_i32).to_le_bytes()); // item_uid
+        payload.extend_from_slice(&(3_u16).to_le_bytes()); // count
+        payload.extend_from_slice(&(5_i32).to_le_bytes()); // state
+
+        let request = GameRequest::try_from(RawPacket {
+            length: 0,
+            packet_type: game::RANDOM_BOX_PURCHASE,
+            payload,
+        })
+        .expect("request should parse");
+
+        assert_eq!(
+            request,
+            GameRequest::RandomBoxPurchase {
+                flag: 1,
+                product_id: 9001,
+                item_uid: 7777,
+                count: 3,
+                state: 5,
+            }
+        );
+    }
+
+    #[test]
+    fn random_box_list_response_uses_fixed_wire_shape() {
+        let packet = RandomBoxListResponsePacket {
+            field0: 11,
+            entries: vec![RandomBoxListEntry {
+                a: 1,
+                b: 2,
+                c: 3,
+                d: 4,
+            }],
+        }
+        .encode();
+
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::RANDOM_BOX_LIST);
+        // [i32 field0][u8 count] + one 14-byte entry = 19 bytes.
+        assert_eq!(raw.payload.len(), 19);
+        let mut reader = crate::PacketReader::new(raw.payload);
+        assert_eq!(reader.read_i32().expect("field0"), 11);
+        assert_eq!(reader.read_u8().expect("count"), 1);
+        assert_eq!(reader.read_i32().expect("entry a"), 1);
+        assert_eq!(reader.read_i32().expect("entry b"), 2);
+        assert_eq!(reader.read_i32().expect("entry c"), 3);
+        assert_eq!(reader.read_u16().expect("entry d"), 4);
+    }
+
+    #[test]
+    fn random_box_list_response_empty_list_round_trips() {
+        let packet = RandomBoxListResponsePacket {
+            field0: 11,
+            entries: Vec::new(),
+        }
+        .encode();
+
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::RANDOM_BOX_LIST);
+        // [i32 field0][u8 count] with no entries = 5 bytes.
+        assert_eq!(raw.payload.len(), 5);
+        let mut reader = crate::PacketReader::new(raw.payload);
+        assert_eq!(reader.read_i32().expect("field0"), 11);
+        assert_eq!(reader.read_u8().expect("count"), 0);
+    }
+
+    #[test]
+    fn random_box_purchase_response_uses_fixed_wire_shape() {
+        let packet = RandomBoxPurchaseResponsePacket {
+            field0: 11,
+            field1: 22,
+            field2: 33,
+            list_a: vec![(1, 2)],
+            list_b: vec![(0x1122_3344_5566_7788, 9)],
+            summary: (0x99AA_BBCC_DDEE_FF00, 7),
+        }
+        .encode();
+
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::RANDOM_BOX_PURCHASE);
+        // [i32 field0][i32 field1][u16 field2][u8 count1] + one 8-byte pair
+        // + [u8 count2] + one 10-byte pair + [u64][u16] summary = 40 bytes.
+        assert_eq!(raw.payload.len(), 40);
+        let mut reader = crate::PacketReader::new(raw.payload);
+        assert_eq!(reader.read_i32().expect("field0"), 11);
+        assert_eq!(reader.read_i32().expect("field1"), 22);
+        assert_eq!(reader.read_u16().expect("field2"), 33);
+        assert_eq!(reader.read_u8().expect("list_a count"), 1);
+        assert_eq!(reader.read_i32().expect("list_a a"), 1);
+        assert_eq!(reader.read_i32().expect("list_a b"), 2);
+        assert_eq!(reader.read_u8().expect("list_b count"), 1);
+        assert_eq!(reader.read_u64().expect("list_b a"), 0x1122_3344_5566_7788);
+        assert_eq!(reader.read_u16().expect("list_b b"), 9);
+        assert_eq!(reader.read_u64().expect("summary a"), 0x99AA_BBCC_DDEE_FF00);
+        assert_eq!(reader.read_u16().expect("summary b"), 7);
+    }
+
+    #[test]
+    fn random_box_purchase_response_empty_lists_round_trip() {
+        let packet = RandomBoxPurchaseResponsePacket {
+            field0: 11,
+            field1: 22,
+            field2: 33,
+            list_a: Vec::new(),
+            list_b: Vec::new(),
+            summary: (0x99AA_BBCC_DDEE_FF00, 7),
+        }
+        .encode();
+
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::RANDOM_BOX_PURCHASE);
+        // [i32 field0][i32 field1][u16 field2][u8 count1=0][u8 count2=0]
+        // + [u64][u16] summary = 22 bytes.
+        assert_eq!(raw.payload.len(), 22);
+        let mut reader = crate::PacketReader::new(raw.payload);
+        assert_eq!(reader.read_i32().expect("field0"), 11);
+        assert_eq!(reader.read_i32().expect("field1"), 22);
+        assert_eq!(reader.read_u16().expect("field2"), 33);
+        assert_eq!(reader.read_u8().expect("list_a count"), 0);
+        assert_eq!(reader.read_u8().expect("list_b count"), 0);
+        assert_eq!(reader.read_u64().expect("summary a"), 0x99AA_BBCC_DDEE_FF00);
+        assert_eq!(reader.read_u16().expect("summary b"), 7);
+    }
+
+    #[test]
+    fn encyclopedia_open_request_reuses_3234_without_payload() {
+        let packet = PacketWriter::new(game::SEAL_REMOVE_LEADER).finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert!(matches!(request, GameRequest::EncyclopediaLoad));
+    }
+
+    #[test]
+    fn seal_remove_leader_request_uses_3234_with_u16_payload() {
+        let mut writer = PacketWriter::new(game::SEAL_REMOVE_LEADER);
+        writer.write_u16(1);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert!(matches!(request, GameRequest::SealRemoveLeader));
+    }
+
+    #[test]
+    fn encyclopedia_open_request_still_accepts_3235_route() {
+        let packet = PacketWriter::new(game::ENCYCLOPEDIA_LOAD).finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert!(matches!(request, GameRequest::EncyclopediaLoad));
     }
 
     #[test]
@@ -4911,6 +5568,79 @@ mod tests {
     }
 
     #[test]
+    fn other_tamer_detail_info_packet_uses_i32_levels_and_clone_level() {
+        let packet = OtherTamerDetailInfoPacket {
+            valid: true,
+            target_handler: 33_480,
+            tamer_name: "SmokeTamer".to_string(),
+            guild_name: "Alpha".to_string(),
+            current_title: 12,
+            tamer_model: 31_001,
+            tamer_level: 70,
+            tamer_size: 130,
+            tamer_hp: 1200,
+            tamer_ds: 800,
+            tamer_at: 155,
+            tamer_de: 90,
+            tamer_ms: 410,
+            partner_name: "Agumon".to_string(),
+            partner_model: 51_001,
+            partner_type: 3,
+            partner_level: 65,
+            partner_size: 125,
+            partner_hp: 2200,
+            partner_ds: 1600,
+            partner_at: 320,
+            partner_de: 210,
+            partner_as: 430,
+            partner_ht: 17,
+            partner_ct: 25,
+            partner_bl: 9,
+            partner_ev: 12,
+            partner_clone_level: 8,
+            status: "Detail info synchronized.".to_string(),
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::OTHER_TAMER_DETAIL_INFO_RESPONSE);
+
+        let mut reader = PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("valid"), 1);
+        assert_eq!(reader.read_u32().expect("handler"), 33_480);
+        assert_eq!(reader.read_string().expect("tamer_name"), "SmokeTamer");
+        assert_eq!(reader.read_string().expect("guild_name"), "Alpha");
+        assert_eq!(reader.read_i32().expect("current_title"), 12);
+        assert_eq!(reader.read_i32().expect("tamer_model"), 31_001);
+        assert_eq!(reader.read_i32().expect("tamer_level"), 70);
+        assert_eq!(reader.read_i32().expect("tamer_size"), 130);
+        assert_eq!(reader.read_i32().expect("tamer_hp"), 1200);
+        assert_eq!(reader.read_i32().expect("tamer_ds"), 800);
+        assert_eq!(reader.read_i32().expect("tamer_at"), 155);
+        assert_eq!(reader.read_i32().expect("tamer_de"), 90);
+        assert_eq!(reader.read_i32().expect("tamer_ms"), 410);
+        assert_eq!(reader.read_string().expect("partner_name"), "Agumon");
+        assert_eq!(reader.read_i32().expect("partner_model"), 51_001);
+        assert_eq!(reader.read_i32().expect("partner_type"), 3);
+        assert_eq!(reader.read_i32().expect("partner_level"), 65);
+        assert_eq!(reader.read_i32().expect("partner_size"), 125);
+        assert_eq!(reader.read_i32().expect("partner_hp"), 2200);
+        assert_eq!(reader.read_i32().expect("partner_ds"), 1600);
+        assert_eq!(reader.read_i32().expect("partner_at"), 320);
+        assert_eq!(reader.read_i32().expect("partner_de"), 210);
+        assert_eq!(reader.read_i32().expect("partner_as"), 430);
+        assert_eq!(reader.read_i32().expect("partner_ht"), 17);
+        assert_eq!(reader.read_i32().expect("partner_ct"), 25);
+        assert_eq!(reader.read_i32().expect("partner_bl"), 9);
+        assert_eq!(reader.read_i32().expect("partner_ev"), 12);
+        assert_eq!(reader.read_i32().expect("partner_clone_level"), 8);
+        assert_eq!(
+            reader.read_string().expect("status"),
+            "Detail info synchronized."
+        );
+        assert_eq!(reader.remaining_len(), 0);
+    }
+
+    #[test]
     fn party_member_map_change_packet_uses_expected_opcode() {
         let packet = PartyMemberMapChangePacket {
             member_slot: 1,
@@ -5036,6 +5766,8 @@ mod tests {
         .encode();
         let raw = PacketReader::from_frame(&packet).expect("frame should decode");
         assert_eq!(raw.packet_type, game::HATCH_SPIRIT_EVOLUTION);
+        // [u32 id][i64 bits] + two 5-byte consumed blocks + [u8 0] = 23 bytes.
+        assert_eq!(raw.payload.len(), 23);
         let mut payload = PacketReader::new(raw.payload);
         assert_eq!(payload.read_u32().expect("digimon id"), 31_004);
         assert_eq!(payload.read_u64().expect("bits"), 450);
@@ -5043,6 +5775,44 @@ mod tests {
         assert_eq!(payload.read_u32().expect("item1"), 81_001);
         assert_eq!(payload.read_u8().expect("count2"), 1);
         assert_eq!(payload.read_u32().expect("item2"), 81_002);
+        assert_eq!(payload.read_u8().expect("end"), 0);
+    }
+
+    #[test]
+    fn hatch_spirit_evolution_result_empty_list_round_trips() {
+        let packet = HatchSpiritEvolutionResultPacket {
+            digimon_id: 31_004,
+            remaining_bits: 450,
+            consumed_items: Vec::new(),
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::HATCH_SPIRIT_EVOLUTION);
+        // [u32 id][i64 bits] + [u8 0] terminator = 13 bytes.
+        assert_eq!(raw.payload.len(), 13);
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u32().expect("digimon id"), 31_004);
+        assert_eq!(payload.read_u64().expect("bits"), 450);
+        assert_eq!(payload.read_u8().expect("end"), 0);
+    }
+
+    #[test]
+    fn hatch_spirit_evolution_result_single_entry_round_trips() {
+        let packet = HatchSpiritEvolutionResultPacket {
+            digimon_id: 31_004,
+            remaining_bits: 450,
+            consumed_items: vec![(2, 81_001)],
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::HATCH_SPIRIT_EVOLUTION);
+        // [u32 id][i64 bits] + one 5-byte consumed block + [u8 0] = 18 bytes.
+        assert_eq!(raw.payload.len(), 18);
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u32().expect("digimon id"), 31_004);
+        assert_eq!(payload.read_u64().expect("bits"), 450);
+        assert_eq!(payload.read_u8().expect("count1"), 2);
+        assert_eq!(payload.read_u32().expect("item1"), 81_001);
         assert_eq!(payload.read_u8().expect("end"), 0);
     }
 
@@ -5057,6 +5827,9 @@ mod tests {
         .encode();
         let raw = PacketReader::from_frame(&packet).expect("frame should decode");
         assert_eq!(raw.packet_type, game::SPIRIT_CRAFT);
+        // [u8 slot][i64 bits] + one 5-byte consumed block + [u8 0]
+        // + one 5-byte gained block + [u8 0] = 21 bytes.
+        assert_eq!(raw.payload.len(), 21);
         let mut payload = PacketReader::new(raw.payload);
         assert_eq!(payload.read_u8().expect("slot"), 2);
         assert_eq!(payload.read_u64().expect("bits"), 250);
@@ -5066,6 +5839,178 @@ mod tests {
         assert_eq!(payload.read_u8().expect("gained count"), 1);
         assert_eq!(payload.read_u32().expect("gained item"), 81_003);
         assert_eq!(payload.read_u8().expect("gained end"), 0);
+    }
+
+    #[test]
+    fn spirit_craft_result_empty_lists_round_trip() {
+        let packet = SpiritCraftResultPacket {
+            slot: 2,
+            remaining_bits: 250,
+            consumed_items: Vec::new(),
+            gained_items: Vec::new(),
+        }
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::SPIRIT_CRAFT);
+        // [u8 slot][i64 bits] + [u8 0] consumed terminator + [u8 0] gained
+        // terminator = 11 bytes.
+        assert_eq!(raw.payload.len(), 11);
+        let mut payload = PacketReader::new(raw.payload);
+        assert_eq!(payload.read_u8().expect("slot"), 2);
+        assert_eq!(payload.read_u64().expect("bits"), 250);
+        assert_eq!(payload.read_u8().expect("consumed end"), 0);
+        assert_eq!(payload.read_u8().expect("gained end"), 0);
+    }
+
+    #[test]
+    fn combine_sync_response_digi_empty_ceiling_round_trips() {
+        let packet = CombineSyncResponsePacket::digi(0, Vec::new()).encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::DIGI_COMBINE_SYNC);
+        // [u8 result][u16 count=0] = 3 bytes.
+        assert_eq!(raw.payload.len(), 3);
+        let mut reader = PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), 0);
+        assert_eq!(reader.read_u16().expect("ceiling count"), 0);
+    }
+
+    #[test]
+    fn combine_sync_response_digi_single_ceiling_round_trips() {
+        let packet = CombineSyncResponsePacket::digi(
+            1,
+            vec![CombineCeilingEntry {
+                tier: 3,
+                value_a: 7,
+                value_b: 0x1234,
+            }],
+        )
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::DIGI_COMBINE_SYNC);
+        // [u8 result][u16 count] + one 4-byte ceiling entry = 7 bytes.
+        assert_eq!(raw.payload.len(), 7);
+        let mut reader = PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), 1);
+        assert_eq!(reader.read_u16().expect("ceiling count"), 1);
+        assert_eq!(reader.read_u8().expect("tier"), 3);
+        assert_eq!(reader.read_u8().expect("value_a"), 7);
+        assert_eq!(reader.read_u16().expect("value_b"), 0x1234);
+    }
+
+    #[test]
+    fn combine_sync_response_union_uses_union_opcode() {
+        let packet = CombineSyncResponsePacket::union(
+            0,
+            vec![CombineCeilingEntry {
+                tier: 5,
+                value_a: 9,
+                value_b: 0x00AB,
+            }],
+        )
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::UNION_COMBINE_SYNC);
+        assert_eq!(raw.payload.len(), 7);
+        let mut reader = PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), 0);
+        assert_eq!(reader.read_u16().expect("ceiling count"), 1);
+        assert_eq!(reader.read_u8().expect("tier"), 5);
+        assert_eq!(reader.read_u8().expect("value_a"), 9);
+        assert_eq!(reader.read_u16().expect("value_b"), 0x00AB);
+    }
+
+    #[test]
+    fn combine_result_response_digi_result_empty_lists_round_trip() {
+        let packet =
+            CombineResultResponsePacket::digi_result(0, Vec::new(), Vec::new(), Vec::new())
+                .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::DIGI_COMBINE);
+        // [u8 result][u16 ceiling=0][u16 materials=0][u16 rewards=0] = 7 bytes.
+        assert_eq!(raw.payload.len(), 7);
+        let mut reader = PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), 0);
+        assert_eq!(reader.read_u16().expect("ceiling count"), 0);
+        assert_eq!(reader.read_u16().expect("material count"), 0);
+        assert_eq!(reader.read_u16().expect("reward count"), 0);
+    }
+
+    #[test]
+    fn combine_result_response_digi_result_single_entries_round_trip() {
+        let packet = CombineResultResponsePacket::digi_result(
+            1,
+            vec![CombineCeilingEntry {
+                tier: 2,
+                value_a: 4,
+                value_b: 0x0102,
+            }],
+            vec![CombineItemRef {
+                item_uid: 0xAABB_CCDD,
+                item_type: 0x0011,
+                count: 0x0022,
+            }],
+            vec![DigiCombineReward {
+                item_id: 5101,
+                amount: 3,
+                grade: 6,
+            }],
+        )
+        .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::DIGI_COMBINE);
+        // [u8 result] + [u16 count + 4B ceiling] + [u16 count + 8B material]
+        // + [u16 count + 71B reward node] = 1 + 6 + 10 + 73 = 90 bytes.
+        assert_eq!(raw.payload.len(), 90);
+        let mut reader = PacketReader::new(raw.payload);
+        assert_eq!(reader.read_u8().expect("result"), 1);
+        assert_eq!(reader.read_u16().expect("ceiling count"), 1);
+        assert_eq!(reader.read_u8().expect("tier"), 2);
+        assert_eq!(reader.read_u8().expect("value_a"), 4);
+        assert_eq!(reader.read_u16().expect("value_b"), 0x0102);
+        assert_eq!(reader.read_u16().expect("material count"), 1);
+        assert_eq!(reader.read_u32().expect("item_uid"), 0xAABB_CCDD);
+        assert_eq!(reader.read_u16().expect("item_type"), 0x0011);
+        assert_eq!(reader.read_u16().expect("material count field"), 0x0022);
+        assert_eq!(reader.read_u16().expect("reward count"), 1);
+        // Reward node: leading 7 decoded bytes, then 64 reserved zero bytes.
+        assert_eq!(reader.read_i32().expect("reward item id"), 5101);
+        assert_eq!(reader.read_u16().expect("reward amount"), 3);
+        assert_eq!(reader.read_u8().expect("reward grade"), 6);
+        let reserved = reader.read_bytes(64).expect("reserved reward block");
+        assert!(
+            reserved.iter().all(|&b| b == 0),
+            "reserved reward bytes must be zero"
+        );
+    }
+
+    #[test]
+    fn combine_result_response_digi_reward_uses_reward_opcode() {
+        let packet =
+            CombineResultResponsePacket::digi_reward(0, Vec::new(), Vec::new(), Vec::new())
+                .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::DIGI_COMBINE_REWARD);
+        assert_eq!(raw.payload.len(), 7);
+    }
+
+    #[test]
+    fn combine_result_response_union_result_uses_union_opcode() {
+        let packet =
+            CombineResultResponsePacket::union_result(0, Vec::new(), Vec::new(), Vec::new())
+                .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::UNION_COMBINE);
+        assert_eq!(raw.payload.len(), 7);
+    }
+
+    #[test]
+    fn combine_result_response_union_reward_uses_union_opcode() {
+        let packet =
+            CombineResultResponsePacket::union_reward(0, Vec::new(), Vec::new(), Vec::new())
+                .encode();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        assert_eq!(raw.packet_type, game::UNION_COMBINE_REWARD);
+        assert_eq!(raw.payload.len(), 7);
     }
 
     #[test]
@@ -5178,6 +6123,25 @@ mod tests {
             GameRequest::SpiritCraft {
                 slot: 2,
                 validation: "4321".to_string(),
+                npc_id: 91001,
+            }
+        );
+    }
+
+    #[test]
+    fn hatch_spirit_evolution_request_decodes_wide_string_name() {
+        let mut writer = PacketWriter::new(game::HATCH_SPIRIT_EVOLUTION);
+        writer.write_i32(31_004);
+        writer.write_wide_string("Agumon");
+        writer.write_i32(91001);
+        let packet = writer.finalize();
+        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+        let request = GameRequest::try_from(raw).expect("request should decode");
+        assert_eq!(
+            request,
+            GameRequest::HatchSpiritEvolution {
+                model_id: 31_004,
+                name: "Agumon".to_string(),
                 npc_id: 91001,
             }
         );
@@ -6038,8 +7002,16 @@ mod sync_1006_exploration {
             x: 15_000 + seed as i32,
             y: 10_000 + seed as i32,
             level: (1 + seed % 99) as u8,
-            general_handler: if seed % 2 == 0 { 0 } else { 11_000 + seed },
-            partner_handler: if seed % 2 == 0 { 0 } else { 21_000 + seed },
+            general_handler: if seed.is_multiple_of(2) {
+                0
+            } else {
+                11_000 + seed
+            },
+            partner_handler: if seed.is_multiple_of(2) {
+                0
+            } else {
+                21_000 + seed
+            },
             partner_current_type: 31_001,
             ..CharacterSummary::default()
         }
@@ -6048,7 +7020,11 @@ mod sync_1006_exploration {
     fn mob_fixture(seed: u32) -> MobSummary {
         MobSummary {
             id: 900 + seed as u64,
-            handler: if seed % 2 == 0 { 0 } else { 44_000 + seed },
+            handler: if seed.is_multiple_of(2) {
+                0
+            } else {
+                44_000 + seed
+            },
             type_id: 51_001 + seed as i32,
             x: 15_000 + seed as i32,
             y: 10_000 + seed as i32,
@@ -6065,13 +7041,21 @@ mod sync_1006_exploration {
     fn drop_fixture(seed: u32) -> DropSummary {
         DropSummary {
             id: 990 + seed as u64,
-            handler: if seed % 2 == 0 { 0 } else { 49_000 + seed },
+            handler: if seed.is_multiple_of(2) {
+                0
+            } else {
+                49_000 + seed
+            },
             item_id: 20_000 + seed as i32,
             x: 15_010 + seed as i32,
             y: 10_020 + seed as i32,
             owner_id: seed as u64,
-            owner_handler: if seed % 3 == 0 { 0 } else { 60_000 + seed },
-            no_owner: seed % 2 == 0,
+            owner_handler: if seed.is_multiple_of(3) {
+                0
+            } else {
+                60_000 + seed
+            },
+            no_owner: seed.is_multiple_of(2),
             ..DropSummary::default()
         }
     }

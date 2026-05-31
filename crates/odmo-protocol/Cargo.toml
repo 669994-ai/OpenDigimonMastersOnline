@@ -9,3 +9,6 @@ authors.workspace = true
 bytes.workspace = true
 thiserror.workspace = true
 odmo-types = { path = "../odmo-types" }
+
+[dev-dependencies]
+proptest.workspace = true

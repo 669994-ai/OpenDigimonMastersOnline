@@ -3,8 +3,8 @@ use odmo_application::character::{CharacterAccountRepository, CharacterRepositor
 use odmo_types::{
     Account, AccountId, ActiveBuffSnapshot, AttendanceStatus, ChannelAvailability,
     CharacterSummary, DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DailyRewardStatus,
-    GuildSnapshot, InventorySnapshot, PartnerSlotSnapshot, RelationEntry, SealListSnapshot,
-    XaiSnapshot,
+    EncyclopediaSnapshot, GuildSnapshot, InventorySnapshot, PartnerSlotSnapshot, RelationEntry,
+    SealListSnapshot, XaiSnapshot,
 };
 
 use super::PgRepository;
@@ -55,6 +55,8 @@ pub(crate) struct CharacterDb {
     pub attendance: serde_json::Value,
     pub available_channels: serde_json::Value,
     pub partner_slots: serde_json::Value,
+    pub encyclopedia: serde_json::Value,
+    pub deck_buff_id: i32,
     pub server_experience: i32,
     pub premium: i32,
     pub silk: i32,
@@ -71,7 +73,8 @@ const SELECT_COLS: &str = "\
     seal_list, guild_snapshot, xai_snapshot, active_buffs, \
     friends, foes, friended_character_ids, map_regions, \
     equipment, digivice, daily_reward, attendance, partner_slots, \
-    available_channels, server_experience, premium, silk, membership_seconds";
+    available_channels, encyclopedia, deck_buff_id, \
+    server_experience, premium, silk, membership_seconds";
 
 pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
     let inventory: InventorySnapshot = serde_json::from_value(row.inventory).unwrap_or_default();
@@ -102,6 +105,8 @@ pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
     let daily_reward: DailyRewardStatus =
         serde_json::from_value(row.daily_reward).unwrap_or_default();
     let attendance: AttendanceStatus = serde_json::from_value(row.attendance).unwrap_or_default();
+    let encyclopedia: EncyclopediaSnapshot =
+        serde_json::from_value(row.encyclopedia).unwrap_or_default();
     let mut partner_slots: Vec<PartnerSlotSnapshot> =
         serde_json::from_value(row.partner_slots).unwrap_or_default();
     let available_channels: Vec<ChannelAvailability> =
@@ -150,7 +155,7 @@ pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
         current_title: 0,
         map_region,
         archive_slots: 7,
-        deck_buff_id: 0,
+        deck_buff_id: row.deck_buff_id,
         equipment,
         digivice,
         shop_name: String::new(),
@@ -212,6 +217,8 @@ pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
         partner_clone_ct_level: 0,
         partner_clone_ev_level: 0,
         partner_clone_hp_level: 0,
+        encyclopedia,
+        active_deck_buff: row.deck_buff_id,
         ..CharacterSummary::default()
     };
 
@@ -380,6 +387,7 @@ impl CharacterRepository for PgRepository {
             let default_account_warehouse = serde_json::json!({"bits": 0, "size": 14, "items": []});
             let default_seals = serde_json::json!({"seal_leader_id": 0, "seals": []});
             let default_channels = serde_json::json!([{"channel": 0, "load": 1}]);
+            let default_encyclopedia = serde_json::json!({"entries": []});
             let default_partner_slots = serde_json::json!([{
                 "slot": 1, "digimon_type": partner_model, "model": partner_model,
                 "level": 1, "name": partner_name, "size": 12000, "hatch_grade": 3,
@@ -400,8 +408,8 @@ impl CharacterRepository for PgRepository {
                  general_handler, partner_handler, \
                  partner_name, partner_model, bits, xgauge, xcrystals, \
                  inventory, warehouse, extra_inventory, account_warehouse, \
-                 seal_list, available_channels, partner_slots) \
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)",
+                 seal_list, available_channels, partner_slots, encyclopedia, deck_buff_id) \
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)",
             )
             .bind(account_id as i64)
             .bind(slot as i16)
@@ -430,6 +438,8 @@ impl CharacterRepository for PgRepository {
             .bind(&default_seals)
             .bind(&default_channels)
             .bind(&default_partner_slots)
+            .bind(&default_encyclopedia)
+            .bind(0i32)
             .execute(&pool)
             .await
             .map_err(|e| anyhow::anyhow!("create_character: {e}"))?;
@@ -715,6 +725,35 @@ impl CharacterRepository for PgRepository {
             .execute(&pool)
             .await?;
             Ok::<(), anyhow::Error>(())
+        })
+    }
+
+    fn update_encyclopedia(
+        &self,
+        character_id: u64,
+        encyclopedia: odmo_types::EncyclopediaSnapshot,
+    ) -> anyhow::Result<()> {
+        let encyclopedia_json = serde_json::to_value(&encyclopedia)?;
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            sqlx::query("UPDATE characters SET encyclopedia = $1 WHERE id = $2")
+                .bind(&encyclopedia_json)
+                .bind(character_id as i64)
+                .execute(&pool)
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn update_deck_buff(&self, character_id: u64, deck_buff_id: i32) -> anyhow::Result<()> {
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            sqlx::query("UPDATE characters SET deck_buff_id = $1 WHERE id = $2")
+                .bind(deck_buff_id)
+                .bind(character_id as i64)
+                .execute(&pool)
+                .await?;
+            Ok(())
         })
     }
 }

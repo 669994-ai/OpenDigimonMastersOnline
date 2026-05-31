@@ -22,6 +22,7 @@ jobs:
           embed-author-name: "Tenshimaru"
           embed-author-icon-url: "https://avatars.githubusercontent.com/u/61519926?v=4"
           embed-thumbnail-url: "https://avatars.githubusercontent.com/u/61519926?v=4"
+          embed-image-url: "https://raw.githubusercontent.com/Tenshimaru/OpenDigimonMastersOnline/main/img/ODMO.png"
           embed-footer-text: "Open Digimon Masters Online"
           embed-footer-icon-url: "https://odmo.dev/img/ODMO%20Icon.png"
           embed-footer-timestamp: "true"

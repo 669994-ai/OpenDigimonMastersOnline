@@ -578,6 +578,12 @@ pub struct CharacterSessionFactory {
     next_seed: std::sync::atomic::AtomicI16,
 }
 
+impl Default for CharacterSessionFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CharacterSessionFactory {
     pub fn new() -> Self {
         Self {

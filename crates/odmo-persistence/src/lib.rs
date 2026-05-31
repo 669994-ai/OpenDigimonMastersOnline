@@ -13,17 +13,20 @@ use odmo_application::{
     account::AccountRepository,
     character::{CharacterAccountRepository, CharacterRepository},
     game::{
-        DigiSummonRepository, DropCollectionResult, ExtraEvolutionRepository, GameRepository,
-        MapDropRepository, MapMobRepository, NpcShopDefinition, NpcShopItem, NpcShopRepository,
-        PortalDefinition, PortalRepository,
+        DigiCombineRepository, DigiSummonRepository, DropCollectionResult,
+        ExtraEvolutionRepository, GameRepository, MapDropRepository, MapMobRepository,
+        NpcShopDefinition, NpcShopItem, NpcShopRepository, PortalDefinition, PortalRepository,
+        RandomBoxRepository, UnionCombineRepository,
     },
 };
 use odmo_types::{
-    AccessLevel, Account, AccountId, AccountSuspension, CharacterSummary,
+    AccessLevel, Account, AccountId, AccountSuspension, CharacterSummary, CombineCeilingEntry,
     DEFAULT_GM_PARTNER_MODEL_ID, DEFAULT_GM_TAMER_MODEL_ID, DEFAULT_PARTNER_MODEL_ID,
     DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID,
-    DigiSummonProduct, DigiSummonReward, DigiSummonTicket, DropSummary, ExtraEvolutionNpc,
-    ItemRecord, MobSummary, PartnerSlotSnapshot, ServerDescriptor,
+    DigiCombineCatalog, DigiCombineCeil, DigiCombineGroup, DigiCombineItem, DigiCombineRank,
+    DigiCombineReward, DigiSummonProduct, DigiSummonReward, DigiSummonTicket, DropSummary,
+    ExtraEvolutionNpc, ItemRecord, MobSummary, PartnerSlotSnapshot, RandomBoxReward,
+    ServerDescriptor, UnionCombineCatalog,
 };
 use serde::{Deserialize, Serialize};
 
@@ -1047,6 +1050,27 @@ impl ExtraEvolutionRepository for JsonRepository {
     }
 }
 
+impl DigiCombineRepository for JsonRepository {
+    fn digi_combine_catalog(&self) -> anyhow::Result<DigiCombineCatalog> {
+        let state = self.state.read().expect("repository poisoned");
+        Ok(state.digi_combine_catalog.clone())
+    }
+}
+
+impl UnionCombineRepository for JsonRepository {
+    fn union_combine_catalog(&self) -> anyhow::Result<UnionCombineCatalog> {
+        let state = self.state.read().expect("repository poisoned");
+        Ok(state.union_combine_catalog.clone())
+    }
+}
+
+impl RandomBoxRepository for JsonRepository {
+    fn random_box_rewards(&self) -> anyhow::Result<Vec<RandomBoxReward>> {
+        let state = self.state.read().expect("repository poisoned");
+        Ok(state.random_box_rewards.clone())
+    }
+}
+
 pub(crate) fn get_npc_shops() -> Vec<NpcShopDefinition> {
     vec![
         NpcShopDefinition {
@@ -1104,6 +1128,9 @@ struct WorldSnapshot {
     drops_by_map: HashMap<String, Vec<DropSummary>>,
     digi_summon_products: Vec<DigiSummonProduct>,
     extra_evolution_npcs: Vec<ExtraEvolutionNpc>,
+    digi_combine_catalog: DigiCombineCatalog,
+    union_combine_catalog: UnionCombineCatalog,
+    random_box_rewards: Vec<RandomBoxReward>,
     resource_hash_hex: Option<String>,
 }
 
@@ -1429,8 +1456,76 @@ impl WorldSnapshot {
                     },
                 ],
             }],
+            digi_combine_catalog: demo_combine_catalog(),
+            union_combine_catalog: demo_combine_catalog(),
+            random_box_rewards: vec![
+                RandomBoxReward {
+                    item_id: 5201,
+                    amount: 1,
+                    weight: 70,
+                },
+                RandomBoxReward {
+                    item_id: 5202,
+                    amount: 1,
+                    weight: 25,
+                },
+                RandomBoxReward {
+                    item_id: 5203,
+                    amount: 2,
+                    weight: 5,
+                },
+            ],
             resource_hash_hex: Some("0123456789ABCDEF".to_string()),
         }
+    }
+}
+
+/// Minimal non-empty combine catalog shared by the Digi Combine and Union
+/// Combine demo seeds, which use byte-identical node layouts.
+fn demo_combine_catalog() -> DigiCombineCatalog {
+    DigiCombineCatalog {
+        rank_rows: vec![
+            DigiCombineRank {
+                ceiling_type: 1,
+                weight: 80,
+                rewards: vec![DigiCombineReward {
+                    item_id: 5101,
+                    amount: 1,
+                    grade: 1,
+                }],
+            },
+            DigiCombineRank {
+                ceiling_type: 1,
+                weight: 20,
+                rewards: vec![DigiCombineReward {
+                    item_id: 5102,
+                    amount: 1,
+                    grade: 2,
+                }],
+            },
+        ],
+        item_list: vec![
+            DigiCombineItem {
+                item_id: 81001,
+                group_id: 1,
+            },
+            DigiCombineItem {
+                item_id: 81002,
+                group_id: 1,
+            },
+        ],
+        item_groups: vec![DigiCombineGroup {
+            group_id: 1,
+            members: vec![81001, 81002],
+        }],
+        ceil_groups: vec![DigiCombineCeil {
+            ceiling_type: 1,
+            entries: vec![CombineCeilingEntry {
+                tier: 1,
+                value_a: 1,
+                value_b: 100,
+            }],
+        }],
     }
 }
 
@@ -1455,12 +1550,10 @@ fn normalize_legacy_snapshot(snapshot: &mut WorldSnapshot) -> bool {
         }
     }
 
-    if !snapshot
-        .mobs_by_map
-        .contains_key(&map_key(DEFAULT_START_MAP_ID, 0))
+    if let std::collections::hash_map::Entry::Vacant(e) =
+        snapshot.mobs_by_map.entry(map_key(DEFAULT_START_MAP_ID, 0))
     {
-        snapshot.mobs_by_map.insert(
-            map_key(DEFAULT_START_MAP_ID, 0),
+        e.insert(
             WorldSnapshot::demo()
                 .mobs_by_map
                 .remove(&map_key(DEFAULT_START_MAP_ID, 0))
@@ -1469,12 +1562,11 @@ fn normalize_legacy_snapshot(snapshot: &mut WorldSnapshot) -> bool {
         changed = true;
     }
 
-    if !snapshot
+    if let std::collections::hash_map::Entry::Vacant(e) = snapshot
         .drops_by_map
-        .contains_key(&map_key(DEFAULT_START_MAP_ID, 0))
+        .entry(map_key(DEFAULT_START_MAP_ID, 0))
     {
-        snapshot.drops_by_map.insert(
-            map_key(DEFAULT_START_MAP_ID, 0),
+        e.insert(
             WorldSnapshot::demo()
                 .drops_by_map
                 .remove(&map_key(DEFAULT_START_MAP_ID, 0))
@@ -1516,7 +1608,7 @@ fn normalize_legacy_character(character: &mut CharacterSummary, fallback_model: 
         changed = true;
     }
 
-    if matches!(character.model, 1001 | 1002 | 1003) || character.model < 80_000 {
+    if matches!(character.model, 1001..=1003) || character.model < 80_000 {
         character.model = fallback_model;
         changed = true;
     }

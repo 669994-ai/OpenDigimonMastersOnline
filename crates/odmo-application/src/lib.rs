@@ -106,8 +106,8 @@ impl OnlineMapState {
         account_id: u64,
     ) -> Option<odmo_types::GameSessionTicket> {
         self.game_session_tickets
-            .remove(&account_id)
-            .map(|(_, v)| v)
+            .get(&account_id)
+            .map(|entry| entry.value().clone())
     }
 }
 

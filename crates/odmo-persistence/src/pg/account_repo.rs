@@ -8,7 +8,7 @@ impl AccountRepository for PgRepository {
         let pool = self.pool().clone();
         let username = username.to_string();
         self.block_on(async move {
-            let row: Option<(i64, String, String, String, i16, Option<String>, Option<i32>, Option<String>)> =
+            let row: Option<AccountRow> =
                 sqlx::query_as(
                     "SELECT id, username, password_hash, email, access_level, secondary_password, suspension_remaining_seconds, suspension_reason FROM accounts WHERE username = $1",
                 )
@@ -23,7 +23,7 @@ impl AccountRepository for PgRepository {
     fn account_by_id(&self, account_id: odmo_types::AccountId) -> anyhow::Result<Option<Account>> {
         let pool = self.pool().clone();
         self.block_on(async move {
-            let row: Option<(i64, String, String, String, i16, Option<String>, Option<i32>, Option<String>)> =
+            let row: Option<AccountRow> =
                 sqlx::query_as(
                     "SELECT id, username, password_hash, email, access_level, secondary_password, suspension_remaining_seconds, suspension_reason FROM accounts WHERE id = $1",
                 )

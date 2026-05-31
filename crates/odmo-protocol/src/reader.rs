@@ -142,6 +142,18 @@ impl PacketReader {
         Ok(String::from_utf8_lossy(&bytes).trim().to_string())
     }
 
+    /// Read a length-prefixed UTF-16LE string: `[u8 code-unit count][units...][u16 0]`.
+    /// The wide analogue of `read_string`; the count is in UTF-16 code units.
+    pub fn read_wide_string(&mut self) -> Result<String, ProtocolError> {
+        let len = self.read_u8()? as usize;
+        let mut units = Vec::with_capacity(len);
+        for _ in 0..len {
+            units.push(self.read_u16()?);
+        }
+        let _terminator = self.read_u16()?;
+        Ok(String::from_utf16_lossy(&units).trim().to_string())
+    }
+
     pub fn read_zstring(&mut self) -> Result<String, ProtocolError> {
         let mut out = Vec::new();
         loop {

@@ -62,10 +62,12 @@ impl odmo_application::BroadcastSink for SessionBroadcast {
         for entry in self.locations.iter() {
             let cid = *entry.key();
             let (loc_map, loc_chan) = *entry.value();
-            if cid != exclude_character_id && loc_map == map_id && loc_chan == channel {
-                if let Some(tx) = self.senders.get(&cid) {
-                    let _ = tx.try_send(packet.to_vec());
-                }
+            if cid != exclude_character_id
+                && loc_map == map_id
+                && loc_chan == channel
+                && let Some(tx) = self.senders.get(&cid)
+            {
+                let _ = tx.try_send(packet.to_vec());
             }
         }
         Ok(())
@@ -200,6 +202,8 @@ async fn serve_client(
                 continue;
             }
         };
+        let raw_packet_type = raw.packet_type;
+        let raw_payload_len = raw.payload.len();
 
         let request = match GameRequest::try_from(raw) {
             Ok(request) => request,
@@ -209,17 +213,38 @@ async fn serve_client(
             }
         };
 
+        let is_encyclopedia_load = matches!(request, GameRequest::EncyclopediaLoad);
+        if is_encyclopedia_load {
+            if raw_packet_type == odmo_protocol::opcode::game::SEAL_REMOVE_LEADER && raw_payload_len == 0 {
+                info!("Routing no-payload packet 3234 as modern Encyclopedia load request.");
+            } else {
+                info!(
+                    "Routing encyclopedia load request packet={} payload_bytes={}",
+                    raw_packet_type,
+                    raw_payload_len
+                );
+            }
+        }
+
         match app.handle_request(session, request) {
             Ok(responses) => {
                 // Register broadcast channel once character is authenticated
-                if broadcast_rx.is_none() && session.character_id.is_some() {
-                    let character_id = session.character_id.unwrap();
+                if let (None, Some(character_id)) = (&broadcast_rx, session.character_id) {
                     let rx = broadcast.register(character_id);
                     broadcast_rx = Some(rx);
                     info!("registered broadcast for character {character_id}");
                 }
 
                 for response in responses {
+                    if is_encyclopedia_load {
+                        if let Ok(raw_response) = PacketReader::from_frame(&response) {
+                            info!(
+                                "Encyclopedia load response sent packet={} payload_bytes={}",
+                                raw_response.packet_type,
+                                raw_response.payload.len()
+                            );
+                        }
+                    }
                     socket.write_all(&response).await?;
                 }
             }

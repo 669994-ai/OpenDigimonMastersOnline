@@ -1,0 +1,3 @@
+ALTER TABLE characters
+    ADD COLUMN IF NOT EXISTS encyclopedia JSONB NOT NULL DEFAULT '{"entries":[]}',
+    ADD COLUMN IF NOT EXISTS deck_buff_id INT NOT NULL DEFAULT 0;

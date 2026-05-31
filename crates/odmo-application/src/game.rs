@@ -36,7 +36,9 @@ use odmo_protocol::{
     PartyMemberBuffChangePacket, PartyMemberBuffEntry, PartyMemberDisconnectedPacket,
     PartyMemberInfoPacket, PartyMemberListEntry, PartyMemberListPacket, PartyMemberMapChangePacket,
     PartyMemberPositionPacket, PickBitsPacket, PickItemFailPacket, PickItemFailReason,
-    PickItemPacket, QuestAvailableListPacket, QuestGoalUpdatePacket, RecompenseGainPacket,
+    PickItemPacket, QuestAvailableListPacket, QuestGoalUpdatePacket, RandomBoxListEntry,
+    RandomBoxListResponsePacket, RandomBoxPurchaseResponsePacket, RecompenseGainPacket,
+    OtherTamerDetailInfoPacket,
     RemoveBuffPacket, SealsPacket, ServerExperiencePacket, SpiritCraftResultPacket,
     SplitItemPacket, TamerAttendancePacket, TamerChangeNamePacket, TamerRelationsPacket,
     TamerWalkPacket, TamerXaiResourcesPacket, TimeRewardPacket, TradeAcceptPacket,
@@ -45,9 +47,15 @@ use odmo_protocol::{
     TradeRemoveItemPacket, TradeRequestErrorPacket, TradeRequestSuccessPacket, UnloadDropsPacket,
     UnloadMobsPacket, UnloadTamerPacket, UpdateCurrentTitlePacket, UpdateMovementSpeedPacket,
     UpdateStatusPacket, XaiInfoPacket,
-    game::{FriendConnectPacket, GuildRankPacket, SkillUpdateCooldownPacket},
+    game::{
+        CombineResultResponsePacket, CombineSyncResponsePacket, FriendConnectPacket,
+        GuildRankPacket, SkillUpdateCooldownPacket,
+    },
 };
-use odmo_types::{AccountId, ItemRecord};
+use odmo_types::{
+    AccountId, CombineCeilingEntry, CombineItemRef, DigiCombineCatalog, DigiCombineReward,
+    ItemRecord, RandomBoxReward, UnionCombineCatalog,
+};
 
 use crate::{
     character::{CharacterAccountRepository, CharacterRepository},
@@ -69,10 +77,28 @@ const DIGI_SUMMON_NO_PRODUCTS: u8 = 1;
 const DIGI_SUMMON_INVALID_PRODUCT: u8 = 2;
 const DIGI_SUMMON_NOT_ENOUGH_TICKET: u8 = 3;
 const DIGI_SUMMON_INVENTORY_FULL: u8 = 4;
+
+// Combine result byte: the wire carries a single `result` flag where zero is a
+// successful roll/claim and any non-zero value rejects. There is no separate
+// error enum, so distinct non-zero codes name the rejection causes.
+const COMBINE_RESULT_SUCCESS: u8 = 0;
+const COMBINE_RESULT_INVALID_GRID: u8 = 1;
+const COMBINE_RESULT_MISSING_MATERIAL: u8 = 2;
+const COMBINE_RESULT_INVENTORY_FULL: u8 = 3;
+// Sync result mirrors the summon convention: zero for a populated catalog, one
+// when there is nothing to roll.
+const COMBINE_SYNC_NO_CATALOG: u8 = 1;
+
+// The Material_Grid is 11 row-groups of 4 cells; each group must be empty or
+// full, so a valid submission carries a multiple of 4 filled nodes, capped at
+// the full 11x4 grid.
+const COMBINE_GRID_ROW_CELLS: usize = 4;
+const COMBINE_GRID_MAX_NODES: usize = 44;
 const EXTRA_EVOLUTION_ITEM_TO_DIGIMON: u16 = 1;
 const EXTRA_EVOLUTION_DIGIMON_TO_ITEM: u16 = 2;
 const EXTRA_EVOLUTION_NEED_ALL: u16 = 1;
 const EXTRA_EVOLUTION_NEED_ONE: u16 = 2;
+const CLIENT_TAMER_CLASS_BITS: u32 = 2;
 
 #[derive(Debug, Clone)]
 struct PendingPartyInvite {
@@ -131,6 +157,18 @@ struct TradeSideRuntime {
     items: Vec<(u8, i32, i16, i32)>, // (trade_slot, item_id, amount, source_inventory_slot)
     money: i64,
     locked: bool,
+}
+
+fn client_projected_tamer_uid(raw_handler: u32) -> u32 {
+    (CLIENT_TAMER_CLASS_BITS << 14) | (raw_handler & 0x0FFF)
+}
+
+fn matches_tamer_target_handler(
+    character: &odmo_types::CharacterSummary,
+    target_handler: u32,
+) -> bool {
+    character.general_handler == target_handler
+        || client_projected_tamer_uid(character.general_handler) == target_handler
 }
 
 impl GuildRuntimeState {
@@ -311,6 +349,19 @@ pub trait ExtraEvolutionRepository: Send + Sync {
     fn extra_evolution_npcs(&self) -> anyhow::Result<Vec<odmo_types::ExtraEvolutionNpc>>;
 }
 
+pub trait DigiCombineRepository: Send + Sync {
+    fn digi_combine_catalog(&self) -> anyhow::Result<DigiCombineCatalog>;
+}
+
+pub trait UnionCombineRepository: Send + Sync {
+    fn union_combine_catalog(&self) -> anyhow::Result<UnionCombineCatalog>;
+}
+
+pub trait RandomBoxRepository: Send + Sync {
+    /// The weighted reward pool a random box rolls a single reward from.
+    fn random_box_rewards(&self) -> anyhow::Result<Vec<RandomBoxReward>>;
+}
+
 pub trait GameRepository:
     CharacterRepository
     + CharacterAccountRepository
@@ -320,6 +371,9 @@ pub trait GameRepository:
     + NpcShopRepository
     + DigiSummonRepository
     + ExtraEvolutionRepository
+    + DigiCombineRepository
+    + UnionCombineRepository
+    + RandomBoxRepository
 {
 }
 
@@ -332,6 +386,9 @@ impl<T> GameRepository for T where
         + NpcShopRepository
         + DigiSummonRepository
         + ExtraEvolutionRepository
+        + DigiCombineRepository
+        + UnionCombineRepository
+        + RandomBoxRepository
 {
 }
 
@@ -505,7 +562,7 @@ impl GameApplication {
                 responses.push(
                     SkillUpdateCooldownPacket {
                         handler: character.partner_handler as i32,
-                        current_type: character.partner_model as i32,
+                        current_type: character.partner_model,
                         cooldowns: vec![],
                     }
                     .encode(),
@@ -1209,21 +1266,18 @@ impl GameApplication {
                     .update_inventory(character_id, character.inventory.clone())
                     .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-                let mut responses = Vec::new();
-                responses.push(
+                let responses = vec![
                     NpcPurchaseResultPacket {
                         success: true,
                         remaining_bits: character.inventory.bits,
                     }
                     .encode(),
-                );
-                responses.push(
                     LoadInventoryPacket {
                         inventory: character.inventory,
                         inventory_type: InventoryType::Inventory,
                     }
                     .encode(),
-                );
+                ];
                 Ok(responses)
             }
             GameRequest::NpcSell {
@@ -1284,20 +1338,17 @@ impl GameApplication {
                     .update_inventory(character_id, character.inventory.clone())
                     .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-                let mut responses = Vec::new();
-                responses.push(
+                let responses = vec![
                     NpcSellResultPacket {
                         remaining_bits: character.inventory.bits,
                     }
                     .encode(),
-                );
-                responses.push(
                     LoadInventoryPacket {
                         inventory: character.inventory,
                         inventory_type: InventoryType::Inventory,
                     }
                     .encode(),
-                );
+                ];
                 Ok(responses)
             }
             GameRequest::LootItem { drop_handler } => {
@@ -1857,7 +1908,7 @@ impl GameApplication {
                     .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
                 // Verify the digimon handler matches the partner
-                if digimon_handler != character.partner_handler as u32 {
+                if digimon_handler != character.partner_handler {
                     return Ok(vec![DigimonEvolutionFailPacket.encode()]);
                 }
 
@@ -2165,6 +2216,10 @@ impl GameApplication {
             GameRequest::EncyclopediaDeckBuff { deck_idx } => {
                 self.handle_encyclopedia_deck_buff(session, deck_idx)
             }
+            // OtherTamerDetailInfo — mirror the modern DetailInfo request for a visible tamer.
+            GameRequest::OtherTamerDetailInfo { target_handler } => {
+                self.handle_other_tamer_detail_info(session, target_handler)
+            }
             // ArenaDailyPoints — add daily arena points and respond with the new total.
             GameRequest::ArenaDailyPoints {
                 item_slot: _,
@@ -2417,6 +2472,24 @@ impl GameApplication {
                 self.handle_time_charge_result(session, charge_type)
             }
             GameRequest::WarpGateDungeon => self.handle_warp_gate_dungeon(session),
+            GameRequest::DigiCombineSyncRequest => self.handle_digi_combine_sync(session),
+            GameRequest::DigiCombine {
+                ceiling_type,
+                materials,
+            } => self.handle_digi_combine(session, ceiling_type, materials),
+            GameRequest::DigiCombineRewardClaim { ceiling_type } => {
+                self.handle_digi_combine_reward_claim(session, ceiling_type)
+            }
+            GameRequest::UnionCombineSyncRequest => self.handle_union_combine_sync(session),
+            GameRequest::UnionCombine {
+                ceiling_type,
+                materials,
+            } => self.handle_union_combine(session, ceiling_type, materials),
+            GameRequest::UnionCombineRewardClaim { ceiling_type } => {
+                self.handle_union_combine_reward_claim(session, ceiling_type)
+            }
+            GameRequest::RandomBoxList { .. } => self.handle_random_box_list(session),
+            GameRequest::RandomBoxPurchase { .. } => self.handle_random_box_purchase(session),
             GameRequest::SpiritCraft {
                 slot,
                 validation,
@@ -2711,18 +2784,19 @@ impl GameApplication {
 
         let mut friends = character.friend_list.clone();
 
-        if let Some(target) = target {
-            if target.id != character.id && !friends.iter().any(|f| f.character_id == target.id) {
-                friends.push(odmo_types::FriendListEntry {
-                    character_id: target.id,
-                    name: target.name.clone(),
-                    annotation: String::new(),
-                    favorite: false,
-                });
-                self.repository
-                    .update_friend_list(character_id, friends)
-                    .map_err(|error| GameFlowError::Storage(error.to_string()))?;
-            }
+        if let Some(target) = target
+            && target.id != character.id
+            && !friends.iter().any(|f| f.character_id == target.id)
+        {
+            friends.push(odmo_types::FriendListEntry {
+                character_id: target.id,
+                name: target.name.clone(),
+                annotation: String::new(),
+                favorite: false,
+            });
+            self.repository
+                .update_friend_list(character_id, friends)
+                .map_err(|error| GameFlowError::Storage(error.to_string()))?;
         }
 
         Ok(Vec::new())
@@ -2809,7 +2883,7 @@ impl GameApplication {
         // Each purchase block adds 100 EXP and costs 100 premium.
         let cost_per_block = 100i32;
         let exp_per_block = 100i32;
-        let count = purchase_count.max(0).min(50);
+        let count = purchase_count.clamp(0, 50);
         let total_cost = cost_per_block.saturating_mul(count);
         if character.premium < total_cost {
             let mut writer = odmo_protocol::writer::PacketWriter::new(
@@ -3177,6 +3251,366 @@ impl GameApplication {
         ])
     }
 
+    fn handle_digi_combine_sync(
+        &self,
+        session: &GameSession,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        self.handle_combine_sync(session, false)
+    }
+
+    fn handle_union_combine_sync(
+        &self,
+        session: &GameSession,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        self.handle_combine_sync(session, true)
+    }
+
+    /// Emit the combine ceiling map for the gacha window. The result mirrors the
+    /// summon sync convention: zero for a populated catalog, one when empty.
+    fn handle_combine_sync(
+        &self,
+        _session: &GameSession,
+        is_union: bool,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let catalog = self.combine_catalog(is_union)?;
+        let ceiling = combine_ceiling_all(&catalog);
+        let result = if catalog.rank_rows.is_empty() {
+            COMBINE_SYNC_NO_CATALOG
+        } else {
+            COMBINE_RESULT_SUCCESS
+        };
+        let packet = if is_union {
+            CombineSyncResponsePacket::union(result, ceiling)
+        } else {
+            CombineSyncResponsePacket::digi(result, ceiling)
+        };
+        Ok(vec![packet.encode()])
+    }
+
+    fn handle_digi_combine(
+        &self,
+        session: &GameSession,
+        ceiling_type: u8,
+        materials: Vec<CombineItemRef>,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        self.handle_combine(session, ceiling_type, materials, false)
+    }
+
+    fn handle_union_combine(
+        &self,
+        session: &GameSession,
+        ceiling_type: u8,
+        materials: Vec<CombineItemRef>,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        self.handle_combine(session, ceiling_type, materials, true)
+    }
+
+    /// Run a Digi/Union combine roll. Union shares Digi's byte-identical layouts,
+    /// so both flow through here with `is_union` selecting catalog and opcode.
+    ///
+    /// The grid is re-validated defensively; a malformed submission rejects with
+    /// no mutation. On a valid grid the submitted materials are consumed exactly,
+    /// a rank is rolled by weight over the matching ceiling, and its rewards are
+    /// granted. Any inventory overflow rolls the inventory back to its pre-state.
+    fn handle_combine(
+        &self,
+        session: &GameSession,
+        ceiling_type: u8,
+        materials: Vec<CombineItemRef>,
+        is_union: bool,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        let catalog = self.combine_catalog(is_union)?;
+        let ceiling = combine_ceiling_for_type(&catalog, ceiling_type);
+
+        let reject = |result: u8| -> Vec<u8> {
+            if is_union {
+                CombineResultResponsePacket::union_result(
+                    result,
+                    ceiling.clone(),
+                    Vec::new(),
+                    Vec::new(),
+                )
+            } else {
+                CombineResultResponsePacket::digi_result(
+                    result,
+                    ceiling.clone(),
+                    Vec::new(),
+                    Vec::new(),
+                )
+            }
+            .encode()
+        };
+
+        if !combine_grid_is_valid(&materials) {
+            return Ok(vec![reject(COMBINE_RESULT_INVALID_GRID)]);
+        }
+
+        let original_inventory = character.inventory.clone();
+        if !consume_combine_materials(&mut character.inventory, &materials) {
+            character.inventory = original_inventory;
+            return Ok(vec![reject(COMBINE_RESULT_MISSING_MATERIAL)]);
+        }
+
+        let ranks: Vec<odmo_types::DigiCombineRank> = catalog
+            .rank_rows
+            .iter()
+            .filter(|rank| rank.ceiling_type == ceiling_type)
+            .cloned()
+            .collect();
+        let rewards = pick_weighted_combine_rank(&ranks)
+            .map(|rank| rank.rewards)
+            .unwrap_or_default();
+
+        for reward in &rewards {
+            if !add_stackable_inventory_item(
+                &mut character.inventory,
+                reward.item_id,
+                i32::from(reward.amount.max(1)),
+            ) {
+                character.inventory = original_inventory;
+                return Ok(vec![reject(COMBINE_RESULT_INVENTORY_FULL)]);
+            }
+        }
+
+        self.repository
+            .update_inventory(character_id, character.inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let result = if is_union {
+            CombineResultResponsePacket::union_result(
+                COMBINE_RESULT_SUCCESS,
+                ceiling,
+                materials,
+                rewards,
+            )
+        } else {
+            CombineResultResponsePacket::digi_result(
+                COMBINE_RESULT_SUCCESS,
+                ceiling,
+                materials,
+                rewards,
+            )
+        };
+
+        Ok(vec![
+            LoadInventoryPacket {
+                inventory: character.inventory,
+                inventory_type: InventoryType::Inventory,
+            }
+            .encode(),
+            result.encode(),
+        ])
+    }
+
+    fn handle_digi_combine_reward_claim(
+        &self,
+        session: &GameSession,
+        ceiling_type: u8,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        self.handle_combine_reward_claim(session, ceiling_type, false)
+    }
+
+    fn handle_union_combine_reward_claim(
+        &self,
+        session: &GameSession,
+        ceiling_type: u8,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        self.handle_combine_reward_claim(session, ceiling_type, true)
+    }
+
+    /// Claim the reward for a resolved ceiling tier. The reward block is keyed on
+    /// `ceiling_type`; a successful claim grants exactly that reward and an
+    /// inventory overflow rolls back fully and rejects.
+    fn handle_combine_reward_claim(
+        &self,
+        session: &GameSession,
+        ceiling_type: u8,
+        is_union: bool,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        let catalog = self.combine_catalog(is_union)?;
+        let ceiling = combine_ceiling_for_type(&catalog, ceiling_type);
+        let rewards: Vec<DigiCombineReward> = catalog
+            .rank_rows
+            .iter()
+            .filter(|rank| rank.ceiling_type == ceiling_type)
+            .flat_map(|rank| rank.rewards.iter().cloned())
+            .collect();
+
+        let reward_packet = |result: u8, rewards: Vec<DigiCombineReward>| -> Vec<u8> {
+            if is_union {
+                CombineResultResponsePacket::union_reward(
+                    result,
+                    ceiling.clone(),
+                    Vec::new(),
+                    rewards,
+                )
+            } else {
+                CombineResultResponsePacket::digi_reward(
+                    result,
+                    ceiling.clone(),
+                    Vec::new(),
+                    rewards,
+                )
+            }
+            .encode()
+        };
+
+        let original_inventory = character.inventory.clone();
+        for reward in &rewards {
+            if !add_stackable_inventory_item(
+                &mut character.inventory,
+                reward.item_id,
+                i32::from(reward.amount.max(1)),
+            ) {
+                character.inventory = original_inventory;
+                return Ok(vec![reward_packet(
+                    COMBINE_RESULT_INVENTORY_FULL,
+                    Vec::new(),
+                )]);
+            }
+        }
+
+        self.repository
+            .update_inventory(character_id, character.inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        Ok(vec![
+            LoadInventoryPacket {
+                inventory: character.inventory,
+                inventory_type: InventoryType::Inventory,
+            }
+            .encode(),
+            reward_packet(COMBINE_RESULT_SUCCESS, rewards),
+        ])
+    }
+
+    /// Read the Digi or Union combine catalog from the repository.
+    fn combine_catalog(&self, is_union: bool) -> Result<DigiCombineCatalog, GameFlowError> {
+        if is_union {
+            self.repository.union_combine_catalog()
+        } else {
+            self.repository.digi_combine_catalog()
+        }
+        .map_err(|error| GameFlowError::Storage(error.to_string()))
+    }
+
+    /// Emit the random box window contents from the server-side reward table.
+    ///
+    /// The wire list fields are not yet decoded, so the reward pool is projected
+    /// onto the fixed entry shape neutrally: one entry per reward carrying its
+    /// item id, amount, and weight. The leading field stays zero. This keeps the
+    /// frame well-formed on the correct opcode while the field meanings remain an
+    /// open item.
+    fn handle_random_box_list(
+        &self,
+        _session: &GameSession,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let rewards = self
+            .repository
+            .random_box_rewards()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let entries = rewards
+            .iter()
+            .map(|reward| RandomBoxListEntry {
+                a: reward.item_id,
+                b: i32::from(reward.amount),
+                c: reward.weight as i32,
+                d: 0,
+            })
+            .collect();
+
+        Ok(vec![
+            RandomBoxListResponsePacket { field0: 0, entries }.encode(),
+        ])
+    }
+
+    /// Roll and grant one random box reward.
+    ///
+    /// Exactly one reward is selected by relative weight over the server-side
+    /// table and granted to the inventory. If the grant would overflow the
+    /// inventory the snapshot is restored and the purchase is rejected without
+    /// persisting, answering with an empty result block. On success the inventory
+    /// is persisted and the granted reward is projected neutrally onto the result
+    /// list pending the field-semantics decode.
+    fn handle_random_box_purchase(
+        &self,
+        session: &GameSession,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        let rewards = self
+            .repository
+            .random_box_rewards()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let empty_result = || -> Vec<u8> {
+            RandomBoxPurchaseResponsePacket {
+                field0: 0,
+                field1: 0,
+                field2: 0,
+                list_a: Vec::new(),
+                list_b: Vec::new(),
+                summary: (0, 0),
+            }
+            .encode()
+        };
+
+        let Some(reward) = pick_weighted_random_box_reward(&rewards) else {
+            return Ok(vec![empty_result()]);
+        };
+
+        let original_inventory = character.inventory.clone();
+        if !add_stackable_inventory_item(
+            &mut character.inventory,
+            reward.item_id,
+            i32::from(reward.amount.max(1)),
+        ) {
+            character.inventory = original_inventory;
+            return Ok(vec![empty_result()]);
+        }
+
+        self.repository
+            .update_inventory(character_id, character.inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        Ok(vec![
+            LoadInventoryPacket {
+                inventory: character.inventory,
+                inventory_type: InventoryType::Inventory,
+            }
+            .encode(),
+            RandomBoxPurchaseResponsePacket {
+                field0: 0,
+                field1: 0,
+                field2: 0,
+                list_a: vec![(reward.item_id, i32::from(reward.amount.max(1)))],
+                list_b: Vec::new(),
+                summary: (0, 0),
+            }
+            .encode(),
+        ])
+    }
+
     fn handle_spirit_craft(
         &self,
         session: &GameSession,
@@ -3538,10 +3972,9 @@ impl GameApplication {
             }
             .encode(),
         ])
-        .map(|v| {
+        .inspect(|_v| {
             // Drop the unused target_uid argument so the compiler doesn't warn.
             let _ = target_uid;
-            v
         })
     }
 
@@ -3735,7 +4168,7 @@ impl GameApplication {
                         .parties
                         .get_mut(&party_id)
                         .expect("party should exist for member mapping");
-                    let existing_members = party.members.iter().copied().collect::<Vec<_>>();
+                    let existing_members = party.members.to_vec();
                     party.members.push(invitee.id);
                     (party.clone(), false, existing_members)
                 };
@@ -3821,15 +4254,15 @@ impl GameApplication {
             party.members.remove(leaving_slot);
 
             let mut new_leader_slot = None;
-            if party.leader_id == character_id {
-                if let Some(new_leader_id) = party.members.first().copied() {
-                    party.leader_id = new_leader_id;
-                    new_leader_slot = party
-                        .members
-                        .iter()
-                        .position(|member_id| *member_id == new_leader_id)
-                        .map(|slot| slot as i32);
-                }
+            if party.leader_id == character_id
+                && let Some(new_leader_id) = party.members.first().copied()
+            {
+                party.leader_id = new_leader_id;
+                new_leader_slot = party
+                    .members
+                    .iter()
+                    .position(|member_id| *member_id == new_leader_id)
+                    .map(|slot| slot as i32);
             }
 
             let remaining_members = party.members.clone();
@@ -3858,13 +4291,11 @@ impl GameApplication {
         for member_id in party_member_ids {
             if broadcast.is_online(member_id) {
                 let _ = broadcast.send_to(member_id, &leave_packet);
-                if !destroy_party {
-                    if let Some(new_leader_slot) = new_leader_slot {
-                        let _ = broadcast.send_to(
-                            member_id,
-                            &PartyLeaderChangedPacket { new_leader_slot }.encode(),
-                        );
-                    }
+                if !destroy_party && let Some(new_leader_slot) = new_leader_slot {
+                    let _ = broadcast.send_to(
+                        member_id,
+                        &PartyLeaderChangedPacket { new_leader_slot }.encode(),
+                    );
                 }
             }
         }
@@ -4112,20 +4543,20 @@ impl GameApplication {
         runtime.pending_invites.retain(|_, invite| {
             invite.inviter_id != character_id && invite.target_id != character_id
         });
-        if let Some(party_id) = runtime.party_by_member.remove(&character_id) {
-            if let Some(party) = runtime.parties.get_mut(&party_id) {
-                party.members.retain(|member_id| *member_id != character_id);
-                if party.leader_id == character_id {
-                    if let Some(new_leader) = party.members.first().copied() {
-                        party.leader_id = new_leader;
-                    }
-                }
-                if party.members.len() < 2 {
-                    let members_to_clear = party.members.clone();
-                    runtime.parties.remove(&party_id);
-                    for member_id in members_to_clear {
-                        runtime.party_by_member.remove(&member_id);
-                    }
+        if let Some(party_id) = runtime.party_by_member.remove(&character_id)
+            && let Some(party) = runtime.parties.get_mut(&party_id)
+        {
+            party.members.retain(|member_id| *member_id != character_id);
+            if party.leader_id == character_id
+                && let Some(new_leader) = party.members.first().copied()
+            {
+                party.leader_id = new_leader;
+            }
+            if party.members.len() < 2 {
+                let members_to_clear = party.members.clone();
+                runtime.parties.remove(&party_id);
+                for member_id in members_to_clear {
+                    runtime.party_by_member.remove(&member_id);
                 }
             }
         }
@@ -4649,18 +5080,18 @@ impl GameApplication {
             .repository
             .character_by_name(trimmed)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
-        if let Some(other) = conflict {
-            if other.id != character.id {
-                return Ok(vec![
-                    TamerChangeNamePacket {
-                        result: 3, // failure: name taken
-                        item_slot: -1,
-                        old_name: character.name.clone(),
-                        new_name: trimmed.to_string(),
-                    }
-                    .encode(),
-                ]);
-            }
+        if let Some(other) = conflict
+            && other.id != character.id
+        {
+            return Ok(vec![
+                TamerChangeNamePacket {
+                    result: 3, // failure: name taken
+                    item_slot: -1,
+                    old_name: character.name.clone(),
+                    new_name: trimmed.to_string(),
+                }
+                .encode(),
+            ]);
         }
 
         let new_name_string = trimmed.to_string();
@@ -6718,17 +7149,17 @@ impl GameApplication {
 
         entry.reward_received = true;
 
-        // The reward item id is asset-driven; the legacy server pulls it from the
-        // EvolutionAsset.RewardItem field. Without the asset table we record the claim
-        // so the modern client UI exits the "claim" state, with a placeholder reward.
+        // The current Rust workspace still lacks a native encyclopedia asset repository,
+        // but the legacy-server reference for this shipped path currently grants the
+        // visible reward payload `97206 x10`. Mirror that until the asset table lands.
         self.repository
             .update_encyclopedia(character_id, encyclopedia)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
         Ok(vec![
             EncyclopediaReceiveRewardItemPacket {
-                item_id: 0,
-                amount: 0,
+                item_id: 97_206,
+                amount: 10,
             }
             .encode(),
         ])
@@ -6766,6 +7197,99 @@ impl GameApplication {
             }
             .encode(),
         ])
+    }
+
+    fn handle_other_tamer_detail_info(
+        &self,
+        session: &GameSession,
+        target_handler: u32,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let target = session
+            .viewed_characters
+            .values()
+            .find(|character| matches_tamer_target_handler(character, target_handler))
+            .cloned()
+            .or_else(|| {
+                let character_id = session.character_id?;
+                let character = self.repository.character_by_id(character_id).ok()??;
+                if matches_tamer_target_handler(&character, target_handler) {
+                    Some(character)
+                } else {
+                    None
+                }
+            });
+
+        let packet = if let Some(character) = target {
+            OtherTamerDetailInfoPacket {
+                valid: true,
+                target_handler,
+                tamer_name: character.name.clone(),
+                guild_name: character
+                    .guild
+                    .as_ref()
+                    .map(|guild| guild.name.clone())
+                    .unwrap_or_default(),
+                current_title: i32::from(character.current_title),
+                tamer_model: character.model,
+                tamer_level: i32::from(character.level),
+                tamer_size: i32::from(character.size),
+                tamer_hp: character.current_hp,
+                tamer_ds: character.current_ds,
+                tamer_at: character.at,
+                tamer_de: character.de,
+                tamer_ms: character.ms,
+                partner_name: character.partner_name.clone(),
+                partner_model: character.partner_model,
+                partner_type: character.partner_current_type,
+                partner_level: i32::from(character.partner_level),
+                partner_size: i32::from(character.partner_size),
+                partner_hp: character.partner_current_hp,
+                partner_ds: character.partner_current_ds,
+                partner_at: character.partner_at,
+                partner_de: character.partner_de,
+                partner_as: character.partner_as,
+                partner_ht: character.partner_ht,
+                partner_ct: character.partner_cc,
+                partner_bl: character.partner_bl,
+                partner_ev: character.partner_ev,
+                partner_clone_level: i32::from(character.partner_clone_level),
+                status: String::from("Detail info synchronized."),
+            }
+        } else {
+            OtherTamerDetailInfoPacket {
+                valid: false,
+                target_handler,
+                tamer_name: String::new(),
+                guild_name: String::new(),
+                current_title: 0,
+                tamer_model: 0,
+                tamer_level: 0,
+                tamer_size: 0,
+                tamer_hp: 0,
+                tamer_ds: 0,
+                tamer_at: 0,
+                tamer_de: 0,
+                tamer_ms: 0,
+                partner_name: String::new(),
+                partner_model: 0,
+                partner_type: 0,
+                partner_level: 0,
+                partner_size: 0,
+                partner_hp: 0,
+                partner_ds: 0,
+                partner_at: 0,
+                partner_de: 0,
+                partner_as: 0,
+                partner_ht: 0,
+                partner_ct: 0,
+                partner_bl: 0,
+                partner_ev: 0,
+                partner_clone_level: 0,
+                status: String::from("Target not visible for DetailInfo."),
+            }
+        };
+
+        Ok(vec![packet.encode()])
     }
 
     // ----- Arena slice -----------------------------------------------------------------
@@ -7638,16 +8162,16 @@ impl GameApplication {
             (guild_id, guild.name.clone())
         };
 
-        if let Some(broadcast) = &self.broadcast {
-            if !broadcast.is_online(target.id) {
-                return Ok(vec![
-                    GuildInviteFailPacket {
-                        reason: 2, // offline
-                        target_name: trimmed,
-                    }
-                    .encode(),
-                ]);
-            }
+        if let Some(broadcast) = &self.broadcast
+            && !broadcast.is_online(target.id)
+        {
+            return Ok(vec![
+                GuildInviteFailPacket {
+                    reason: 2, // offline
+                    target_name: trimmed,
+                }
+                .encode(),
+            ]);
         }
 
         // Stash the pending invite keyed by the invitee.
@@ -7812,14 +8336,14 @@ impl GameApplication {
                 .map(|pending| pending.inviter_id)
         };
 
-        if let (Some(inviter), Some(broadcast)) = (inviter_id, &self.broadcast) {
-            if broadcast.is_online(inviter) {
-                let packet = GuildInviteDenyPacket {
-                    target_name: character.name.clone(),
-                }
-                .encode();
-                let _ = broadcast.send_to(inviter, &packet);
+        if let (Some(inviter), Some(broadcast)) = (inviter_id, &self.broadcast)
+            && broadcast.is_online(inviter)
+        {
+            let packet = GuildInviteDenyPacket {
+                target_name: character.name.clone(),
             }
+            .encode();
+            let _ = broadcast.send_to(inviter, &packet);
         }
         Ok(vec![])
     }
@@ -8172,6 +8696,12 @@ pub struct GameSessionFactory {
     next_seed: AtomicI16,
 }
 
+impl Default for GameSessionFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GameSessionFactory {
     pub fn new() -> Self {
         Self {
@@ -8317,12 +8847,12 @@ fn find_usable_digi_summon_ticket(
 ) -> Option<(usize, odmo_types::DigiSummonTicket)> {
     if requested_slot >= 0 {
         let requested_slot = requested_slot as usize;
-        if let Some(slot_item) = inventory.items.get(requested_slot) {
-            if let Some(ticket) = product.tickets.iter().find(|ticket| {
+        if let Some(slot_item) = inventory.items.get(requested_slot)
+            && let Some(ticket) = product.tickets.iter().find(|ticket| {
                 ticket.item_id == slot_item.item_id && slot_item.amount >= ticket.cost
-            }) {
-                return Some((requested_slot, ticket.clone()));
-            }
+            })
+        {
+            return Some((requested_slot, ticket.clone()));
         }
     }
 
@@ -8359,6 +8889,118 @@ fn roll_digi_summon_rewards(
         results.push(pick_weighted_digi_summon_reward(&rewards, draw_index));
     }
     results
+}
+
+/// Defensive server-side re-validation of the 11x4 Material_Grid.
+///
+/// Only filled cells travel on the wire, so the per-row grouping is not
+/// separable from the flat node list. The faithful invariant given that wire
+/// shape is: the filled-node count is a multiple of 4 (each row-group is empty
+/// or full) and never exceeds the full 11x4 grid.
+fn combine_grid_is_valid(materials: &[CombineItemRef]) -> bool {
+    materials.len() <= COMBINE_GRID_MAX_NODES
+        && materials.len().is_multiple_of(COMBINE_GRID_ROW_CELLS)
+}
+
+/// Remove exactly the submitted material nodes from inventory. Returns false
+/// (with the inventory restored) if any node is missing or insufficient.
+fn consume_combine_materials(
+    inventory: &mut odmo_types::InventorySnapshot,
+    materials: &[CombineItemRef],
+) -> bool {
+    let original = inventory.clone();
+    for material in materials {
+        let count = i32::from(material.count);
+        if count <= 0 {
+            *inventory = original;
+            return false;
+        }
+        let Some(slot_index) = inventory
+            .items
+            .iter()
+            .position(|item| item.item_id == material.item_type as i32 && item.amount >= count)
+        else {
+            *inventory = original;
+            return false;
+        };
+        if consume_inventory_item_at(inventory, slot_index, count).is_none() {
+            *inventory = original;
+            return false;
+        }
+    }
+    true
+}
+
+/// Flatten every ceiling-group entry in the catalog into a single ceiling map.
+fn combine_ceiling_all(catalog: &DigiCombineCatalog) -> Vec<CombineCeilingEntry> {
+    catalog
+        .ceil_groups
+        .iter()
+        .flat_map(|group| group.entries.iter().cloned())
+        .collect()
+}
+
+/// Resolve the ceiling-map entries configured for one ceiling tier.
+fn combine_ceiling_for_type(
+    catalog: &DigiCombineCatalog,
+    ceiling_type: u8,
+) -> Vec<CombineCeilingEntry> {
+    catalog
+        .ceil_groups
+        .iter()
+        .filter(|group| group.ceiling_type == ceiling_type)
+        .flat_map(|group| group.entries.iter().cloned())
+        .collect()
+}
+
+/// Pick one reward from the random box pool by relative weight.
+///
+/// Returns `None` for an empty pool. A pool with only zero-weight entries falls
+/// back to a uniform pick, and an entry with zero weight is never chosen while a
+/// positive-weight entry remains.
+fn pick_weighted_random_box_reward(rewards: &[RandomBoxReward]) -> Option<RandomBoxReward> {
+    if rewards.is_empty() {
+        return None;
+    }
+    let total_weight: u128 = rewards.iter().map(|reward| u128::from(reward.weight)).sum();
+    if total_weight == 0 {
+        let index = (current_unix_nanos() as usize) % rewards.len();
+        return Some(rewards[index].clone());
+    }
+
+    let mut roll = (current_unix_nanos() % total_weight) + 1;
+    for reward in rewards {
+        let weight = u128::from(reward.weight);
+        if roll <= weight {
+            return Some(reward.clone());
+        }
+        roll -= weight;
+    }
+    rewards.last().cloned()
+}
+
+/// Pick one rank from the candidates by relative weight.
+fn pick_weighted_combine_rank(
+    ranks: &[odmo_types::DigiCombineRank],
+) -> Option<odmo_types::DigiCombineRank> {
+    if ranks.is_empty() {
+        return None;
+    }
+    let total_weight: u128 = ranks.iter().map(|rank| u128::from(rank.weight)).sum();
+    if total_weight == 0 {
+        let index = (current_unix_nanos() as usize) % ranks.len();
+        return Some(ranks[index].clone());
+    }
+
+    let mut roll = (current_unix_nanos() % total_weight) + 1;
+    for rank in ranks {
+        let weight = u128::from(rank.weight);
+        if roll <= weight {
+            return Some(rank.clone());
+        }
+        roll -= weight;
+    }
+    ranks.last().cloned()
 }
 
 fn pick_weighted_digi_summon_reward(
@@ -8504,12 +9146,15 @@ fn consume_item_material_groups(
             consume_first_matching_material(inventory, main_materials, consumed_items)
                 && consume_first_matching_material(inventory, sub_materials, consumed_items)
         }
-        EXTRA_EVOLUTION_NEED_ALL | _ => {
+        EXTRA_EVOLUTION_NEED_ALL => {
+            consume_all_materials(inventory, main_materials, consumed_items)
+                && consume_all_materials(inventory, sub_materials, consumed_items)
+        }
+        _ => {
             consume_all_materials(inventory, main_materials, consumed_items)
                 && consume_all_materials(inventory, sub_materials, consumed_items)
         }
     };
-
     if success {
         return true;
     }
@@ -8566,6 +9211,9 @@ mod tests {
         drops_by_map: RwLock<HashMap<(i16, u8), Vec<DropSummary>>>,
         digi_summon_products: Vec<odmo_types::DigiSummonProduct>,
         extra_evolution_npcs: Vec<ExtraEvolutionNpc>,
+        digi_combine_catalog: odmo_types::DigiCombineCatalog,
+        union_combine_catalog: odmo_types::UnionCombineCatalog,
+        random_box_rewards: Vec<odmo_types::RandomBoxReward>,
     }
 
     #[derive(Debug, Default)]
@@ -8621,6 +9269,54 @@ mod tests {
         }
 
         fn update_location(&self, _character_id: u64, _map_id: i16, _channel: u8) {}
+    }
+
+    /// A small combine catalog the in-crate tests roll against: one ceiling tier
+    /// with a single ceiling-map entry and a guaranteed reward pool.
+    fn demo_combine_catalog() -> odmo_types::DigiCombineCatalog {
+        odmo_types::DigiCombineCatalog {
+            rank_rows: vec![odmo_types::DigiCombineRank {
+                ceiling_type: 1,
+                weight: 1,
+                rewards: vec![odmo_types::DigiCombineReward {
+                    item_id: 5201,
+                    amount: 1,
+                    grade: 1,
+                }],
+            }],
+            item_list: vec![odmo_types::DigiCombineItem {
+                item_id: 81001,
+                group_id: 1,
+            }],
+            item_groups: vec![odmo_types::DigiCombineGroup {
+                group_id: 1,
+                members: vec![81001],
+            }],
+            ceil_groups: vec![odmo_types::DigiCombineCeil {
+                ceiling_type: 1,
+                entries: vec![odmo_types::CombineCeilingEntry {
+                    tier: 1,
+                    value_a: 0,
+                    value_b: 0,
+                }],
+            }],
+        }
+    }
+
+    /// A small weighted reward pool the in-crate tests roll a random box against.
+    fn demo_random_box_rewards() -> Vec<odmo_types::RandomBoxReward> {
+        vec![
+            odmo_types::RandomBoxReward {
+                item_id: 5301,
+                amount: 1,
+                weight: 1,
+            },
+            odmo_types::RandomBoxReward {
+                item_id: 5302,
+                amount: 2,
+                weight: 3,
+            },
+        ]
     }
 
     impl InMemoryCharacterRepository {
@@ -9009,6 +9705,9 @@ mod tests {
                         },
                     ],
                 }],
+                digi_combine_catalog: demo_combine_catalog(),
+                union_combine_catalog: demo_combine_catalog(),
+                random_box_rewards: demo_random_box_rewards(),
             }
         }
     }
@@ -9322,6 +10021,24 @@ mod tests {
         }
     }
 
+    impl DigiCombineRepository for InMemoryCharacterRepository {
+        fn digi_combine_catalog(&self) -> anyhow::Result<odmo_types::DigiCombineCatalog> {
+            Ok(self.digi_combine_catalog.clone())
+        }
+    }
+
+    impl UnionCombineRepository for InMemoryCharacterRepository {
+        fn union_combine_catalog(&self) -> anyhow::Result<odmo_types::UnionCombineCatalog> {
+            Ok(self.union_combine_catalog.clone())
+        }
+    }
+
+    impl RandomBoxRepository for InMemoryCharacterRepository {
+        fn random_box_rewards(&self) -> anyhow::Result<Vec<odmo_types::RandomBoxReward>> {
+            Ok(self.random_box_rewards.clone())
+        }
+    }
+
     impl MapMobRepository for InMemoryCharacterRepository {
         fn mobs_by_map(&self, map_id: i16, channel: u8) -> anyhow::Result<Vec<MobSummary>> {
             Ok(self
@@ -9515,6 +10232,49 @@ mod tests {
             )
             .expect("bootstrap should succeed");
         assert_eq!(responses.len(), 1);
+    }
+
+    #[test]
+    fn initial_information_allows_reconnect_with_same_ticket() {
+        let portal_state_dir = unique_test_dir("reconnect-ticket");
+        let bridge = PortalBridge::from_json(portal_state_dir.clone()).expect("bridge");
+        bridge
+            .store_game_session_ticket(&GameSessionTicket {
+                token: "demo".to_string(),
+                account_id: 1,
+                character_id: 100,
+            })
+            .expect("store ticket");
+
+        let app = GameApplication::new(
+            GameServiceConfig { portal_state_dir },
+            Arc::new(InMemoryCharacterRepository::demo()),
+        );
+
+        let mut first_session = GameSession::new(1);
+        let first = app
+            .handle_request(
+                &mut first_session,
+                GameRequest::InitialInformation {
+                    account_id: 1,
+                    access_code: 0,
+                },
+            )
+            .expect("first bootstrap should succeed");
+        assert_eq!(first.len(), 1);
+
+        let mut reconnect_session = GameSession::new(2);
+        let reconnect = app
+            .handle_request(
+                &mut reconnect_session,
+                GameRequest::InitialInformation {
+                    account_id: 1,
+                    access_code: 0,
+                },
+            )
+            .expect("reconnect bootstrap should also succeed");
+        assert_eq!(reconnect.len(), 1);
+        assert_eq!(reconnect_session.character_id, Some(100));
     }
 
     #[test]
@@ -11242,5 +12002,17 @@ mod tests {
             raw.packet_type,
             odmo_protocol::opcode::game::PARTNER_SKILL_ERROR
         );
+    }
+
+    #[test]
+    fn matches_tamer_target_handler_accepts_client_projected_uid() {
+        let character = CharacterSummary {
+            general_handler: 13_000,
+            ..CharacterSummary::default()
+        };
+
+        assert!(matches_tamer_target_handler(&character, 13_000));
+        assert!(matches_tamer_target_handler(&character, 33_480));
+        assert!(!matches_tamer_target_handler(&character, 13_001));
     }
 }

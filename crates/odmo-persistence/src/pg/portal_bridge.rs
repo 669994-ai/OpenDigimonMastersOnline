@@ -85,10 +85,6 @@ impl PortalStore for PgRepository {
             .await?;
 
             if let Some((token, character_id)) = row {
-                sqlx::query("DELETE FROM game_session_tickets WHERE account_id = $1")
-                    .bind(account_id as i64)
-                    .execute(&self.pool)
-                    .await?;
                 Ok(Some(GameSessionTicket {
                     token,
                     account_id,

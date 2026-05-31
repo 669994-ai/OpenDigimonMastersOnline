@@ -112,22 +112,12 @@ impl ItemRecord {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct InventorySnapshot {
     pub bits: i64,
     pub size: u16,
     pub items: Vec<ItemRecord>,
-}
-
-impl Default for InventorySnapshot {
-    fn default() -> Self {
-        Self {
-            bits: 0,
-            size: 0,
-            items: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,7 +136,7 @@ impl Default for ChannelAvailability {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SealRecord {
     pub seal_id: i32,
@@ -155,31 +145,11 @@ pub struct SealRecord {
     pub favorite: bool,
 }
 
-impl Default for SealRecord {
-    fn default() -> Self {
-        Self {
-            seal_id: 0,
-            amount: 0,
-            sequential_id: 0,
-            favorite: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SealListSnapshot {
     pub seal_leader_id: i16,
     pub seals: Vec<SealRecord>,
-}
-
-impl Default for SealListSnapshot {
-    fn default() -> Self {
-        Self {
-            seal_leader_id: 0,
-            seals: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,7 +190,7 @@ impl Default for AttendanceStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RelationEntry {
     pub name: String,
@@ -228,32 +198,12 @@ pub struct RelationEntry {
     pub annotation: String,
 }
 
-impl Default for RelationEntry {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            connected: false,
-            annotation: String::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GuildAuthoritySnapshot {
     pub class: u8,
     pub title: String,
     pub duty: String,
-}
-
-impl Default for GuildAuthoritySnapshot {
-    fn default() -> Self {
-        Self {
-            class: 0,
-            title: String::new(),
-            duty: String::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -376,7 +326,7 @@ impl Default for GuildSnapshot {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct XaiSnapshot {
     pub item_id: i32,
@@ -384,34 +334,13 @@ pub struct XaiSnapshot {
     pub max_xcrystals: i16,
 }
 
-impl Default for XaiSnapshot {
-    fn default() -> Self {
-        Self {
-            item_id: 0,
-            max_xgauge: 0,
-            max_xcrystals: 0,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ActiveBuffSnapshot {
     pub buff_id: u16,
     pub buff_class: u16,
     pub skill_id: i32,
     pub remaining_seconds: i32,
-}
-
-impl Default for ActiveBuffSnapshot {
-    fn default() -> Self {
-        Self {
-            buff_id: 0,
-            buff_class: 0,
-            skill_id: 0,
-            remaining_seconds: 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -872,21 +801,12 @@ pub struct GameServerTarget {
 // Quest progress (per character)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct InProgressQuest {
     pub quest_id: i16,
     /// Goals 0..4. Each value is the cumulative progress count for that goal index.
     pub goals: [i16; 5],
-}
-
-impl Default for InProgressQuest {
-    fn default() -> Self {
-        Self {
-            quest_id: 0,
-            goals: [0; 5],
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -939,6 +859,11 @@ impl Default for EncyclopediaEvolutionEntry {
 pub struct EncyclopediaEntry {
     pub digimon_evolution_id: i64,
     pub level: u8,
+    pub enchant_at: i16,
+    pub enchant_bl: i16,
+    pub enchant_ct: i16,
+    pub enchant_ev: i16,
+    pub enchant_hp: i16,
     pub size: i16,
     pub reward_allowed: bool,
     pub reward_received: bool,
@@ -951,6 +876,11 @@ impl Default for EncyclopediaEntry {
         Self {
             digimon_evolution_id: 0,
             level: 1,
+            enchant_at: 0,
+            enchant_bl: 0,
+            enchant_ct: 0,
+            enchant_ev: 0,
+            enchant_hp: 0,
             size: 12_000,
             reward_allowed: false,
             reward_received: false,
@@ -960,25 +890,17 @@ impl Default for EncyclopediaEntry {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EncyclopediaSnapshot {
     pub entries: Vec<EncyclopediaEntry>,
-}
-
-impl Default for EncyclopediaSnapshot {
-    fn default() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
 // Friend list (per character)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FriendListEntry {
     pub character_id: CharacterId,
@@ -987,22 +909,11 @@ pub struct FriendListEntry {
     pub favorite: bool,
 }
 
-impl Default for FriendListEntry {
-    fn default() -> Self {
-        Self {
-            character_id: 0,
-            name: String::new(),
-            annotation: String::new(),
-            favorite: false,
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Cash shop history (per character/account)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CashShopHistoryEntry {
     pub order_id: u32,
@@ -1010,18 +921,6 @@ pub struct CashShopHistoryEntry {
     pub amount: i16,
     pub price: i32,
     pub purchased_at_unix: u64,
-}
-
-impl Default for CashShopHistoryEntry {
-    fn default() -> Self {
-        Self {
-            order_id: 0,
-            product_id: 0,
-            amount: 0,
-            price: 0,
-            purchased_at_unix: 0,
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1054,20 +953,11 @@ impl Default for CashShopProduct {
 // DigiSummon catalog (server-wide random-box data)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DigiSummonTicket {
     pub item_id: i32,
     pub cost: i32,
-}
-
-impl Default for DigiSummonTicket {
-    fn default() -> Self {
-        Self {
-            item_id: 0,
-            cost: 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1096,7 +986,7 @@ impl Default for DigiSummonReward {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DigiSummonProduct {
     pub product_id: i32,
@@ -1111,22 +1001,150 @@ pub struct DigiSummonProduct {
     pub rewards: Vec<DigiSummonReward>,
 }
 
-impl Default for DigiSummonProduct {
+/// One reward in the random box pool: an item stack and its relative selection weight.
+///
+/// The box rolls a single reward by weight over the pool. `weight` is the
+/// relative chance of this entry; an entry with zero weight is never picked
+/// while a positive-weight entry remains.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RandomBoxReward {
+    /// Item id granted when this entry is rolled.
+    pub item_id: i32,
+    /// Stack amount granted.
+    pub amount: u16,
+    /// Relative weight for selecting this entry during a roll.
+    pub weight: u32,
+}
+
+impl Default for RandomBoxReward {
     fn default() -> Self {
         Self {
-            product_id: 0,
-            string_id: 0,
-            draw_count: 0,
-            rank: 0,
-            remaining_daily_limit: 0,
-            icon: String::new(),
-            name: String::new(),
-            description: String::new(),
-            tickets: Vec::new(),
-            rewards: Vec::new(),
+            item_id: 0,
+            amount: 1,
+            weight: 0,
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Digi/Union Combine catalog (server-wide gacha-combine data)
+// ---------------------------------------------------------------------------
+
+/// A material item reference the client submits when combining and the server echoes back.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CombineItemRef {
+    /// Unique inventory id of the submitted material.
+    pub item_uid: u32,
+    /// Item type/class of the material.
+    pub item_type: u16,
+    /// Stack count contributed by this material node.
+    pub count: u16,
+}
+
+/// One entry of the combine ceiling map: a tier key and its two progress values.
+///
+/// The widths are fixed (`u8` key, `u8`, `u2`); the precise meaning of the two
+/// values is not yet decoded and is left to the reward/ceiling logic.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CombineCeilingEntry {
+    /// Ceiling tier key.
+    pub tier: u8,
+    /// First ceiling value (one byte on the wire).
+    pub value_a: u8,
+    /// Second ceiling value (two bytes on the wire).
+    pub value_b: u16,
+}
+
+/// A reward item granted by a combine roll (leading decoded fields of the reward node).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigiCombineReward {
+    /// Item id granted.
+    pub item_id: i32,
+    /// Stack amount granted.
+    pub amount: u16,
+    /// Reward grade/tier.
+    pub grade: u8,
+}
+
+impl Default for DigiCombineReward {
+    fn default() -> Self {
+        Self {
+            item_id: 0,
+            amount: 1,
+            grade: 0,
+        }
+    }
+}
+
+/// One rank-tier row: the reward pool and selection weight for a ceiling tier.
+///
+/// Pack-table columns beyond the fields needed to drive a roll are deferred.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigiCombineRank {
+    /// Ceiling tier this rank belongs to; matches the leading combine byte and the ceiling map key.
+    pub ceiling_type: u8,
+    /// Relative weight for selecting this rank during a roll.
+    pub weight: u32,
+    /// Reward pool granted when this rank is rolled.
+    pub rewards: Vec<DigiCombineReward>,
+}
+
+/// One material-item row: an item allowed as a combine material and the group it belongs to.
+///
+/// Pack-table columns beyond the membership fields needed to validate a roll are deferred.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigiCombineItem {
+    /// Item id accepted as a combine material.
+    pub item_id: i32,
+    /// Group this material belongs to.
+    pub group_id: i32,
+}
+
+/// One item-group row: a named group of materials the combine roll selects from.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigiCombineGroup {
+    /// Group identifier referenced by material rows.
+    pub group_id: i32,
+    /// Item ids that make up this group.
+    pub members: Vec<i32>,
+}
+
+/// One ceiling-group row: the ceiling-map entries emitted for a tier.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigiCombineCeil {
+    /// Ceiling tier this row configures.
+    pub ceiling_type: u8,
+    /// Ceiling-map entries emitted for this tier.
+    pub entries: Vec<CombineCeilingEntry>,
+}
+
+/// The Digi Combine catalog: rank, material, group, and ceiling rows.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigiCombineCatalog {
+    /// Rank-tier rows and their reward pools.
+    pub rank_rows: Vec<DigiCombineRank>,
+    /// Allowed combine materials.
+    pub item_list: Vec<DigiCombineItem>,
+    /// Material groupings.
+    pub item_groups: Vec<DigiCombineGroup>,
+    /// Ceiling-group configuration.
+    pub ceil_groups: Vec<DigiCombineCeil>,
+}
+
+/// The Union Combine catalog.
+///
+/// Union shares byte-identical node layouts with Digi Combine, so it reuses the
+/// same catalog and sub-types rather than duplicating them.
+pub type UnionCombineCatalog = DigiCombineCatalog;
 
 // ---------------------------------------------------------------------------
 // Extra evolution / digital fusion catalog
@@ -1176,27 +1194,18 @@ impl Default for ExtraEvolutionRecipe {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ExtraEvolutionNpc {
     pub npc_id: i32,
     pub recipes: Vec<ExtraEvolutionRecipe>,
 }
 
-impl Default for ExtraEvolutionNpc {
-    fn default() -> Self {
-        Self {
-            npc_id: 0,
-            recipes: Vec::new(),
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Tamer/personal shop state (consigned shop = warehouse-shop)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ConsignedShopListing {
     pub listing_id: u32,
@@ -1208,41 +1217,18 @@ pub struct ConsignedShopListing {
     pub created_at_unix: u64,
 }
 
-impl Default for ConsignedShopListing {
-    fn default() -> Self {
-        Self {
-            listing_id: 0,
-            seller_id: 0,
-            seller_name: String::new(),
-            item_id: 0,
-            amount: 0,
-            price_per_unit: 0,
-            created_at_unix: 0,
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Trade session
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TradeSlotEntry {
     pub trade_slot: u8,
     pub item_record: ItemRecord,
 }
 
-impl Default for TradeSlotEntry {
-    fn default() -> Self {
-        Self {
-            trade_slot: 0,
-            item_record: ItemRecord::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TradeSideState {
     pub character_id: CharacterId,
@@ -1250,18 +1236,6 @@ pub struct TradeSideState {
     pub money: i64,
     pub locked: bool,
     pub final_confirmed: bool,
-}
-
-impl Default for TradeSideState {
-    fn default() -> Self {
-        Self {
-            character_id: 0,
-            items: Vec::new(),
-            money: 0,
-            locked: false,
-            final_confirmed: false,
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1298,7 +1272,7 @@ impl Default for ArenaRankingEntry {
 // Hatch (incubator) state (per character)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HatchState {
     /// Whether an egg is currently in the incubator.
@@ -1311,35 +1285,15 @@ pub struct HatchState {
     pub backup_active: bool,
 }
 
-impl Default for HatchState {
-    fn default() -> Self {
-        Self {
-            egg_inserted: false,
-            egg_item_id: 0,
-            increase_level: 0,
-            backup_active: false,
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Digimon archive (storage of dormant partners)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DigimonArchiveEntry {
     pub archive_slot: u8,
     pub partner: PartnerSlotSnapshot,
-}
-
-impl Default for DigimonArchiveEntry {
-    fn default() -> Self {
-        Self {
-            archive_slot: 0,
-            partner: PartnerSlotSnapshot::default(),
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------

@@ -130,10 +130,10 @@ impl AccountApplication {
                 };
 
                 let mut responses = vec![LoginRequestAnswerPacket::Success(screen).encode()];
-                if self.config.use_resource_hash {
-                    if let Some(packet) = self.resources_hash_packet() {
-                        responses.push(packet);
-                    }
+                if self.config.use_resource_hash
+                    && let Some(packet) = self.resources_hash_packet()
+                {
+                    responses.push(packet);
                 }
                 Ok(responses)
             }
@@ -152,10 +152,9 @@ impl AccountApplication {
                 let account_id = self.require_authenticated(session)?;
                 let account = self.account_by_id(account_id)?;
 
-                let result = if check_mode == SecondaryPasswordCheck::DontCheck {
-                    session.secondary_verified = true;
-                    SecondaryPasswordCheck::CorrectOrSkipped
-                } else if account.secondary_password == password {
+                let result = if check_mode == SecondaryPasswordCheck::DontCheck
+                    || account.secondary_password == password
+                {
                     session.secondary_verified = true;
                     SecondaryPasswordCheck::CorrectOrSkipped
                 } else {
@@ -208,10 +207,10 @@ impl AccountApplication {
                 self.issue_transfer_ticket(account_id, server_id as u32);
 
                 let mut responses = Vec::new();
-                if self.config.use_resource_hash {
-                    if let Some(packet) = self.resources_hash_packet() {
-                        responses.push(packet);
-                    }
+                if self.config.use_resource_hash
+                    && let Some(packet) = self.resources_hash_packet()
+                {
+                    responses.push(packet);
                 }
                 responses.push(
                     ConnectCharacterServerPacket {
@@ -310,6 +309,12 @@ impl AccountApplication {
 #[derive(Debug)]
 pub struct SessionFactory {
     next_seed: AtomicI16,
+}
+
+impl Default for SessionFactory {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SessionFactory {

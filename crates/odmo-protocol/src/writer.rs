@@ -76,6 +76,17 @@ impl PacketWriter {
         }
     }
 
+    /// Write a length-prefixed UTF-16LE string: `[u8 code-unit count][units...][u16 0]`.
+    /// This is the wide analogue of `write_string`, used for variable-length names.
+    pub fn write_wide_string(&mut self, value: &str) {
+        let units: Vec<u16> = value.encode_utf16().collect();
+        self.write_u8(units.len() as u8);
+        for unit in units {
+            self.write_u16(unit);
+        }
+        self.write_u16(0);
+    }
+
     pub fn write_string_at(&mut self, value: &str, pos: usize) {
         let bytes = value.as_bytes();
         self.buffer[pos] = bytes.len() as u8;

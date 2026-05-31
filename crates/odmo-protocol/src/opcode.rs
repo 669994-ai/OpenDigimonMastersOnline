@@ -80,7 +80,7 @@ pub mod game {
     pub const REPURCHASE_ITEM: i16 = 3978;
     pub const LOAD_NPC_REPURCHASE_LIST: i16 = 3979;
     pub const DIGI_SUMMON_SYNC_REQUEST: i16 = 3652;
-    pub const DIGI_SUMMON_SYNC_RESPONSE: i16 = 3702;
+    pub const DIGI_SUMMON_SYNC_RESPONSE: i16 = 3652;
     pub const EXITEM_MOVE: i16 = 0x0ED9;
     pub const EXITEM_BATCH_MOVE: i16 = 0x0EDA;
     pub const EXITEM_SORT: i16 = 0x0EDB;
@@ -170,6 +170,8 @@ pub mod game {
     pub const ENCYCLOPEDIA_LOAD_RESPONSE: i16 = 3234;
     pub const ENCYCLOPEDIA_GET_REWARD: i16 = 3236;
     pub const ENCYCLOPEDIA_DECK_BUFF: i16 = 3237;
+    pub const OTHER_TAMER_DETAIL_INFO_REQUEST: i16 = 16070;
+    pub const OTHER_TAMER_DETAIL_INFO_RESPONSE: i16 = 16071;
     pub const ARENA_DAILY_POINTS: i16 = 4131;
     pub const ARENA_DAILY_RANKING: i16 = 4130;
     pub const ARENA_RANKING_ALL: i16 = 16023;
@@ -250,7 +252,16 @@ pub mod game {
     pub const GUILD_AUTHORITY_DATS: i16 = 2117;
     pub const HATCH_SPIRIT_EVOLUTION: i16 = 3240;
     pub const DIGI_SUMMON_PURCHASE: i16 = 3651;
-    pub const DIGI_SUMMON_PURCHASE_RESPONSE: i16 = 3701;
+    pub const DIGI_SUMMON_PURCHASE_RESPONSE: i16 = 3651;
+    // Digivice combine and union combine flows, plus the random box draw.
+    pub const DIGI_COMBINE_SYNC: i16 = 3661;
+    pub const DIGI_COMBINE: i16 = 3662;
+    pub const DIGI_COMBINE_REWARD: i16 = 3663;
+    pub const UNION_COMBINE_SYNC: i16 = 4301;
+    pub const UNION_COMBINE: i16 = 4302;
+    pub const UNION_COMBINE_REWARD: i16 = 4303;
+    pub const RANDOM_BOX_LIST: i16 = 16067;
+    pub const RANDOM_BOX_PURCHASE: i16 = 16068;
     pub const LOAD_ACCOUNT_WAREHOUSE: i16 = 3930;
     pub const RETRIEVE_ACCOUNT_WAREHOUSE: i16 = 3931;
     pub const PARTY_MEMBER_DISCONNECT: i16 = 2312;

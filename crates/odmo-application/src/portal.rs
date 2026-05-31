@@ -161,8 +161,6 @@ impl PortalStore for JsonPortalBridge {
             .with_context(|| format!("failed to read game session ticket {}", path.display()))?;
         let ticket = serde_json::from_slice(&payload)
             .with_context(|| format!("failed to decode game session ticket {}", path.display()))?;
-        fs::remove_file(&path)
-            .with_context(|| format!("failed to remove consumed game ticket {}", path.display()))?;
         Ok(Some(ticket))
     }
 
