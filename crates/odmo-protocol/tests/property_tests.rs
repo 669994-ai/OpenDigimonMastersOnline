@@ -6,7 +6,8 @@
 use odmo_protocol::game::{
     CombineResultResponsePacket, CombineSyncResponsePacket, HatchSpiritEvolutionResultPacket,
     RandomBoxListEntry, RandomBoxListResponsePacket, RandomBoxPurchaseResponsePacket,
-    SpiritCraftResultPacket,
+    SpiritCraftResultPacket, UnionHackModifyResponsePacket, UnionHackOpenResponsePacket,
+    UnionHackSlot, UnionInitDataPacket,
 };
 use odmo_protocol::{
     DigiSummonPurchaseResponsePacket, DigiSummonSyncResponsePacket, GameRequest, PacketReader,
@@ -98,6 +99,19 @@ fn item_block_strategy() -> impl Strategy<Value = (u8, u32)> {
     (1..=u8::MAX, any::<u32>())
 }
 
+/// Strategy for one row in the D-Unit (Union hacking tool) response list.
+/// The locked flag is a single bit so any boolean is fair game.
+fn union_hack_slot_strategy() -> impl Strategy<Value = UnionHackSlot> {
+    (any::<u8>(), any::<i32>(), any::<i16>(), any::<bool>()).prop_map(
+        |(slot, part_id, grade, locked)| UnionHackSlot {
+            slot,
+            part_id,
+            grade,
+            locked,
+        },
+    )
+}
+
 /// Strategy for an Extra Evolution name. The wide-string reader trims ASCII
 /// whitespace, so names exclude leading/trailing spaces; length stays within
 /// the `u8` code-unit count and uses printable ASCII so the UTF-16 round-trip
@@ -176,6 +190,22 @@ fn encode_request(req: &GameRequest) -> Vec<u8> {
         GameRequest::UnionCombineRewardClaim { ceiling_type } => {
             let mut writer = PacketWriter::new(game::UNION_COMBINE_REWARD);
             writer.write_u8(*ceiling_type);
+            writer.finalize()
+        }
+        // Bare body: opcode plus the framing only.
+        GameRequest::UnionHackOpenRequest => {
+            PacketWriter::new(game::UNION_HACK_OPEN_REQUEST).finalize()
+        }
+        // [u8 slot][i32 part_id][i16 grade].
+        GameRequest::UnionHackModify {
+            slot,
+            part_id,
+            grade,
+        } => {
+            let mut writer = PacketWriter::new(game::UNION_HACK_MODIFY_REQUEST);
+            writer.write_u8(*slot);
+            writer.write_i32(*part_id);
+            writer.write_i16(*grade);
             writer.finalize()
         }
         // [i32 model_id][wstring name][i32 npc_id].
@@ -262,6 +292,14 @@ fn covered_request_strategy() -> impl Strategy<Value = GameRequest> {
                 materials,
             }),
         any::<u8>().prop_map(|ceiling_type| GameRequest::UnionCombineRewardClaim { ceiling_type }),
+        Just(GameRequest::UnionHackOpenRequest),
+        (any::<u8>(), any::<i32>(), any::<i16>()).prop_map(|(slot, part_id, grade)| {
+            GameRequest::UnionHackModify {
+                slot,
+                part_id,
+                grade,
+            }
+        }),
         (any::<i32>(), extra_evolution_name_strategy(), any::<i32>()).prop_map(
             |(model_id, name, npc_id)| GameRequest::HatchSpiritEvolution {
                 model_id,
@@ -330,6 +368,8 @@ fn request_opcode(req: &GameRequest) -> i16 {
         GameRequest::UnionCombineSyncRequest => game::UNION_COMBINE_SYNC,
         GameRequest::UnionCombine { .. } => game::UNION_COMBINE,
         GameRequest::UnionCombineRewardClaim { .. } => game::UNION_COMBINE_REWARD,
+        GameRequest::UnionHackOpenRequest => game::UNION_HACK_OPEN_REQUEST,
+        GameRequest::UnionHackModify { .. } => game::UNION_HACK_MODIFY_REQUEST,
         GameRequest::HatchSpiritEvolution { .. } => game::HATCH_SPIRIT_EVOLUTION,
         GameRequest::SpiritCraft { .. } => game::SPIRIT_CRAFT,
         GameRequest::RandomBoxList { .. } => game::RANDOM_BOX_LIST,
@@ -488,6 +528,64 @@ fn covered_response_strategy() -> impl Strategy<Value = (Vec<u8>, i16)> {
         })
         .boxed();
 
+    let union_hack_open = (
+        any::<u8>(),
+        any::<u8>(),
+        prop::collection::vec(union_hack_slot_strategy(), 0..=6),
+    )
+        .prop_map(|(result, unlocked_slots, slots)| {
+            (
+                UnionHackOpenResponsePacket {
+                    result,
+                    unlocked_slots,
+                    slots,
+                }
+                .encode(),
+                game::UNION_HACK_OPEN_RESPONSE,
+            )
+        })
+        .boxed();
+
+    let union_hack_modify = (
+        any::<u8>(),
+        any::<u8>(),
+        any::<i32>(),
+        any::<i16>(),
+        any::<i32>(),
+    )
+        .prop_map(|(result, slot, new_part_id, new_grade, total_rating)| {
+            (
+                UnionHackModifyResponsePacket {
+                    result,
+                    slot,
+                    new_part_id,
+                    new_grade,
+                    total_rating,
+                }
+                .encode(),
+                game::UNION_HACK_MODIFY_RESPONSE,
+            )
+        })
+        .boxed();
+
+    let union_init_data = (
+        prop::collection::vec(union_hack_slot_strategy(), 0..=6),
+        any::<i32>(),
+        any::<i32>(),
+    )
+        .prop_map(|(slots, total_rating, synergy_bonus)| {
+            (
+                UnionInitDataPacket {
+                    slots,
+                    total_rating,
+                    synergy_bonus,
+                }
+                .encode(),
+                game::UNION_INIT_DATA,
+            )
+        })
+        .boxed();
+
     prop_oneof![
         sync,
         purchase,
@@ -497,6 +595,9 @@ fn covered_response_strategy() -> impl Strategy<Value = (Vec<u8>, i16)> {
         craft_result,
         random_box_list,
         random_box_purchase,
+        union_hack_open,
+        union_hack_modify,
+        union_init_data,
     ]
 }
 
@@ -1026,6 +1127,118 @@ proptest! {
             prop_assert_eq!(craft_reader.read_u32().expect("gained item_id"), *item_id);
         }
         prop_assert_eq!(craft_reader.read_u8().expect("gained terminator"), 0);
+    }
+
+    /// D-Unit (Union hacking tool) opcodes 4311/4312/4313 round-trip exactly.
+    ///
+    /// The C2S open request is a bare body — encoding the variant yields a
+    /// frame that decodes back to the same `UnionHackOpenRequest`. The modify
+    /// request carries `[u8 slot][i32 part_id][i16 grade]` and round-trips all
+    /// three fields. The S2C open / modify / init data packets each preserve
+    /// the opcode, the unlocked slot count, every row in order, and the
+    /// trailing rating/synergy integers.
+    #[test]
+    fn union_hack_packets_round_trip(
+        slot in any::<u8>(),
+        part_id in any::<i32>(),
+        grade in any::<i16>(),
+        result in any::<u8>(),
+        unlocked_slots in any::<u8>(),
+        slots in prop::collection::vec(union_hack_slot_strategy(), 0..=6),
+        total_rating in any::<i32>(),
+        synergy_bonus in any::<i32>(),
+    ) {
+        // C2S open (4311): bare body.
+        let open_frame = encode_request(&GameRequest::UnionHackOpenRequest);
+        let open_raw = PacketReader::from_frame(&open_frame).expect("open frame decodes");
+        prop_assert_eq!(open_raw.packet_type, game::UNION_HACK_OPEN_REQUEST);
+        let decoded_open = GameRequest::try_from(RawPacket {
+            length: open_raw.length,
+            packet_type: open_raw.packet_type,
+            payload: open_raw.payload,
+        })
+        .expect("open request parses");
+        prop_assert_eq!(&decoded_open, &GameRequest::UnionHackOpenRequest);
+        let re_encoded_open = encode_request(&decoded_open);
+        prop_assert_eq!(re_encoded_open, open_frame);
+
+        // C2S modify (4312): [u8 slot][i32 part_id][i16 grade].
+        let modify_req = GameRequest::UnionHackModify {
+            slot,
+            part_id,
+            grade,
+        };
+        let modify_frame = encode_request(&modify_req);
+        let modify_raw = PacketReader::from_frame(&modify_frame).expect("modify frame decodes");
+        let decoded_modify = GameRequest::try_from(RawPacket {
+            length: modify_raw.length,
+            packet_type: modify_raw.packet_type,
+            payload: modify_raw.payload,
+        })
+        .expect("modify request parses");
+        prop_assert_eq!(&decoded_modify, &modify_req);
+        let re_encoded_modify = encode_request(&decoded_modify);
+        prop_assert_eq!(re_encoded_modify, modify_frame);
+
+        // S2C open (4311): [u8 result][u8 unlocked][u8 count][rows...].
+        let open_resp_frame = UnionHackOpenResponsePacket {
+            result,
+            unlocked_slots,
+            slots: slots.clone(),
+        }
+        .encode();
+        let open_resp_raw =
+            PacketReader::from_frame(&open_resp_frame).expect("open response decodes");
+        prop_assert_eq!(open_resp_raw.packet_type, game::UNION_HACK_OPEN_RESPONSE);
+        let mut reader = PacketReader::new(open_resp_raw.payload);
+        prop_assert_eq!(reader.read_u8().expect("open result"), result);
+        prop_assert_eq!(reader.read_u8().expect("open unlocked"), unlocked_slots);
+        prop_assert_eq!(reader.read_u8().expect("open count") as usize, slots.len());
+        for row in &slots {
+            prop_assert_eq!(reader.read_u8().expect("row slot"), row.slot);
+            prop_assert_eq!(reader.read_i32().expect("row part"), row.part_id);
+            prop_assert_eq!(reader.read_i16().expect("row grade"), row.grade);
+            prop_assert_eq!(reader.read_u8().expect("row locked"), u8::from(row.locked));
+        }
+
+        // S2C modify (4312): [u8 result][u8 slot][i32 part][i16 grade][i32 total].
+        let modify_resp_frame = UnionHackModifyResponsePacket {
+            result,
+            slot,
+            new_part_id: part_id,
+            new_grade: grade,
+            total_rating,
+        }
+        .encode();
+        let modify_resp_raw =
+            PacketReader::from_frame(&modify_resp_frame).expect("modify response decodes");
+        prop_assert_eq!(modify_resp_raw.packet_type, game::UNION_HACK_MODIFY_RESPONSE);
+        let mut reader = PacketReader::new(modify_resp_raw.payload);
+        prop_assert_eq!(reader.read_u8().expect("mod result"), result);
+        prop_assert_eq!(reader.read_u8().expect("mod slot"), slot);
+        prop_assert_eq!(reader.read_i32().expect("mod part"), part_id);
+        prop_assert_eq!(reader.read_i16().expect("mod grade"), grade);
+        prop_assert_eq!(reader.read_i32().expect("mod total"), total_rating);
+
+        // S2C init (4313): [u8 count][rows...][i32 total][i32 synergy].
+        let init_frame = UnionInitDataPacket {
+            slots: slots.clone(),
+            total_rating,
+            synergy_bonus,
+        }
+        .encode();
+        let init_raw = PacketReader::from_frame(&init_frame).expect("init frame decodes");
+        prop_assert_eq!(init_raw.packet_type, game::UNION_INIT_DATA);
+        let mut reader = PacketReader::new(init_raw.payload);
+        prop_assert_eq!(reader.read_u8().expect("init count") as usize, slots.len());
+        for row in &slots {
+            prop_assert_eq!(reader.read_u8().expect("init row slot"), row.slot);
+            prop_assert_eq!(reader.read_i32().expect("init row part"), row.part_id);
+            prop_assert_eq!(reader.read_i16().expect("init row grade"), row.grade);
+            prop_assert_eq!(reader.read_u8().expect("init row locked"), u8::from(row.locked));
+        }
+        prop_assert_eq!(reader.read_i32().expect("init total"), total_rating);
+        prop_assert_eq!(reader.read_i32().expect("init synergy"), synergy_bonus);
     }
 
     /// Feature: babel-npc-summon-fusion, Property 16: Every covered C2S request round-trips.

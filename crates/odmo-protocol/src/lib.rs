@@ -54,7 +54,8 @@ pub use game::{
     TradeAcceptPacket, TradeAddItemPacket, TradeAddMoneyPacket, TradeCancelPacket,
     TradeConfirmationPacket, TradeFinalConfirmationPacket, TradeInventoryLockPacket,
     TradeInventoryUnlockPacket, TradeRemoveItemPacket, TradeRequestErrorPacket,
-    TradeRequestSuccessPacket, UnloadDropsPacket, UnloadMobsPacket, UnloadTamerPacket,
+    TradeRequestSuccessPacket, UnionHackModifyResponsePacket, UnionHackOpenResponsePacket,
+    UnionHackSlot, UnionInitDataPacket, UnloadDropsPacket, UnloadMobsPacket, UnloadTamerPacket,
     UpdateCurrentTitlePacket, UpdateMovementSpeedPacket, UpdateStatusPacket, XaiInfoPacket,
 };
 pub use reader::{PacketReader, RawPacket};

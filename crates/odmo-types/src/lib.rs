@@ -647,6 +647,8 @@ pub struct CharacterSummary {
     pub reward_storage: Vec<ItemRecord>,
     /// Gift storage (premium gifts).
     pub gift_storage: Vec<ItemRecord>,
+    /// D-Unit (Union hacking tool) installed parts, one per unlocked slot.
+    pub union_hack_slots: Vec<UnionHackSlotRow>,
 }
 
 impl Default for CharacterSummary {
@@ -787,6 +789,7 @@ impl Default for CharacterSummary {
             npc_repurchase_log: Vec::new(),
             reward_storage: Vec::new(),
             gift_storage: Vec::new(),
+            union_hack_slots: Vec::new(),
         }
     }
 }
@@ -1023,6 +1026,35 @@ impl Default for RandomBoxReward {
             item_id: 0,
             amount: 1,
             weight: 0,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// D-Unit (Union hacking tool) — per character
+// ---------------------------------------------------------------------------
+
+/// One row in the modern D-Unit hacking grid: the part installed in a given
+/// slot, the grade rolled on it, and whether the slot is locked against
+/// further edits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct UnionHackSlotRow {
+    /// Catalog part id installed in the slot (mirrors `CSTable_Union`).
+    pub part_id: i32,
+    /// Grade/level rolled on the installed part; contributes to the total
+    /// rating shown on the hacking tool header.
+    pub grade: i16,
+    /// Whether the slot is currently locked.
+    pub locked: bool,
+}
+
+impl Default for UnionHackSlotRow {
+    fn default() -> Self {
+        Self {
+            part_id: 0,
+            grade: 0,
+            locked: false,
         }
     }
 }

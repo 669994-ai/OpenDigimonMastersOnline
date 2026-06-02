@@ -1,11 +1,11 @@
 use odmo_application::account::AccountRepository;
 use odmo_application::character::{CharacterAccountRepository, CharacterRepository};
-use odmo_types::{
-    Account, AccountId, ActiveBuffSnapshot, AttendanceStatus, ChannelAvailability,
-    CharacterSummary, DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DailyRewardStatus,
-    EncyclopediaSnapshot, GuildSnapshot, InventorySnapshot, PartnerSlotSnapshot, RelationEntry,
-    SealListSnapshot, XaiSnapshot,
-};
+    use odmo_types::{
+        Account, AccountId, ActiveBuffSnapshot, AttendanceStatus, ChannelAvailability,
+        CharacterSummary, DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DailyRewardStatus,
+        EncyclopediaSnapshot, GuildSnapshot, InventorySnapshot, PartnerSlotSnapshot, RelationEntry,
+        SealListSnapshot, UnionHackSlotRow, XaiSnapshot,
+    };
 
 use super::PgRepository;
 use crate::{active_partner_snapshot, apply_partner_snapshot};
@@ -56,6 +56,7 @@ pub(crate) struct CharacterDb {
     pub available_channels: serde_json::Value,
     pub partner_slots: serde_json::Value,
     pub encyclopedia: serde_json::Value,
+    pub union_hack_slots: serde_json::Value,
     pub deck_buff_id: i32,
     pub server_experience: i32,
     pub premium: i32,
@@ -73,7 +74,7 @@ const SELECT_COLS: &str = "\
     seal_list, guild_snapshot, xai_snapshot, active_buffs, \
     friends, foes, friended_character_ids, map_regions, \
     equipment, digivice, daily_reward, attendance, partner_slots, \
-    available_channels, encyclopedia, deck_buff_id, \
+    available_channels, encyclopedia, union_hack_slots, deck_buff_id, \
     server_experience, premium, silk, membership_seconds";
 
 pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
@@ -107,6 +108,8 @@ pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
     let attendance: AttendanceStatus = serde_json::from_value(row.attendance).unwrap_or_default();
     let encyclopedia: EncyclopediaSnapshot =
         serde_json::from_value(row.encyclopedia).unwrap_or_default();
+    let union_hack_slots: Vec<UnionHackSlotRow> =
+        serde_json::from_value(row.union_hack_slots).unwrap_or_default();
     let mut partner_slots: Vec<PartnerSlotSnapshot> =
         serde_json::from_value(row.partner_slots).unwrap_or_default();
     let available_channels: Vec<ChannelAvailability> =
@@ -219,6 +222,7 @@ pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
         partner_clone_hp_level: 0,
         encyclopedia,
         active_deck_buff: row.deck_buff_id,
+        union_hack_slots,
         ..CharacterSummary::default()
     };
 
@@ -388,6 +392,7 @@ impl CharacterRepository for PgRepository {
             let default_seals = serde_json::json!({"seal_leader_id": 0, "seals": []});
             let default_channels = serde_json::json!([{"channel": 0, "load": 1}]);
             let default_encyclopedia = serde_json::json!({"entries": []});
+            let default_union_hacks = serde_json::json!([]);
             let default_partner_slots = serde_json::json!([{
                 "slot": 1, "digimon_type": partner_model, "model": partner_model,
                 "level": 1, "name": partner_name, "size": 12000, "hatch_grade": 3,
@@ -408,8 +413,9 @@ impl CharacterRepository for PgRepository {
                  general_handler, partner_handler, \
                  partner_name, partner_model, bits, xgauge, xcrystals, \
                  inventory, warehouse, extra_inventory, account_warehouse, \
-                 seal_list, available_channels, partner_slots, encyclopedia, deck_buff_id) \
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)",
+                 seal_list, available_channels, partner_slots, encyclopedia, \
+                 union_hack_slots, deck_buff_id) \
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)",
             )
             .bind(account_id as i64)
             .bind(slot as i16)
@@ -439,6 +445,7 @@ impl CharacterRepository for PgRepository {
             .bind(&default_channels)
             .bind(&default_partner_slots)
             .bind(&default_encyclopedia)
+            .bind(&default_union_hacks)
             .bind(0i32)
             .execute(&pool)
             .await
@@ -742,6 +749,64 @@ impl CharacterRepository for PgRepository {
                 .execute(&pool)
                 .await?;
             Ok(())
+        })
+    }
+
+    fn union_hack_slots(
+        &self,
+        character_id: u64,
+    ) -> anyhow::Result<Vec<odmo_types::UnionHackSlotRow>> {
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            let row: (serde_json::Value,) =
+                sqlx::query_as("SELECT union_hack_slots FROM characters WHERE id = $1")
+                    .bind(character_id as i64)
+                    .fetch_optional(&pool)
+                    .await?
+                    .unwrap_or((serde_json::json!([]),));
+            Ok(serde_json::from_value(row.0).unwrap_or_default())
+        })
+    }
+
+    fn update_union_hack_slot(
+        &self,
+        character_id: u64,
+        slot: u8,
+        part_id: i32,
+        grade: i16,
+    ) -> anyhow::Result<bool> {
+        const MAX_SLOTS: usize = 6;
+        let slot_index = slot as usize;
+        if slot_index >= MAX_SLOTS {
+            return Ok(false);
+        }
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            let existing: (serde_json::Value,) =
+                sqlx::query_as("SELECT union_hack_slots FROM characters WHERE id = $1")
+                    .bind(character_id as i64)
+                    .fetch_optional(&pool)
+                    .await?
+                    .unwrap_or((serde_json::json!([]),));
+            let mut rows: Vec<odmo_types::UnionHackSlotRow> =
+                serde_json::from_value(existing.0).unwrap_or_default();
+            if rows.len() < slot_index + 1 {
+                rows.resize(slot_index + 1, odmo_types::UnionHackSlotRow::default());
+            }
+            rows[slot_index] = odmo_types::UnionHackSlotRow {
+                part_id,
+                grade,
+                locked: false,
+            };
+            let json = serde_json::to_value(&rows)?;
+            let result = sqlx::query(
+                "UPDATE characters SET union_hack_slots = $1 WHERE id = $2",
+            )
+            .bind(&json)
+            .bind(character_id as i64)
+            .execute(&pool)
+            .await?;
+            Ok(result.rows_affected() > 0)
         })
     }
 

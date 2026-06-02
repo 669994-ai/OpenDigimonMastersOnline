@@ -236,14 +236,14 @@ async fn serve_client(
                 }
 
                 for response in responses {
-                    if is_encyclopedia_load {
-                        if let Ok(raw_response) = PacketReader::from_frame(&response) {
-                            info!(
-                                "Encyclopedia load response sent packet={} payload_bytes={}",
-                                raw_response.packet_type,
-                                raw_response.payload.len()
-                            );
-                        }
+                    if is_encyclopedia_load
+                        && let Ok(raw_response) = PacketReader::from_frame(&response)
+                    {
+                        info!(
+                            "Encyclopedia load response sent packet={} payload_bytes={}",
+                            raw_response.packet_type,
+                            raw_response.payload.len()
+                        );
                     }
                     socket.write_all(&response).await?;
                 }

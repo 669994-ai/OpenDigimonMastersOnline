@@ -44,7 +44,8 @@ use odmo_protocol::{
     TamerWalkPacket, TamerXaiResourcesPacket, TimeRewardPacket, TradeAcceptPacket,
     TradeAddItemPacket, TradeAddMoneyPacket, TradeCancelPacket, TradeConfirmationPacket,
     TradeFinalConfirmationPacket, TradeInventoryLockPacket, TradeInventoryUnlockPacket,
-    TradeRemoveItemPacket, TradeRequestErrorPacket, TradeRequestSuccessPacket, UnloadDropsPacket,
+    TradeRemoveItemPacket, TradeRequestErrorPacket,     TradeRequestSuccessPacket, UnionHackModifyResponsePacket, UnionHackOpenResponsePacket,
+    UnionHackSlot, UnionInitDataPacket, UnloadDropsPacket,
     UnloadMobsPacket, UnloadTamerPacket, UpdateCurrentTitlePacket, UpdateMovementSpeedPacket,
     UpdateStatusPacket, XaiInfoPacket,
     game::{
@@ -479,7 +480,11 @@ impl GameApplication {
                 session.account_id = Some(account_id);
                 session.character_id = Some(character.id);
 
-                Ok(vec![GameInitialInfoPacket { character }.encode()])
+                let mut responses = vec![GameInitialInfoPacket { character }.encode()];
+                if let Ok(union_init) = self.build_union_init_data(session) {
+                    responses.push(union_init);
+                }
+                Ok(responses)
             }
             GameRequest::ComplementarInformation => {
                 let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
@@ -2488,6 +2493,12 @@ impl GameApplication {
             GameRequest::UnionCombineRewardClaim { ceiling_type } => {
                 self.handle_union_combine_reward_claim(session, ceiling_type)
             }
+            GameRequest::UnionHackOpenRequest => self.handle_union_hack_open(session),
+            GameRequest::UnionHackModify {
+                slot,
+                part_id,
+                grade,
+            } => self.handle_union_hack_modify(session, slot, part_id, grade),
             GameRequest::RandomBoxList { .. } => self.handle_random_box_list(session),
             GameRequest::RandomBoxPurchase { .. } => self.handle_random_box_purchase(session),
             GameRequest::SpiritCraft {
@@ -3496,6 +3507,129 @@ impl GameApplication {
             .encode(),
             reward_packet(COMBINE_RESULT_SUCCESS, rewards),
         ])
+    }
+
+    // ----- D-Unit (Union) hacking tool slice ----------------------------------------
+
+    /// Open the D-Unit hacking grid window. Returns the unlocked slot count and
+    /// the equipped parts per slot for the current character.
+    fn handle_union_hack_open(
+        &self,
+        session: &GameSession,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let rows = self
+            .repository
+            .union_hack_slots(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let unlocked_slots = rows.len().min(u8::MAX as usize) as u8;
+        let slots: Vec<UnionHackSlot> = rows
+            .into_iter()
+            .enumerate()
+            .map(|(index, row)| UnionHackSlot {
+                slot: index as u8,
+                part_id: row.part_id,
+                grade: row.grade,
+                locked: row.locked,
+            })
+            .collect();
+
+        Ok(vec![
+            UnionHackOpenResponsePacket {
+                result: 0,
+                unlocked_slots,
+                slots,
+            }
+            .encode()
+        ])
+    }
+
+    /// Replace the part installed in a given D-Unit slot for the current character.
+    /// Returns the modified slot plus the recomputed total rating.
+    fn handle_union_hack_modify(
+        &self,
+        session: &GameSession,
+        slot: u8,
+        part_id: i32,
+        grade: i16,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+
+        let updated = self
+            .repository
+            .update_union_hack_slot(character_id, slot, part_id, grade)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        if !updated {
+            return Ok(vec![
+                UnionHackModifyResponsePacket {
+                    result: 1,
+                    slot,
+                    new_part_id: part_id,
+                    new_grade: grade,
+                    total_rating: 0,
+                }
+                .encode(),
+            ]);
+        }
+
+        let rows = self
+            .repository
+            .union_hack_slots(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let total_rating: i32 = rows
+            .iter()
+            .map(|row| i32::from(row.grade))
+            .sum();
+
+        Ok(vec![
+            UnionHackModifyResponsePacket {
+                result: 0,
+                slot,
+                new_part_id: part_id,
+                new_grade: grade,
+                total_rating,
+            }
+            .encode()
+        ])
+    }
+
+    /// Push the full D-Unit state to the client on login so the modern
+    /// `cUnionContents` can hydrate its hacking grid without an extra request.
+    pub fn build_union_init_data(
+        &self,
+        session: &GameSession,
+    ) -> Result<Vec<u8>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let rows = self
+            .repository
+            .union_hack_slots(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let slots: Vec<UnionHackSlot> = rows
+            .into_iter()
+            .enumerate()
+            .map(|(index, row)| UnionHackSlot {
+                slot: index as u8,
+                part_id: row.part_id,
+                grade: row.grade,
+                locked: row.locked,
+            })
+            .collect();
+
+        let total_rating: i32 = slots
+            .iter()
+            .map(|slot| i32::from(slot.grade))
+            .sum();
+
+        Ok(UnionInitDataPacket {
+            slots,
+            total_rating,
+            synergy_bonus: 0,
+        }
+        .encode())
     }
 
     /// Read the Digi or Union combine catalog from the repository.
@@ -10231,7 +10365,7 @@ mod tests {
                 },
             )
             .expect("bootstrap should succeed");
-        assert_eq!(responses.len(), 1);
+        assert_eq!(responses.len(), 2);
     }
 
     #[test]
@@ -10261,7 +10395,7 @@ mod tests {
                 },
             )
             .expect("first bootstrap should succeed");
-        assert_eq!(first.len(), 1);
+        assert_eq!(first.len(), 2);
 
         let mut reconnect_session = GameSession::new(2);
         let reconnect = app
@@ -10273,7 +10407,7 @@ mod tests {
                 },
             )
             .expect("reconnect bootstrap should also succeed");
-        assert_eq!(reconnect.len(), 1);
+        assert_eq!(reconnect.len(), 2);
         assert_eq!(reconnect_session.character_id, Some(100));
     }
 

@@ -541,6 +541,15 @@ pub enum GameRequest {
     UnionCombineRewardClaim {
         ceiling_type: u8,
     },
+    /// D-Unit: open the hacking grid window — returns the unlocked slot count
+    /// and the equipped parts per slot (opcode 4311).
+    UnionHackOpenRequest,
+    /// D-Unit: replace the part installed in a given slot (opcode 4312).
+    UnionHackModify {
+        slot: u8,
+        part_id: i32,
+        grade: i16,
+    },
     /// Random box: open/sync the box window (5-byte body).
     RandomBoxList {
         flag: u8,
@@ -2345,6 +2354,94 @@ impl OtherTamerDetailInfoPacket {
         writer.write_i32(self.partner_ev);
         writer.write_i32(self.partner_clone_level);
         writer.write_string(&self.status);
+        writer.finalize()
+    }
+}
+
+// ===========================================================================
+// D-Unit / Union hacking & init packets (modern flow, opcode 4311/4312/4313)
+// ===========================================================================
+
+/// One slot row in the D-Unit / Union hacking grid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnionHackSlot {
+    /// Slot index inside the hacking grid (0..).
+    pub slot: u8,
+    /// Equipped part model id (0 when empty).
+    pub part_id: i32,
+    /// Grade / level of the part in that slot.
+    pub grade: i16,
+    /// Locked flag (cannot be replaced until unlocked with an item).
+    pub locked: bool,
+}
+
+/// Response payload for `UNION_HACK_OPEN` (opcode 4311).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnionHackOpenResponsePacket {
+    pub result: u8,
+    pub unlocked_slots: u8,
+    pub slots: Vec<UnionHackSlot>,
+}
+
+impl UnionHackOpenResponsePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::UNION_HACK_OPEN_RESPONSE);
+        writer.write_u8(self.result);
+        writer.write_u8(self.unlocked_slots);
+        writer.write_u8(self.slots.len() as u8);
+        for slot in &self.slots {
+            writer.write_u8(slot.slot);
+            writer.write_i32(slot.part_id);
+            writer.write_i16(slot.grade);
+            writer.write_u8(if slot.locked { 1 } else { 0 });
+        }
+        writer.finalize()
+    }
+}
+
+/// Response payload for `UNION_HACK_MODIFY` (opcode 4312).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnionHackModifyResponsePacket {
+    pub result: u8,
+    pub slot: u8,
+    pub new_part_id: i32,
+    pub new_grade: i16,
+    pub total_rating: i32,
+}
+
+impl UnionHackModifyResponsePacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::UNION_HACK_MODIFY_RESPONSE);
+        writer.write_u8(self.result);
+        writer.write_u8(self.slot);
+        writer.write_i32(self.new_part_id);
+        writer.write_i16(self.new_grade);
+        writer.write_i32(self.total_rating);
+        writer.finalize()
+    }
+}
+
+/// `UNION_INIT_DATA` push (opcode 4313) — sends the full D-Unit / Union state
+/// to the client on login so the modern `cUnionContents` can hydrate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnionInitDataPacket {
+    pub slots: Vec<UnionHackSlot>,
+    pub total_rating: i32,
+    pub synergy_bonus: i32,
+}
+
+impl UnionInitDataPacket {
+    pub fn encode(&self) -> Vec<u8> {
+        let mut writer = PacketWriter::new(game::UNION_INIT_DATA);
+        writer.write_u8(self.slots.len() as u8);
+        for slot in &self.slots {
+            writer.write_u8(slot.slot);
+            writer.write_i32(slot.part_id);
+            writer.write_i16(slot.grade);
+            writer.write_u8(if slot.locked { 1 } else { 0 });
+        }
+        writer.write_i32(self.total_rating);
+        writer.write_i32(self.synergy_bonus);
         writer.finalize()
     }
 }
@@ -4703,6 +4800,17 @@ impl TryFrom<RawPacket> for GameRequest {
             game::UNION_COMBINE_REWARD => {
                 let ceiling_type = reader.read_u8()?;
                 Ok(Self::UnionCombineRewardClaim { ceiling_type })
+            }
+            game::UNION_HACK_OPEN_REQUEST => Ok(Self::UnionHackOpenRequest),
+            game::UNION_HACK_MODIFY_REQUEST => {
+                let slot = reader.read_u8()?;
+                let part_id = reader.read_i32()?;
+                let grade = reader.read_i16()?;
+                Ok(Self::UnionHackModify {
+                    slot,
+                    part_id,
+                    grade,
+                })
             }
             game::RANDOM_BOX_LIST => {
                 let flag = reader.read_u8()?;

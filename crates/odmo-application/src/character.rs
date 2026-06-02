@@ -332,6 +332,27 @@ pub trait CharacterRepository: Send + Sync {
         Ok(())
     }
 
+    /// Read the D-Unit (Union hacking tool) slots installed on a character.
+    /// Each row represents one unlocked slot. New characters return an empty list.
+    fn union_hack_slots(
+        &self,
+        _character_id: u64,
+    ) -> anyhow::Result<Vec<odmo_types::UnionHackSlotRow>> {
+        Ok(Vec::new())
+    }
+
+    /// Replace the part installed in a D-Unit slot. Returns `true` if the row
+    /// was created/updated, `false` if the slot index is out of range.
+    fn update_union_hack_slot(
+        &self,
+        _character_id: u64,
+        _slot: u8,
+        _part_id: i32,
+        _grade: i16,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
     // ---- Cross-character lookups -----------------------------------------
 
     /// Search by partial name fragment for friend search.

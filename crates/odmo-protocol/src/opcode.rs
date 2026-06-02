@@ -260,6 +260,12 @@ pub mod game {
     pub const UNION_COMBINE_SYNC: i16 = 4301;
     pub const UNION_COMBINE: i16 = 4302;
     pub const UNION_COMBINE_REWARD: i16 = 4303;
+    // Modern D-Unit / Union hacking and init flows.
+    pub const UNION_HACK_OPEN_REQUEST: i16 = 4311;
+    pub const UNION_HACK_OPEN_RESPONSE: i16 = 4311;
+    pub const UNION_HACK_MODIFY_REQUEST: i16 = 4312;
+    pub const UNION_HACK_MODIFY_RESPONSE: i16 = 4312;
+    pub const UNION_INIT_DATA: i16 = 4313;
     pub const RANDOM_BOX_LIST: i16 = 16067;
     pub const RANDOM_BOX_PURCHASE: i16 = 16068;
     pub const LOAD_ACCOUNT_WAREHOUSE: i16 = 3930;
