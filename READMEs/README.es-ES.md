@@ -36,6 +36,7 @@ El proyecto es desarrollado por la comunidad **ODMO - Open Digimon Masters Onlin
 | Persistencia JSON | Implementada |
 | Ruta PostgreSQL | Implementada y ampliándose |
 | Handoff en tiempo real entre servicios | Implementado |
+| Catálogos de assets del servidor | Implementados |
 
 ### Preview visual
 
@@ -108,6 +109,9 @@ El proyecto es desarrollado por la comunidad **ODMO - Open Digimon Masters Onlin
 #### Persistencia
 
 - repositorio JSON con creación y seed automática
+- selección explícita de repositorio:
+  - `ODMO_DATABASE_URL` para PostgreSQL
+  - `ODMO_DEV_MODE=1` para modo de desarrollo con JSON
 - búsqueda de cuenta por nombre e id
 - persistencia de contraseña secundaria
 - persistencia de lista de servidores
@@ -115,6 +119,17 @@ El proyecto es desarrollado por la comunidad **ODMO - Open Digimon Masters Onlin
 - listado, búsqueda, creación y eliminación de personajes
 - contratos para actualización de mapa, posición, posición del compañero e inventario
 - ruta PostgreSQL ya conectada a los servicios
+- migrations y seed demo automáticos en el arranque cuando se usa PostgreSQL
+- catálogos de reglas del servidor bajo `data/server-assets/`
+
+### Catálogos de assets del servidor
+
+Los datos de reglas que el backend necesita validar viven en catálogos propios del proyecto:
+
+- `data/server-assets/evolution_assets.json`
+- `data/server-assets/item_assets.json`
+
+El cliente sigue leyendo sus propios packs en runtime. El servidor no depende de packs ni dumps del cliente para validar esas reglas.
 
 Evidencias principales:
 
@@ -182,12 +197,23 @@ cargo build
 
 ```powershell
 $env:ODMO_PORTAL_STATE_DIR = ".odmo-portal"
+$env:ODMO_DEV_MODE = "1"
 $env:ODMO_REPOSITORY_PATH = ".odmo-data\world.json"
 
 cargo run -p odmo-account-service
 cargo run -p odmo-character-service
 cargo run -p odmo-game-service
 ```
+
+```powershell
+$env:ODMO_DATABASE_URL = "postgres://user:password@localhost/odmo"
+
+cargo run -p odmo-account-service
+cargo run -p odmo-character-service
+cargo run -p odmo-game-service
+```
+
+Cuando `ODMO_DATABASE_URL` está definido, los servicios aplican las migrations y el seed demo automáticamente al iniciar.
 
 ### Licencia
 

@@ -14,9 +14,9 @@ use odmo_application::{
     character::{CharacterAccountRepository, CharacterRepository},
     game::{
         DigiCombineRepository, DigiSummonRepository, DropCollectionResult,
-        ExtraEvolutionRepository, GameRepository, MapDropRepository, MapMobRepository,
-        NpcShopDefinition, NpcShopItem, NpcShopRepository, PortalDefinition, PortalRepository,
-        RandomBoxRepository, UnionCombineRepository,
+        EvolutionAssetRepository, ExtraEvolutionRepository, GameRepository, ItemAssetRepository,
+        MapDropRepository, MapMobRepository, NpcShopDefinition, NpcShopItem, NpcShopRepository,
+        PortalDefinition, PortalRepository, RandomBoxRepository, UnionCombineRepository,
     },
 };
 use odmo_types::{
@@ -25,13 +25,51 @@ use odmo_types::{
     DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID,
     DigiCombineCatalog, DigiCombineCeil, DigiCombineGroup, DigiCombineItem, DigiCombineRank,
     DigiCombineReward, DigiSummonProduct, DigiSummonReward, DigiSummonTicket, DropSummary,
-    ExtraEvolutionNpc, ItemRecord, MobSummary, PartnerSlotSnapshot, RandomBoxReward,
-    ServerDescriptor, UnionCombineCatalog,
+    EvolutionAsset, ExtraEvolutionNpc, ItemAsset, ItemRecord, MobSummary,
+    PartnerSlotSnapshot, RandomBoxReward, ServerDescriptor, UnionCombineCatalog,
 };
 use serde::{Deserialize, Serialize};
 
 fn map_key(map_id: i16, channel: u8) -> String {
     format!("{map_id}:{channel}")
+}
+
+const EVOLUTION_ASSET_CATALOG_PATH: &str = "data/server-assets/evolution_assets.json";
+const ITEM_ASSET_CATALOG_PATH: &str = "data/server-assets/item_assets.json";
+
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .canonicalize()
+        .unwrap_or_else(|_| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("..")
+                .join("..")
+        })
+}
+
+fn workspace_path(relative_path: &str) -> PathBuf {
+    workspace_root().join(relative_path)
+}
+
+fn read_json_catalog<T>(relative_path: &str) -> anyhow::Result<T>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let path = workspace_path(relative_path);
+    let payload =
+        fs::read(&path).with_context(|| format!("failed to read catalog '{}'", path.display()))?;
+    serde_json::from_slice(&payload)
+        .with_context(|| format!("failed to parse catalog '{}'", path.display()))
+}
+
+pub(crate) fn load_evolution_asset_catalog() -> anyhow::Result<Vec<EvolutionAsset>> {
+    read_json_catalog(EVOLUTION_ASSET_CATALOG_PATH)
+}
+
+pub(crate) fn load_item_asset_catalog() -> anyhow::Result<Vec<ItemAsset>> {
+    read_json_catalog(ITEM_ASSET_CATALOG_PATH)
 }
 
 fn active_partner_snapshot(character: &CharacterSummary) -> PartnerSlotSnapshot {
@@ -69,6 +107,12 @@ fn active_partner_snapshot(character: &CharacterSummary) -> PartnerSlotSnapshot 
         clone_ev_level: character.partner_clone_ev_level,
         clone_hp_level: character.partner_clone_hp_level,
         active_buffs: character.partner_active_buffs.clone(),
+        evolutions: character
+            .partner_slots
+            .iter()
+            .find(|slot| slot.slot == character.partner_current_slot)
+            .map(|slot| slot.evolutions.clone())
+            .unwrap_or_default(),
     }
 }
 
@@ -105,6 +149,13 @@ fn apply_partner_snapshot(character: &mut CharacterSummary, partner: &PartnerSlo
     character.partner_clone_ev_level = partner.clone_ev_level;
     character.partner_clone_hp_level = partner.clone_hp_level;
     character.partner_active_buffs = partner.active_buffs.clone();
+    if let Some(current_slot) = character
+        .partner_slots
+        .iter_mut()
+        .find(|slot| slot.slot == partner.slot)
+    {
+        current_slot.evolutions = partner.evolutions.clone();
+    }
 }
 
 /// Persistence backend selection.
@@ -538,6 +589,18 @@ impl CharacterRepository for JsonRepository {
         for characters in state.characters_by_account.values_mut() {
             if let Some(ch) = characters.iter_mut().find(|c| c.id == character_id) {
                 ch.inventory = inventory;
+                self.persist(&state)?;
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    fn update_equipment(&self, character_id: u64, equipment: Vec<u8>) -> anyhow::Result<()> {
+        let mut state = self.state.write().expect("repository poisoned");
+        for characters in state.characters_by_account.values_mut() {
+            if let Some(ch) = characters.iter_mut().find(|c| c.id == character_id) {
+                ch.equipment = equipment;
                 self.persist(&state)?;
                 return Ok(());
             }
@@ -1047,6 +1110,18 @@ impl ExtraEvolutionRepository for JsonRepository {
     fn extra_evolution_npcs(&self) -> anyhow::Result<Vec<ExtraEvolutionNpc>> {
         let state = self.state.read().expect("repository poisoned");
         Ok(state.extra_evolution_npcs.clone())
+    }
+}
+
+impl EvolutionAssetRepository for JsonRepository {
+    fn evolution_assets(&self) -> anyhow::Result<Vec<EvolutionAsset>> {
+        load_evolution_asset_catalog()
+    }
+}
+
+impl ItemAssetRepository for JsonRepository {
+    fn item_assets(&self) -> anyhow::Result<Vec<ItemAsset>> {
+        load_item_asset_catalog()
     }
 }
 

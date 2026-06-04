@@ -1,0 +1,73 @@
+[
+  {
+    "base_type": 31001,
+    "lines": [
+      {
+        "type_id": 31001,
+        "slot_level": 3,
+        "unlock_level": 0,
+        "unlock_quest_id": 0,
+        "unlock_item_section": 0,
+        "unlock_item_section_amount": 0,
+        "required_item": 0,
+        "required_amount": 0,
+        "required_ds": 0,
+        "enabled": 1,
+        "open_qualification": 0,
+        "use_item_hint": 0,
+        "required_intimacy": 0,
+        "open_crest": 0,
+        "evolution_tree": 0,
+        "icon_pos_x": 0,
+        "icon_pos_y": 0,
+        "jogress_quest_check": 0,
+        "jogress_chipset_type": 0,
+        "jogress_consumable_chipset_type": 0,
+        "jogress_chipset_amount": 0,
+        "jogress_period_chipset_type": 0,
+        "jogress_need_digimon_types": [],
+        "stages": [
+          {
+            "target_type": 31011,
+            "value": 65540
+          },
+          {
+            "target_type": 31001,
+            "value": 8
+          }
+        ]
+      },
+      {
+        "type_id": 31011,
+        "slot_level": 4,
+        "unlock_level": 1,
+        "unlock_quest_id": 0,
+        "unlock_item_section": 0,
+        "unlock_item_section_amount": 0,
+        "required_item": 0,
+        "required_amount": 0,
+        "required_ds": 50,
+        "enabled": 1,
+        "open_qualification": 0,
+        "use_item_hint": 0,
+        "required_intimacy": 0,
+        "open_crest": 0,
+        "evolution_tree": 0,
+        "icon_pos_x": 0,
+        "icon_pos_y": 0,
+        "jogress_quest_check": 0,
+        "jogress_chipset_type": 0,
+        "jogress_consumable_chipset_type": 0,
+        "jogress_chipset_amount": 0,
+        "jogress_period_chipset_type": 0,
+        "jogress_need_digimon_types": [],
+        "stages": [
+          {
+            "target_type": 31001,
+            "value": 8
+          }
+        ]
+      }
+    ]
+  }
+]

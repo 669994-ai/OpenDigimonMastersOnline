@@ -15,21 +15,21 @@ use odmo_protocol::{
     AvailableChannelsPacket, BurningEventPacket, CashShopCoinsPacket, CastSkillPacket,
     ChangeTamerModelPacket, DailyCheckEventInfoPacket, DailyCheckEventInfoRow,
     DailyCheckEventItemResultPacket, DigiSummonPurchaseResponsePacket,
-    DigiSummonSyncResponsePacket, DigimonEvolutionFailPacket, DigimonWalkPacket,
-    DungeonArenaNextStagePacket, EncyclopediaDeckBuffUsePacket, EncyclopediaLoadPacket,
-    EncyclopediaReceiveRewardItemPacket, GameConnectionPacket, GameInitialInfoPacket, GameRequest,
-    GiftStorageRetrievePacket, GuildAuthorityUpdatePacket, GuildCreateFailPacket,
-    GuildCreateSuccessPacket, GuildDeletePacket, GuildHistoricPacket, GuildInformationPacket,
-    GuildInviteAcceptPacket, GuildInviteDenyPacket, GuildInviteFailPacket,
-    GuildInviteSuccessPacket, GuildMemberKickPacket, GuildMemberQuitPacket, GuildMessagePacket,
-    GuildNoticeUpdatePacket, GuildPromotionDemotionPacket, HatchSpiritEvolutionResultPacket,
-    HitPacket, HitType, InventoryType, ItemConsumeFailPacket, ItemIdentifyPacket,
-    ItemMoveFailPacket, ItemMoveSuccessPacket, ItemRerollPacket, ItemReturnPacket,
-    ItemSocketIdentifyPacket, ItemSocketInPacket, ItemSocketOutPacket, ItemStoragePacket,
-    KillOnHitPacket, KillOnSkillPacket, LoadBuffsPacket, LoadDropsPacket, LoadInventoryPacket,
-    LoadMobBuffsPacket, LoadMobsPacket, LoadTamerPacket, LocalMapSwapPacket, MapSwapPacket,
-    MembershipPacket, MissHitPacket, ModernArenaOldRankingInfoPacket, ModernArenaRankingInfoPacket,
-    MonsterRespawnTimerPacket, NpcPurchaseResultPacket, NpcSellResultPacket,
+    DigiSummonSyncResponsePacket, DigimonEvolutionFailPacket, DigimonEvolutionSuccessPacket,
+    DigimonToSpiritResultPacket, DigimonWalkPacket, DungeonArenaNextStagePacket,
+    EncyclopediaDeckBuffUsePacket, EncyclopediaLoadPacket, EncyclopediaReceiveRewardItemPacket,
+    GameConnectionPacket, GameInitialInfoPacket, GameRequest, GiftStorageRetrievePacket,
+    GuildAuthorityUpdatePacket, GuildCreateFailPacket, GuildCreateSuccessPacket, GuildDeletePacket,
+    GuildHistoricPacket, GuildInformationPacket, GuildInviteAcceptPacket, GuildInviteDenyPacket,
+    GuildInviteFailPacket, GuildInviteSuccessPacket, GuildMemberKickPacket, GuildMemberQuitPacket,
+    GuildMessagePacket, GuildNoticeUpdatePacket, GuildPromotionDemotionPacket, HitPacket, HitType,
+    InventoryType, ItemConsumeFailPacket, ItemIdentifyPacket, ItemMoveFailPacket,
+    ItemMoveSuccessPacket, ItemRerollPacket, ItemReturnPacket, ItemSocketIdentifyPacket,
+    ItemSocketInPacket, ItemSocketOutPacket, ItemStoragePacket, KillOnHitPacket, KillOnSkillPacket,
+    LoadBuffsPacket, LoadDropsPacket, LoadInventoryPacket, LoadMobBuffsPacket, LoadMobsPacket,
+    LoadTamerPacket, LocalMapSwapPacket, MapSwapPacket, MembershipPacket, MissHitPacket,
+    ModernArenaOldRankingInfoPacket, ModernArenaRankingInfoPacket, MonsterRespawnTimerPacket,
+    NpcPurchaseResultPacket, NpcSellResultPacket, OtherTamerDetailInfoPacket,
     PartnerSkillErrorPacket, PartnerSwitchFailurePacket, PartnerSwitchPacket,
     PartyChangeLootTypePacket, PartyCreatedPacket, PartyInvitePacket, PartyInviteResultPacket,
     PartyJoinPacket, PartyKickPacket, PartyLeaderChangedPacket, PartyLeavePacket,
@@ -38,16 +38,15 @@ use odmo_protocol::{
     PartyMemberPositionPacket, PickBitsPacket, PickItemFailPacket, PickItemFailReason,
     PickItemPacket, QuestAvailableListPacket, QuestGoalUpdatePacket, RandomBoxListEntry,
     RandomBoxListResponsePacket, RandomBoxPurchaseResponsePacket, RecompenseGainPacket,
-    OtherTamerDetailInfoPacket,
-    RemoveBuffPacket, SealsPacket, ServerExperiencePacket, SpiritCraftResultPacket,
+    RemoveBuffPacket, SealsPacket, ServerExperiencePacket, SpiritToDigimonResultPacket,
     SplitItemPacket, TamerAttendancePacket, TamerChangeNamePacket, TamerRelationsPacket,
     TamerWalkPacket, TamerXaiResourcesPacket, TimeRewardPacket, TradeAcceptPacket,
     TradeAddItemPacket, TradeAddMoneyPacket, TradeCancelPacket, TradeConfirmationPacket,
     TradeFinalConfirmationPacket, TradeInventoryLockPacket, TradeInventoryUnlockPacket,
-    TradeRemoveItemPacket, TradeRequestErrorPacket,     TradeRequestSuccessPacket, UnionHackModifyResponsePacket, UnionHackOpenResponsePacket,
-    UnionHackSlot, UnionInitDataPacket, UnloadDropsPacket,
-    UnloadMobsPacket, UnloadTamerPacket, UpdateCurrentTitlePacket, UpdateMovementSpeedPacket,
-    UpdateStatusPacket, XaiInfoPacket,
+    TradeRemoveItemPacket, TradeRequestErrorPacket, TradeRequestSuccessPacket,
+    UnionHackModifyResponsePacket, UnionHackOpenResponsePacket, UnionHackSlot, UnionInitDataPacket,
+    UnloadDropsPacket, UnloadMobsPacket, UnloadTamerPacket, UpdateCurrentTitlePacket,
+    UpdateMovementSpeedPacket, UpdateStatusPacket, XaiInfoPacket,
     game::{
         CombineResultResponsePacket, CombineSyncResponsePacket, FriendConnectPacket,
         GuildRankPacket, SkillUpdateCooldownPacket,
@@ -350,6 +349,14 @@ pub trait ExtraEvolutionRepository: Send + Sync {
     fn extra_evolution_npcs(&self) -> anyhow::Result<Vec<odmo_types::ExtraEvolutionNpc>>;
 }
 
+pub trait ItemAssetRepository: Send + Sync {
+    fn item_assets(&self) -> anyhow::Result<Vec<odmo_types::ItemAsset>>;
+}
+
+pub trait EvolutionAssetRepository: Send + Sync {
+    fn evolution_assets(&self) -> anyhow::Result<Vec<odmo_types::EvolutionAsset>>;
+}
+
 pub trait DigiCombineRepository: Send + Sync {
     fn digi_combine_catalog(&self) -> anyhow::Result<DigiCombineCatalog>;
 }
@@ -372,6 +379,8 @@ pub trait GameRepository:
     + NpcShopRepository
     + DigiSummonRepository
     + ExtraEvolutionRepository
+    + ItemAssetRepository
+    + EvolutionAssetRepository
     + DigiCombineRepository
     + UnionCombineRepository
     + RandomBoxRepository
@@ -387,6 +396,8 @@ impl<T> GameRepository for T where
         + NpcShopRepository
         + DigiSummonRepository
         + ExtraEvolutionRepository
+        + ItemAssetRepository
+        + EvolutionAssetRepository
         + DigiCombineRepository
         + UnionCombineRepository
         + RandomBoxRepository
@@ -740,6 +751,7 @@ impl GameApplication {
                     .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
                 const TAB_INVENTORY: u16 = 0;
+                const TAB_EQUIPMENT: u16 = 1000;
                 const TAB_WAREHOUSE: u16 = 2000;
                 const TAB_SHARESTASH: u16 = 9000;
                 fn tab_class(sid: u16) -> u16 {
@@ -753,6 +765,50 @@ impl GameApplication {
                 let dst_tab = tab_class(destination_slot);
                 let src_idx = tab_index(origin_slot);
                 let dst_idx = tab_index(destination_slot);
+
+                // Validate equipment moves
+                if dst_tab == TAB_EQUIPMENT {
+                    if dst_idx >= 16 {
+                        return Ok(vec![
+                            ItemMoveFailPacket {
+                                origin_slot,
+                                destination_slot,
+                            }
+                            .encode(),
+                        ]);
+                    }
+                    let item = &character
+                        .inventory
+                        .items
+                        .get(src_idx)
+                        .cloned()
+                        .unwrap_or_default();
+                    if item.item_id <= 0 {
+                        return Ok(vec![
+                            ItemMoveFailPacket {
+                                origin_slot,
+                                destination_slot,
+                            }
+                            .encode(),
+                        ]);
+                    }
+                    let assets = self.repository.item_assets().unwrap_or_default();
+                    if let Some(asset) = assets.iter().find(|a| a.item_id == item.item_id) {
+                        let tamer_level = character.level as i32;
+                        if tamer_level < asset.tamer_min_level as i32
+                            || (asset.tamer_max_level > 0
+                                && tamer_level > asset.tamer_max_level as i32)
+                        {
+                            return Ok(vec![
+                                ItemMoveFailPacket {
+                                    origin_slot,
+                                    destination_slot,
+                                }
+                                .encode(),
+                            ]);
+                        }
+                    }
+                }
 
                 // Helper: swap/merge items between two mutable inventory slices
                 fn transfer_between(
@@ -802,6 +858,79 @@ impl GameApplication {
                         if src_idx < len && dst_idx < len {
                             swap_within(&mut character.inventory.items, src_idx, dst_idx);
                             true
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_INVENTORY, TAB_EQUIPMENT) => {
+                        let len = character.inventory.items.len();
+                        if src_idx < len && dst_idx < 16 {
+                            let item = &character.inventory.items[src_idx];
+                            if item.item_id > 0 {
+                                // Update equipment blob (69 bytes per slot)
+                                if character.equipment.len() < 16 * 69 {
+                                    character.equipment.resize(16 * 69, 0);
+                                }
+                                let offset = dst_idx * 69;
+                                character.equipment[offset..offset + 69]
+                                    .copy_from_slice(&item.record);
+
+                                character.inventory.items[src_idx] = ItemRecord::default();
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_EQUIPMENT, TAB_INVENTORY) => {
+                        let len = character.inventory.items.len();
+                        if src_idx < 16 && dst_idx < len {
+                            // Find empty slot in inventory
+                            if let Some(empty_idx) = character
+                                .inventory
+                                .items
+                                .iter()
+                                .position(|i| i.item_id == 0)
+                            {
+                                // Read from equipment blob
+                                if character.equipment.len() >= 16 * 69 {
+                                    let offset = src_idx * 69;
+                                    let record = character.equipment[offset..offset + 69].to_vec();
+
+                                    // Extract item_id and amount from the record (packed in first 4 bytes)
+                                    if record.len() >= 4 {
+                                        let packed = u32::from_le_bytes([
+                                            record[0], record[1], record[2], record[3],
+                                        ]);
+                                        let item_id = (packed & 0x1FFFF) as i32;
+                                        let amount = ((packed >> 17) & 0x7FFF) as i32;
+
+                                        if item_id > 0 {
+                                            let mut unequipped_item = ItemRecord {
+                                                item_id,
+                                                amount,
+                                                record,
+                                            };
+                                            unequipped_item.sync_record(); // Ensure consistency
+                                            character.inventory.items[empty_idx] = unequipped_item;
+
+                                            // Clear equipment slot
+                                            character.equipment[offset..offset + 69].fill(0);
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false // Inventory full
+                            }
                         } else {
                             false
                         }
@@ -888,6 +1017,9 @@ impl GameApplication {
                     // Persist all involved inventories unconditionally
                     self.repository
                         .update_inventory(character_id, character.inventory.clone())
+                        .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+                    self.repository
+                        .update_equipment(character_id, character.equipment.clone())
                         .map_err(|error| GameFlowError::Storage(error.to_string()))?;
                     self.repository
                         .update_warehouse(character_id, character.warehouse.clone())
@@ -1904,36 +2036,7 @@ impl GameApplication {
             GameRequest::PartnerEvolution {
                 digimon_handler,
                 evolution_slot,
-            } => {
-                let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
-                let character = self
-                    .repository
-                    .character_by_id(character_id)
-                    .map_err(|error| GameFlowError::Storage(error.to_string()))?
-                    .ok_or(GameFlowError::CharacterNotFound(character_id))?;
-
-                // Verify the digimon handler matches the partner
-                if digimon_handler != character.partner_handler {
-                    return Ok(vec![DigimonEvolutionFailPacket.encode()]);
-                }
-
-                // Check if the evolution slot is valid
-                if evolution_slot > 4 {
-                    return Ok(vec![DigimonEvolutionFailPacket.encode()]);
-                }
-
-                // Update the partner's evolution type in the database
-                let new_type = evolution_slot as i32; // Simplified: slot maps to type
-                let _ = self.repository.update_partner_type(character_id, new_type);
-
-                // Send success response
-                let mut writer = odmo_protocol::writer::PacketWriter::new(
-                    odmo_protocol::opcode::game::PARTNER_EVOLUTION,
-                );
-                writer.write_u32(character.partner_handler);
-                writer.write_i32(new_type);
-                Ok(vec![writer.finalize()])
-            }
+            } => self.handle_partner_evolution(session, digimon_handler, evolution_slot),
             // PartnerDelete — respond with `PartnerDeletePacket(-1)` (wrong validation)
             // until account-side secondary password / email validation is ported. The
             // legacy contract is `[opcode 1042][i32 result]` where positive = success
@@ -1955,19 +2058,10 @@ impl GameApplication {
                 writer.write_i32(-1);
                 Ok(vec![writer.finalize()])
             }
-            // EvolutionUnlock — respond with `EvolutionArmorUnlocked(2)` (failure) until the
-            // evolution asset table and item-consumption pipeline are ported. The legacy
-            // contract is `[opcode 3239][i16 result]` where 1 = success and 2 = fail.
             GameRequest::EvolutionUnlock {
-                evolution_type: _,
-                inven_idx: _,
-            } => {
-                let mut writer = odmo_protocol::writer::PacketWriter::new(
-                    odmo_protocol::opcode::game::EVOLUTION_ARMOR_UNLOCKED,
-                );
-                writer.write_i16(2);
-                Ok(vec![writer.finalize()])
-            }
+                evolution_type,
+                inven_idx,
+            } => self.handle_evolution_unlock(session, evolution_type, inven_idx),
             // RideModeStart — toggle the partner ride mode on. The wire payload is empty
             // (the open-slot transaction is a different opcode), so this is a pure switch.
             GameRequest::RideModeStart => self.handle_ride_mode_start(session),
@@ -2062,9 +2156,6 @@ impl GameApplication {
             GameRequest::ItemIdentify { item_slot } => {
                 self.handle_item_identify(session, item_slot)
             }
-            // ItemCraft — craft an item from a recipe. Without the legacy recipe table
-            // we acknowledge with the failure result so the modern client UI exits the
-            // craft dialog without crashing.
             GameRequest::ItemCraft { recipe_slot: _ } => {
                 let mut writer = odmo_protocol::writer::PacketWriter::new(
                     odmo_protocol::opcode::game::ITEM_CRAFT,
@@ -2074,10 +2165,6 @@ impl GameApplication {
             }
             // ItemReroll — re-roll the accessory stats on the target item.
             GameRequest::ItemReroll { item_slot } => self.handle_item_reroll(session, item_slot),
-            // ItemSocketIn — insert a chip into the target item socket. The legacy
-            // server consumes the chip from the inventory and updates the item's socket
-            // payload. Without the chip asset table we charge a small bits cost (the
-            // legacy default) and acknowledge so the client UI clears.
             GameRequest::ItemSocketIn {
                 vip: _,
                 inven_portable_pos: _,
@@ -2107,12 +2194,7 @@ impl GameApplication {
                 inven_portable_pos: _,
                 inven_pos,
             } => self.handle_item_socket_identify(session, inven_pos as i16),
-            // ItemReturn — return an item for bits. Without the return-item asset table
-            // we charge a flat 100 bits per item slot and acknowledge.
             GameRequest::ItemReturn { item_slot } => self.handle_item_return(session, item_slot),
-            // ItemScan — scan an item for additional rewards. Without the scan asset table
-            // we acknowledge silently (the modern client treats no response as "no scan
-            // available", which is consistent with the legacy fallback).
             GameRequest::ItemScan { item_slot: _ } => Ok(Vec::new()),
             // LoadGiftStorage — return the character's gift storage contents.
             GameRequest::LoadGiftStorage => self.handle_load_gift_storage(session),
@@ -2160,8 +2242,7 @@ impl GameApplication {
             // CashShopReload — return current premium/silk balances.
             GameRequest::CashShopReload => self.handle_cash_shop_reload(session),
             // QuestAvailableList — return quest ids the character can accept from the
-            // queried NPC. Without quest asset data we return an empty list, which the
-            // modern client renders as "no quests available right now" without crashing.
+            // queried NPC. Without quest asset data we return an empty list.
             GameRequest::QuestAvailableList { npc_id } => Ok(vec![
                 QuestAvailableListPacket {
                     npc_id,
@@ -2175,9 +2256,6 @@ impl GameApplication {
             GameRequest::QuestDeliver { quest_id } => self.handle_quest_deliver(session, quest_id),
             // QuestGiveUp — remove the quest from the in-progress list.
             GameRequest::QuestGiveUp { quest_id } => self.handle_quest_give_up(session, quest_id),
-            // QuestUpdate — increment a goal counter and echo it back. The modern client
-            // ships `value` as the new value (not just an increment), so we trust the
-            // client's number and persist it.
             GameRequest::QuestUpdate {
                 quest_id,
                 cond_index,
@@ -2221,7 +2299,6 @@ impl GameApplication {
             GameRequest::EncyclopediaDeckBuff { deck_idx } => {
                 self.handle_encyclopedia_deck_buff(session, deck_idx)
             }
-            // OtherTamerDetailInfo — mirror the modern DetailInfo request for a visible tamer.
             GameRequest::OtherTamerDetailInfo { target_handler } => {
                 self.handle_other_tamer_detail_info(session, target_handler)
             }
@@ -2247,7 +2324,7 @@ impl GameApplication {
             }
             // DungeonNextStage — advance the dungeon stage. Real dungeon orchestration is
             // out of scope for the current slice; we acknowledge with the next-stage packet
-            // carrying a zero remaining time so the modern client UI advances without crash.
+            // carrying a zero remaining time.
             GameRequest::DungeonNextStage => self.handle_dungeon_next_stage(session),
             // DungeonSurrender — leave the dungeon. We just send back an empty next-stage
             // signaling the run is over (legacy: tamers are teleported back to the lobby).
@@ -2305,11 +2382,7 @@ impl GameApplication {
             GameRequest::TamerNameChange { new_name } => {
                 self.handle_tamer_name_change(session, new_name)
             }
-            // RareMachineOpen — pure UI state (no response needed by the modern client).
             GameRequest::RareMachineOpen { npc_idx: _ } => Ok(vec![]),
-            // RareMachineRun — random reward roll. The reward pool is part of the asset
-            // catalog which is not yet ported, so we acknowledge the run with a 0 reward
-            // (the modern client renders this as "no reward this time").
             GameRequest::RareMachineRun {
                 npc_idx: _,
                 inven_idx: _,
@@ -2335,9 +2408,8 @@ impl GameApplication {
                 disp_rare_grade,
             } => self.handle_party_change_loot(session, loot_type, rare_type, disp_rare_grade),
             GameRequest::PartyDismiss => self.handle_party_dismiss(session),
-            // GuildCreate — bootstrap an in-memory guild and emit the legacy bootstrap burst:
+            // GuildCreate — bootstrap an in-memory guild and emit the bootstrap burst:
             // success packet + GuildInformation + GuildHistoric + GuildRank.
-            // Modern client sends `[wstring guild_name][i32 inven_slot][i32 npc_id]`.
             GameRequest::GuildCreate {
                 guild_name,
                 inven_slot: _,
@@ -2436,11 +2508,11 @@ impl GameApplication {
                 self.handle_guild_authority(session, target_name, 3, "DatsMember")
             }
             // ----- Spirit / DigiSummon purchase ---------------------------------
-            GameRequest::HatchSpiritEvolution {
+            GameRequest::SpiritToDigimon {
                 model_id,
                 name,
                 npc_id,
-            } => self.handle_hatch_spirit_evolution(session, model_id, name, npc_id),
+            } => self.handle_spirit_to_digimon(session, model_id, name, npc_id),
             GameRequest::DigiSummonPurchase {
                 product_id,
                 ticket_slot,
@@ -2501,11 +2573,11 @@ impl GameApplication {
             } => self.handle_union_hack_modify(session, slot, part_id, grade),
             GameRequest::RandomBoxList { .. } => self.handle_random_box_list(session),
             GameRequest::RandomBoxPurchase { .. } => self.handle_random_box_purchase(session),
-            GameRequest::SpiritCraft {
+            GameRequest::DigimonToSpirit {
                 slot,
                 validation,
                 npc_id,
-            } => self.handle_spirit_craft(session, slot, validation, npc_id),
+            } => self.handle_digimon_to_spirit(session, slot, validation, npc_id),
         }?;
 
         responses.extend(request_responses);
@@ -2569,8 +2641,7 @@ impl GameApplication {
         let mut gifts = character.gift_storage.clone();
         for product_id in &product_ids {
             // Without a product catalog we treat the product_id as the item id and use
-            // amount = 1. This keeps the runtime contract honest and the modern client UI
-            // updates the gift storage view consistently.
+            // amount = 1.
             gifts.push(odmo_types::ItemRecord::new(*product_id, i32::from(amount)));
         }
         self.repository
@@ -3016,7 +3087,7 @@ impl GameApplication {
 
     // ----- Spirit / DigiSummon --------------------------------------------------------
 
-    fn handle_hatch_spirit_evolution(
+    fn handle_spirit_to_digimon(
         &self,
         session: &GameSession,
         model_id: i32,
@@ -3117,7 +3188,7 @@ impl GameApplication {
 
         Ok(vec![
             hatch_finish.finalize(),
-            HatchSpiritEvolutionResultPacket {
+            SpiritToDigimonResultPacket {
                 digimon_id: model_id as u32,
                 remaining_bits: character.inventory_bits,
                 consumed_items: consumed_packet_items,
@@ -3513,10 +3584,7 @@ impl GameApplication {
 
     /// Open the D-Unit hacking grid window. Returns the unlocked slot count and
     /// the equipped parts per slot for the current character.
-    fn handle_union_hack_open(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+    fn handle_union_hack_open(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let rows = self
             .repository
@@ -3541,7 +3609,7 @@ impl GameApplication {
                 unlocked_slots,
                 slots,
             }
-            .encode()
+            .encode(),
         ])
     }
 
@@ -3579,10 +3647,7 @@ impl GameApplication {
             .union_hack_slots(character_id)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        let total_rating: i32 = rows
-            .iter()
-            .map(|row| i32::from(row.grade))
-            .sum();
+        let total_rating: i32 = rows.iter().map(|row| i32::from(row.grade)).sum();
 
         Ok(vec![
             UnionHackModifyResponsePacket {
@@ -3592,16 +3657,13 @@ impl GameApplication {
                 new_grade: grade,
                 total_rating,
             }
-            .encode()
+            .encode(),
         ])
     }
 
     /// Push the full D-Unit state to the client on login so the modern
     /// `cUnionContents` can hydrate its hacking grid without an extra request.
-    pub fn build_union_init_data(
-        &self,
-        session: &GameSession,
-    ) -> Result<Vec<u8>, GameFlowError> {
+    pub fn build_union_init_data(&self, session: &GameSession) -> Result<Vec<u8>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let rows = self
             .repository
@@ -3619,10 +3681,7 @@ impl GameApplication {
             })
             .collect();
 
-        let total_rating: i32 = slots
-            .iter()
-            .map(|slot| i32::from(slot.grade))
-            .sum();
+        let total_rating: i32 = slots.iter().map(|slot| i32::from(slot.grade)).sum();
 
         Ok(UnionInitDataPacket {
             slots,
@@ -3745,7 +3804,7 @@ impl GameApplication {
         ])
     }
 
-    fn handle_spirit_craft(
+    fn handle_digimon_to_spirit(
         &self,
         session: &GameSession,
         slot: u8,
@@ -3855,7 +3914,7 @@ impl GameApplication {
             .collect();
 
         Ok(vec![
-            SpiritCraftResultPacket {
+            DigimonToSpiritResultPacket {
                 slot,
                 remaining_bits: character.inventory_bits,
                 consumed_items: consumed_packet_items,
@@ -4096,8 +4155,7 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        // Without the tamer-skill asset table we acknowledge with a cooldown packet so
-        // the modern client UI grays out the skill icon.
+        // Without the tamer-skill asset table we acknowledge with a cooldown packet.
         Ok(vec![
             SkillUpdateCooldownPacket {
                 handler: character.general_handler as i32,
@@ -4921,9 +4979,6 @@ impl GameApplication {
             buffs: active_buffs
                 .iter()
                 .map(|buff| PartyMemberBuffEntry {
-                    // The modern client packet is delta-shaped. For partner switch we
-                    // publish the new active set as present entries and let an empty
-                    // list represent "no active party-visible buffs".
                     status: 1,
                     buff_code: buff.buff_id,
                 })
@@ -5368,10 +5423,8 @@ impl GameApplication {
             .update_quest_progress(character_id, progress)
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
-        // Modern client `RecvQuestCancel` (`pQuest::Cancel` = 11003) expects a list of
-        // warehouse items to remove. Without quest asset data we cannot infer which
-        // items belong to the cancelled quest, so we return an empty list (count = 0)
-        // matching the legacy "quest had no supplies" branch. The wire shape is:
+        // Without quest asset data we cannot infer which warehouse items belong to
+        // the cancelled quest, so we return an empty list (count = 0). The wire shape is:
         //   [u2 deleteItemTotalCount = 0]
         let mut writer =
             odmo_protocol::writer::PacketWriter::new(odmo_protocol::opcode::game::QUEST_GIVE_UP);
@@ -5408,7 +5461,6 @@ impl GameApplication {
             return Ok(Vec::new());
         };
 
-        // Modern client sends the new condition value directly (not an increment).
         quest.goals[cond_idx] = i16::from(value);
         let current = quest.goals[cond_idx];
 
@@ -5436,9 +5488,7 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        // Restore the character to a safe HP/DS state. The legacy contract teleports the
-        // character back to a configured spawn map; the modern client only requires a
-        // fresh status update so the UI exits the death overlay.
+        // Restore the character to a safe HP/DS state and send a fresh status update.
         let restored_hp = (character.hp / 2).max(1);
         let restored_ds = character.ds.max(0);
         self.repository
@@ -5600,8 +5650,7 @@ impl GameApplication {
 
         // The legacy power and reroll counters live in the item's "record" blob; without
         // the asset table we surface a default identification (power=0, reroll_left=5,
-        // four blank stats). The modern client renders this as a freshly identified
-        // accessory with no enchant rolled.
+        // four blank stats).
         Ok(vec![
             ItemIdentifyPacket {
                 slot: item_slot,
@@ -6318,8 +6367,7 @@ impl GameApplication {
 
         // Emit a custom payload mirroring the legacy DigimonArchiveLoadPacket which
         // is not yet defined in the Rust protocol crate. We write a minimal envelope
-        // (count + per-entry partner type/level/name) so the modern client UI shows
-        // the archived partners.
+        // with count + per-entry partner type/level/name.
         let mut writer = odmo_protocol::writer::PacketWriter::new(
             odmo_protocol::opcode::game::DIGIMON_ARCHIVE_LIST,
         );
@@ -6371,6 +6419,100 @@ impl GameApplication {
 
     // ----- Ride mode + partner rename ------------------------------------------------
 
+    fn handle_partner_evolution(
+        &self,
+        session: &GameSession,
+        digimon_handler: u32,
+        evolution_slot: u8,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        if digimon_handler != character.partner_handler {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        }
+
+        let assets = self
+            .repository
+            .evolution_assets()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        let Some(active_slot_index) = character
+            .partner_slots
+            .iter()
+            .position(|slot| slot.slot == character.partner_current_slot)
+        else {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        };
+
+        let active_slot_type = character.partner_slots[active_slot_index].digimon_type;
+        let base_type = if character.partner_slots[active_slot_index].model > 0 {
+            character.partner_slots[active_slot_index].model
+        } else {
+            character.partner_model
+        };
+        let Some(asset) = assets.iter().find(|asset| asset.base_type == base_type) else {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        };
+        let Some(current_line) = asset
+            .lines
+            .iter()
+            .find(|line| line.type_id == active_slot_type)
+        else {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        };
+
+        let Some(stage) = current_line
+            .stages
+            .iter()
+            .find(|stage| (stage.value & 0xffff) as u8 == evolution_slot)
+        else {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        };
+        let target_type = stage.target_type;
+        if target_type <= 0 {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        }
+
+        character.partner_slots[active_slot_index].digimon_type = target_type;
+        character.partner_current_type = target_type;
+        self.repository
+            .update_partner_roster(
+                character_id,
+                character.partner_current_slot,
+                character.partner_slots.clone(),
+            )
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let hp_rate = if character.partner_hp <= 0 {
+            0
+        } else {
+            ((character.partner_current_hp.max(0) * 100) / character.partner_hp.max(1))
+                .clamp(0, 100) as u8
+        };
+        let packet = DigimonEvolutionSuccessPacket {
+            digimon_handler: character.partner_handler,
+            tamer_handler: character.general_handler,
+            new_type: target_type,
+            evolution_slot,
+            hp_rate,
+            parts_type: 0,
+        }
+        .encode();
+        if let Some(broadcast) = &self.broadcast {
+            let _ = broadcast.send_to_visible(
+                character.map_id,
+                character.channel,
+                character.id,
+                &packet,
+            );
+        }
+        Ok(vec![packet])
+    }
+
     fn handle_ride_mode_start(&self, session: &GameSession) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
         let character = self
@@ -6379,9 +6521,6 @@ impl GameApplication {
             .map_err(|error| GameFlowError::Storage(error.to_string()))?
             .ok_or(GameFlowError::CharacterNotFound(character_id))?;
 
-        // The current partner must already have its ride mode unlocked. Without
-        // the evolution asset table to query, we trust the client request and
-        // emit the activation packet so peers see the partner mounted.
         let evolution_type = character.partner_current_type;
 
         let mut writer =
@@ -6404,14 +6543,159 @@ impl GameApplication {
     fn handle_open_ride_mode(
         &self,
         session: &GameSession,
-        _evo_unit_idx: u32,
-        _item_type: i32,
+        evo_unit_idx: u32,
+        item_type: i32,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
-        // The open-ride-mode request consumes a ride-unlock item from the
-        // inventory. The full asset table is not yet ported, so we accept the
-        // request without applying any side effects. Returning an empty
-        // response keeps the client transition smooth.
-        let _ = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        let Some(active_slot_index) = character
+            .partner_slots
+            .iter()
+            .position(|slot| slot.slot == character.partner_current_slot)
+        else {
+            return Ok(Vec::new());
+        };
+
+        let evo_index = evo_unit_idx as usize;
+        if evo_index >= character.partner_slots[active_slot_index].evolutions.len() {
+            return Ok(Vec::new());
+        }
+
+        if (character.partner_slots[active_slot_index].evolutions[evo_index].unlocked & 0x08) != 0 {
+            return Ok(Vec::new());
+        }
+
+        let item_assets = self
+            .repository
+            .item_assets()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        let item_sections = item_section_index(&item_assets);
+        let mut consumed_items = Vec::new();
+        if !consume_items_by_section(
+            &mut character.inventory,
+            &item_sections,
+            item_type,
+            1,
+            &mut consumed_items,
+        ) {
+            return Ok(Vec::new());
+        }
+
+        character.partner_slots[active_slot_index].evolutions[evo_index].unlocked |= 0x08;
+        self.repository
+            .update_inventory(character_id, character.inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        self.repository
+            .update_partner_roster(
+                character_id,
+                character.partner_current_slot,
+                character.partner_slots.clone(),
+            )
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        Ok(Vec::new())
+    }
+
+    fn handle_evolution_unlock(
+        &self,
+        session: &GameSession,
+        evolution_index: i32,
+        inven_idx: Option<i16>,
+    ) -> Result<Vec<Vec<u8>>, GameFlowError> {
+        if inven_idx.is_some() {
+            let mut writer = odmo_protocol::writer::PacketWriter::new(
+                odmo_protocol::opcode::game::CAPSULE_EVOLUTION_SLOT_RESULT,
+            );
+            writer.write_i16(2);
+            return Ok(vec![writer.finalize()]);
+        }
+
+        let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
+        let mut character = self
+            .repository
+            .character_by_id(character_id)
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?
+            .ok_or(GameFlowError::CharacterNotFound(character_id))?;
+
+        let Some(active_slot_index) = character
+            .partner_slots
+            .iter()
+            .position(|slot| slot.slot == character.partner_current_slot)
+        else {
+            return Ok(Vec::new());
+        };
+
+        let evo_index = evolution_index as usize;
+        if evo_index >= character.partner_slots[active_slot_index].evolutions.len() {
+            return Ok(Vec::new());
+        }
+
+        if (character.partner_slots[active_slot_index].evolutions[evo_index].unlocked & 0x01) != 0 {
+            return Ok(Vec::new());
+        }
+
+        let assets = self
+            .repository
+            .evolution_assets()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        let item_assets = self
+            .repository
+            .item_assets()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+
+        let active_slot = &character.partner_slots[active_slot_index];
+        let Some(evolution) = active_slot.evolutions.get(evo_index) else {
+            return Ok(Vec::new());
+        };
+        let base_type = if active_slot.model > 0 {
+            active_slot.model
+        } else {
+            character.partner_model
+        };
+        let Some(asset) = assets.iter().find(|asset| asset.base_type == base_type) else {
+            return Ok(Vec::new());
+        };
+        let Some(target_line) = asset
+            .lines
+            .iter()
+            .find(|line| line.type_id == evolution.evolution_type)
+        else {
+            return Ok(Vec::new());
+        };
+
+        let required_section = target_line.unlock_item_section;
+        let required_amount = target_line.unlock_item_section_amount.max(1);
+        if required_section <= 0 || required_amount <= 0 {
+            return Ok(Vec::new());
+        }
+
+        let item_sections = item_section_index(&item_assets);
+        let mut consumed_items = Vec::new();
+        if !consume_items_by_section(
+            &mut character.inventory,
+            &item_sections,
+            required_section,
+            required_amount,
+            &mut consumed_items,
+        ) {
+            return Ok(Vec::new());
+        }
+
+        character.partner_slots[active_slot_index].evolutions[evo_index].unlocked |= 0x01;
+        self.repository
+            .update_inventory(character_id, character.inventory.clone())
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        self.repository
+            .update_partner_roster(
+                character_id,
+                character.partner_current_slot,
+                character.partner_slots.clone(),
+            )
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
         Ok(Vec::new())
     }
 
@@ -6680,9 +6964,8 @@ impl GameApplication {
             return Ok(Vec::new());
         }
 
-        // The trade slot is implicit — modern client picks the next free slot in its
-        // local trade-side state. We append to our side's items vec and use the index
-        // as the trade_slot for the broadcast.
+        // The trade slot is implicit. We append to our side's items vec and use the
+        // index as the trade_slot for the broadcast.
         let other_handler = self.with_trade_session(character_id, |sess, is_a| {
             let (mine, theirs) = if is_a {
                 (&mut sess.side_a, &sess.side_b)
@@ -7433,9 +7716,8 @@ impl GameApplication {
         _session: &GameSession,
         added_points: i16,
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
-        // The arena ranking table is not yet persisted in the Rust port. We accept
-        // the request and echo back a points total derived from the increment so the
-        // modern client UI updates without a desync.
+        // The arena ranking table is not yet persisted. Echo the requested delta as
+        // the current points total until the backing store is wired in.
         Ok(vec![
             ArenaRankingDailyUpdatePointsPacket {
                 points: added_points.max(0) as i32,
@@ -8489,7 +8771,6 @@ impl GameApplication {
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
 
-        // Resolve target by name (modern client sends wstring tamer name).
         let target = self
             .repository
             .character_by_name(&target_name)
@@ -8724,7 +9005,6 @@ impl GameApplication {
     ) -> Result<Vec<Vec<u8>>, GameFlowError> {
         let character_id = session.character_id.ok_or(GameFlowError::Unauthenticated)?;
 
-        // Resolve target by name first (modern client sends the wstring tamer name).
         let target = self
             .repository
             .character_by_name(&target_name)
@@ -9028,9 +9308,8 @@ fn roll_digi_summon_rewards(
 /// Defensive server-side re-validation of the 11x4 Material_Grid.
 ///
 /// Only filled cells travel on the wire, so the per-row grouping is not
-/// separable from the flat node list. The faithful invariant given that wire
-/// shape is: the filled-node count is a multiple of 4 (each row-group is empty
-/// or full) and never exceeds the full 11x4 grid.
+/// separable from the flat node list. The valid shape is a multiple of 4
+/// entries per filled row-group and never exceeds the full 11x4 grid.
 fn combine_grid_is_valid(materials: &[CombineItemRef]) -> bool {
     materials.len() <= COMBINE_GRID_MAX_NODES
         && materials.len().is_multiple_of(COMBINE_GRID_ROW_CELLS)
@@ -9266,6 +9545,54 @@ fn consume_all_materials(
     true
 }
 
+fn item_section_index(item_assets: &[odmo_types::ItemAsset]) -> HashMap<i32, i32> {
+    item_assets
+        .iter()
+        .map(|asset| (asset.item_id, asset.section))
+        .collect()
+}
+
+fn consume_items_by_section(
+    inventory: &mut odmo_types::InventorySnapshot,
+    item_sections: &HashMap<i32, i32>,
+    target_section: i32,
+    mut total_amount: i32,
+    consumed_items: &mut Vec<odmo_types::ItemRecord>,
+) -> bool {
+    if target_section <= 0 || total_amount <= 0 {
+        return false;
+    }
+
+    let mut slot_index = 0usize;
+    while total_amount > 0 && slot_index < inventory.items.len() {
+        let Some(item) = inventory.items.get(slot_index).cloned() else {
+            break;
+        };
+        let matches_section = item.amount > 0
+            && item_sections
+                .get(&item.item_id)
+                .copied()
+                .unwrap_or_default()
+                == target_section;
+        if !matches_section {
+            slot_index += 1;
+            continue;
+        }
+
+        let consume_amount = item.amount.min(total_amount);
+        let Some(consumed) = consume_inventory_item_at(inventory, slot_index, consume_amount)
+        else {
+            slot_index += 1;
+            continue;
+        };
+        consumed_items.push(consumed);
+        total_amount -= consume_amount;
+        slot_index += 1;
+    }
+
+    total_amount == 0
+}
+
 fn consume_item_material_groups(
     inventory: &mut odmo_types::InventorySnapshot,
     way_type: u16,
@@ -9332,9 +9659,10 @@ mod tests {
         CharacterSummary, DEFAULT_ALT_PARTNER_MODEL_ID, DEFAULT_ALT_TAMER_MODEL_ID,
         DEFAULT_GM_PARTNER_MODEL_ID, DEFAULT_GM_TAMER_MODEL_ID, DEFAULT_PARTNER_MODEL_ID,
         DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID,
-        DailyRewardStatus, DropSummary, ExtraEvolutionNpc, GameSessionTicket, GuildHistoricEntry,
-        GuildMemberSnapshot, GuildSnapshot, MobSummary, RelationEntry, SealListSnapshot,
-        SealRecord, XaiSnapshot,
+        DailyRewardStatus, DropSummary, EvolutionAsset, EvolutionLineAsset, EvolutionStageAsset,
+        ExtraEvolutionNpc, GameSessionTicket, GuildHistoricEntry, GuildMemberSnapshot,
+        GuildSnapshot, ItemAsset, MobSummary, RelationEntry, SealListSnapshot, SealRecord,
+        XaiSnapshot,
     };
 
     #[derive(Debug)]
@@ -9345,6 +9673,8 @@ mod tests {
         drops_by_map: RwLock<HashMap<(i16, u8), Vec<DropSummary>>>,
         digi_summon_products: Vec<odmo_types::DigiSummonProduct>,
         extra_evolution_npcs: Vec<ExtraEvolutionNpc>,
+        item_assets: Vec<ItemAsset>,
+        evolution_assets: Vec<EvolutionAsset>,
         digi_combine_catalog: odmo_types::DigiCombineCatalog,
         union_combine_catalog: odmo_types::UnionCombineCatalog,
         random_box_rewards: Vec<odmo_types::RandomBoxReward>,
@@ -9451,6 +9781,42 @@ mod tests {
                 weight: 3,
             },
         ]
+    }
+
+    fn demo_evolution_assets() -> Vec<EvolutionAsset> {
+        vec![EvolutionAsset {
+            base_type: DEFAULT_PARTNER_MODEL_ID,
+            lines: vec![
+                EvolutionLineAsset {
+                    type_id: DEFAULT_PARTNER_MODEL_ID,
+                    slot_level: 3,
+                    enabled: 1,
+                    stages: vec![
+                        EvolutionStageAsset {
+                            target_type: 31_011,
+                            value: 4 | (1 << 16),
+                        },
+                        EvolutionStageAsset {
+                            target_type: DEFAULT_PARTNER_MODEL_ID,
+                            value: 8,
+                        },
+                    ],
+                    ..EvolutionLineAsset::default()
+                },
+                EvolutionLineAsset {
+                    type_id: 31_011,
+                    slot_level: 4,
+                    unlock_level: 1,
+                    required_ds: 50,
+                    enabled: 1,
+                    stages: vec![EvolutionStageAsset {
+                        target_type: DEFAULT_PARTNER_MODEL_ID,
+                        value: 8,
+                    }],
+                    ..EvolutionLineAsset::default()
+                },
+            ],
+        }]
     }
 
     impl InMemoryCharacterRepository {
@@ -9571,6 +9937,18 @@ mod tests {
                                     digimon_type: DEFAULT_PARTNER_MODEL_ID,
                                     model: DEFAULT_PARTNER_MODEL_ID,
                                     name: "Agumon".to_string(),
+                                    evolutions: vec![
+                                        odmo_types::PartnerEvolutionSnapshot {
+                                            evolution_type: DEFAULT_PARTNER_MODEL_ID,
+                                            unlocked: 1,
+                                            ..odmo_types::PartnerEvolutionSnapshot::default()
+                                        },
+                                        odmo_types::PartnerEvolutionSnapshot {
+                                            evolution_type: 31_011,
+                                            unlocked: 1,
+                                            ..odmo_types::PartnerEvolutionSnapshot::default()
+                                        },
+                                    ],
                                     ..odmo_types::PartnerSlotSnapshot::default()
                                 },
                                 odmo_types::PartnerSlotSnapshot {
@@ -9839,6 +10217,27 @@ mod tests {
                         },
                     ],
                 }],
+                item_assets: vec![
+                    ItemAsset {
+                        item_id: 81001,
+                        name: "Sample Burst Opener".to_string(),
+                        item_type: 61,
+                        section: 6100,
+                        combined_section: 67100,
+                        overlap: 99,
+                        ..Default::default()
+                    },
+                    ItemAsset {
+                        item_id: 81002,
+                        name: "Sample Ride Opener".to_string(),
+                        item_type: 62,
+                        section: 6220,
+                        combined_section: 68220,
+                        overlap: 99,
+                        ..Default::default()
+                    },
+                ],
+                evolution_assets: demo_evolution_assets(),
                 digi_combine_catalog: demo_combine_catalog(),
                 union_combine_catalog: demo_combine_catalog(),
                 random_box_rewards: demo_random_box_rewards(),
@@ -10003,6 +10402,13 @@ mod tests {
             }
             Ok(())
         }
+        fn update_equipment(&self, character_id: u64, equipment: Vec<u8>) -> anyhow::Result<()> {
+            let mut characters = self.characters.write().expect("repo poisoned");
+            if let Some(character) = characters.get_mut(&character_id) {
+                character.equipment = equipment;
+            }
+            Ok(())
+        }
         fn update_extra_inventory(
             &self,
             _character_id: u64,
@@ -10152,6 +10558,18 @@ mod tests {
     impl ExtraEvolutionRepository for InMemoryCharacterRepository {
         fn extra_evolution_npcs(&self) -> anyhow::Result<Vec<ExtraEvolutionNpc>> {
             Ok(self.extra_evolution_npcs.clone())
+        }
+    }
+
+    impl EvolutionAssetRepository for InMemoryCharacterRepository {
+        fn evolution_assets(&self) -> anyhow::Result<Vec<EvolutionAsset>> {
+            Ok(self.evolution_assets.clone())
+        }
+    }
+
+    impl ItemAssetRepository for InMemoryCharacterRepository {
+        fn item_assets(&self) -> anyhow::Result<Vec<ItemAsset>> {
+            Ok(self.item_assets.clone())
         }
     }
 
@@ -11702,6 +12120,125 @@ mod tests {
     }
 
     #[test]
+    fn evolution_unlock_modern_branch_consumes_section_and_persists_unlock() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets[0].lines[1].unlock_item_section = 6100;
+        repo.evolution_assets[0].lines[1].unlock_item_section_amount = 1;
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .expect("character")
+            .partner_slots[0]
+            .evolutions[1]
+            .unlocked = 0;
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("evolution-unlock-modern"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::EvolutionUnlock {
+                    evolution_type: 1,
+                    inven_idx: None,
+                },
+            )
+            .expect("request should complete");
+
+        assert!(
+            responses.is_empty(),
+            "modern slot-open should stay optimistic"
+        );
+
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.inventory.items[0].amount, 2);
+        assert_eq!(stored.partner_slots[0].evolutions[1].unlocked & 0x01, 0x01);
+    }
+
+    #[test]
+    fn evolution_unlock_capsule_branch_keeps_legacy_result_packet() {
+        let repo = Arc::new(InMemoryCharacterRepository::demo());
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("evolution-unlock-capsule"),
+            },
+            repo,
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::EvolutionUnlock {
+                    evolution_type: 1,
+                    inven_idx: Some(0),
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::CAPSULE_EVOLUTION_SLOT_RESULT
+        );
+    }
+
+    #[test]
+    fn open_ride_mode_consumes_section_and_sets_ride_bit() {
+        let repo = InMemoryCharacterRepository::demo();
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .expect("character")
+            .partner_slots[0]
+            .evolutions[1]
+            .unlocked = 0;
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("open-ride-mode"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::OpenRideMode {
+                    evo_unit_idx: 1,
+                    item_type: 6220,
+                },
+            )
+            .expect("request should complete");
+
+        assert!(responses.is_empty(), "ride-open should stay optimistic");
+
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.inventory.items[1].amount, 1);
+        assert_eq!(stored.partner_slots[0].evolutions[1].unlocked & 0x08, 0x08);
+    }
+
+    #[test]
     fn digi_summon_sync_returns_catalog() {
         let repo = Arc::new(InMemoryCharacterRepository::demo());
         let app = GameApplication::new(
@@ -11862,7 +12399,7 @@ mod tests {
     }
 
     #[test]
-    fn hatch_spirit_evolution_consumes_materials_and_adds_partner_slot() {
+    fn spirit_to_digimon_consumes_materials_and_adds_partner_slot() {
         let repo = Arc::new(InMemoryCharacterRepository::demo());
         {
             let mut characters = repo.characters.write().expect("repo poisoned");
@@ -11883,7 +12420,7 @@ mod tests {
         let responses = app
             .handle_request(
                 &mut session,
-                GameRequest::HatchSpiritEvolution {
+                GameRequest::SpiritToDigimon {
                     model_id: 31_004,
                     name: "Vmon".to_string(),
                     npc_id: 91001,
@@ -11895,7 +12432,7 @@ mod tests {
         let result_raw = PacketReader::from_frame(&responses[1]).expect("result frame");
         assert_eq!(
             result_raw.packet_type,
-            odmo_protocol::opcode::game::HATCH_SPIRIT_EVOLUTION
+            odmo_protocol::opcode::game::SPIRIT_TO_DIGIMON
         );
 
         let stored = repo
@@ -11929,7 +12466,7 @@ mod tests {
     }
 
     #[test]
-    fn spirit_craft_consumes_sub_material_and_removes_partner() {
+    fn digimon_to_spirit_consumes_sub_material_and_removes_partner() {
         let repo = Arc::new(InMemoryCharacterRepository::demo());
         {
             let mut characters = repo.characters.write().expect("repo poisoned");
@@ -11950,7 +12487,7 @@ mod tests {
         let responses = app
             .handle_request(
                 &mut session,
-                GameRequest::SpiritCraft {
+                GameRequest::DigimonToSpirit {
                     slot: 2,
                     validation: "4321".to_string(),
                     npc_id: 91001,
@@ -11962,7 +12499,7 @@ mod tests {
         let result_raw = PacketReader::from_frame(&responses[0]).expect("result frame");
         assert_eq!(
             result_raw.packet_type,
-            odmo_protocol::opcode::game::SPIRIT_CRAFT
+            odmo_protocol::opcode::game::DIGIMON_TO_SPIRIT
         );
 
         let stored = repo

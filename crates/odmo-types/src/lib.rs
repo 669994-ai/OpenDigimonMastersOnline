@@ -86,6 +86,68 @@ impl Default for ItemRecord {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ItemAsset {
+    pub item_id: i32,
+    pub name: String,
+    pub item_type: i32,
+    pub section: i32,
+    pub combined_section: i32,
+    pub overlap: i16,
+    pub use_time_group: i32,
+    pub use_time_seconds: i32,
+    pub quest_requirements: Vec<i32>,
+    pub use_character: i32,
+    pub bound_type: i32,
+    pub use_time_type: i32,
+    pub skill_code: i64,
+    pub tamer_min_level: u8,
+    pub tamer_max_level: u8,
+    pub digimon_min_level: u8,
+    pub digimon_max_level: u8,
+    pub sell_price: i64,
+    pub scan_price: i32,
+    pub digicore_price: i32,
+    pub event_price_id: i32,
+    pub event_price_amount: i32,
+    pub usage_time_minutes: i32,
+    pub do_not_use_type: i32,
+    pub use_battle: i32,
+}
+
+impl Default for ItemAsset {
+    fn default() -> Self {
+        Self {
+            item_id: 0,
+            name: String::new(),
+            item_type: 0,
+            section: 0,
+            combined_section: 0,
+            overlap: 0,
+            use_time_group: 0,
+            use_time_seconds: 0,
+            quest_requirements: Vec::new(),
+            use_character: 0,
+            bound_type: 0,
+            use_time_type: 0,
+            skill_code: 0,
+            tamer_min_level: 0,
+            tamer_max_level: 0,
+            digimon_min_level: 0,
+            digimon_max_level: 0,
+            sell_price: 0,
+            scan_price: 0,
+            digicore_price: 0,
+            event_price_id: 0,
+            event_price_amount: 0,
+            usage_time_minutes: 0,
+            do_not_use_type: 0,
+            use_battle: 0,
+        }
+    }
+}
+
 impl ItemRecord {
     /// Sync the struct's item_id and amount fields back into the raw 69-byte record.
     /// Uses the packed u32 format for item_id and amount:
@@ -343,6 +405,124 @@ pub struct ActiveBuffSnapshot {
     pub remaining_seconds: i32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PartnerEvolutionSnapshot {
+    pub evolution_type: i32,
+    pub unlocked: u8,
+    pub skill_experience: i32,
+    pub skill_points: u8,
+    pub skill_mastery: u8,
+    pub skill_levels: Vec<u8>,
+    pub max_skill_levels: Vec<u8>,
+}
+
+impl Default for PartnerEvolutionSnapshot {
+    fn default() -> Self {
+        Self {
+            evolution_type: 0,
+            unlocked: 0,
+            skill_experience: 0,
+            skill_points: 0,
+            skill_mastery: 0,
+            skill_levels: vec![0; 5],
+            max_skill_levels: vec![0; 5],
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EvolutionStageAsset {
+    pub target_type: i32,
+    pub value: i32,
+}
+
+impl Default for EvolutionStageAsset {
+    fn default() -> Self {
+        Self {
+            target_type: 0,
+            value: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EvolutionLineAsset {
+    pub type_id: i32,
+    pub slot_level: u8,
+    pub unlock_level: u8,
+    pub unlock_quest_id: i32,
+    pub unlock_item_section: i32,
+    pub unlock_item_section_amount: i32,
+    pub required_item: i32,
+    pub required_amount: i32,
+    pub required_ds: i32,
+    pub enabled: u8,
+    pub open_qualification: u16,
+    pub use_item_hint: u16,
+    pub required_intimacy: u16,
+    pub open_crest: u16,
+    pub evolution_tree: i32,
+    pub icon_pos_x: i32,
+    pub icon_pos_y: i32,
+    pub jogress_quest_check: i32,
+    pub jogress_chipset_type: i32,
+    pub jogress_consumable_chipset_type: i32,
+    pub jogress_chipset_amount: i32,
+    pub jogress_period_chipset_type: i32,
+    pub jogress_need_digimon_types: Vec<i32>,
+    pub stages: Vec<EvolutionStageAsset>,
+}
+
+impl Default for EvolutionLineAsset {
+    fn default() -> Self {
+        Self {
+            type_id: 0,
+            slot_level: 0,
+            unlock_level: 0,
+            unlock_quest_id: 0,
+            unlock_item_section: 0,
+            unlock_item_section_amount: 0,
+            required_item: 0,
+            required_amount: 0,
+            required_ds: 0,
+            enabled: 0,
+            open_qualification: 0,
+            use_item_hint: 0,
+            required_intimacy: 0,
+            open_crest: 0,
+            evolution_tree: 0,
+            icon_pos_x: 0,
+            icon_pos_y: 0,
+            jogress_quest_check: 0,
+            jogress_chipset_type: 0,
+            jogress_consumable_chipset_type: 0,
+            jogress_chipset_amount: 0,
+            jogress_period_chipset_type: 0,
+            jogress_need_digimon_types: Vec::new(),
+            stages: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EvolutionAsset {
+    pub base_type: i32,
+    pub lines: Vec<EvolutionLineAsset>,
+}
+
+impl Default for EvolutionAsset {
+    fn default() -> Self {
+        Self {
+            base_type: 0,
+            lines: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PartnerSlotSnapshot {
@@ -379,6 +559,7 @@ pub struct PartnerSlotSnapshot {
     pub clone_ev_level: u16,
     pub clone_hp_level: u16,
     pub active_buffs: Vec<ActiveBuffSnapshot>,
+    pub evolutions: Vec<PartnerEvolutionSnapshot>,
 }
 
 impl Default for PartnerSlotSnapshot {
@@ -417,6 +598,7 @@ impl Default for PartnerSlotSnapshot {
             clone_ev_level: 0,
             clone_hp_level: 0,
             active_buffs: Vec::new(),
+            evolutions: Vec::new(),
         }
     }
 }
@@ -708,7 +890,7 @@ impl Default for CharacterSummary {
             map_region: vec![0; 255],
             archive_slots: 7,
             deck_buff_id: 0,
-            equipment: vec![0; 16 * 60],
+            equipment: vec![0; 16 * 69],
             digivice: vec![0; 60],
             shop_name: String::new(),
             size: 12_000,

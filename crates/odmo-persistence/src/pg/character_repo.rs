@@ -1,11 +1,11 @@
 use odmo_application::account::AccountRepository;
 use odmo_application::character::{CharacterAccountRepository, CharacterRepository};
-    use odmo_types::{
-        Account, AccountId, ActiveBuffSnapshot, AttendanceStatus, ChannelAvailability,
-        CharacterSummary, DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DailyRewardStatus,
-        EncyclopediaSnapshot, GuildSnapshot, InventorySnapshot, PartnerSlotSnapshot, RelationEntry,
-        SealListSnapshot, UnionHackSlotRow, XaiSnapshot,
-    };
+use odmo_types::{
+    Account, AccountId, ActiveBuffSnapshot, AttendanceStatus, ChannelAvailability,
+    CharacterSummary, DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DailyRewardStatus,
+    EncyclopediaSnapshot, GuildSnapshot, InventorySnapshot, PartnerSlotSnapshot, RelationEntry,
+    SealListSnapshot, UnionHackSlotRow, XaiSnapshot,
+};
 
 use super::PgRepository;
 use crate::{active_partner_snapshot, apply_partner_snapshot};
@@ -101,7 +101,7 @@ pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
     let map_region: Vec<u8> =
         serde_json::from_value(row.map_regions).unwrap_or_else(|_| vec![0u8; 255]);
     let equipment: Vec<u8> =
-        serde_json::from_value(row.equipment).unwrap_or_else(|_| vec![0u8; 16 * 60]);
+        serde_json::from_value(row.equipment).unwrap_or_else(|_| vec![0u8; 16 * 69]);
     let digivice: Vec<u8> = serde_json::from_value(row.digivice).unwrap_or_else(|_| vec![0u8; 60]);
     let daily_reward: DailyRewardStatus =
         serde_json::from_value(row.daily_reward).unwrap_or_default();
@@ -623,6 +623,19 @@ impl CharacterRepository for PgRepository {
         })
     }
 
+    fn update_equipment(&self, character_id: u64, equipment: Vec<u8>) -> anyhow::Result<()> {
+        let equipment_json = serde_json::to_value(&equipment)?;
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            sqlx::query("UPDATE characters SET equipment = $1 WHERE id = $2")
+                .bind(&equipment_json)
+                .bind(character_id as i64)
+                .execute(&pool)
+                .await?;
+            Ok(())
+        })
+    }
+
     fn update_extra_inventory(
         &self,
         character_id: u64,
@@ -799,13 +812,11 @@ impl CharacterRepository for PgRepository {
                 locked: false,
             };
             let json = serde_json::to_value(&rows)?;
-            let result = sqlx::query(
-                "UPDATE characters SET union_hack_slots = $1 WHERE id = $2",
-            )
-            .bind(&json)
-            .bind(character_id as i64)
-            .execute(&pool)
-            .await?;
+            let result = sqlx::query("UPDATE characters SET union_hack_slots = $1 WHERE id = $2")
+                .bind(&json)
+                .bind(character_id as i64)
+                .execute(&pool)
+                .await?;
             Ok(result.rows_affected() > 0)
         })
     }

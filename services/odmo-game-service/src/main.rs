@@ -215,13 +215,14 @@ async fn serve_client(
 
         let is_encyclopedia_load = matches!(request, GameRequest::EncyclopediaLoad);
         if is_encyclopedia_load {
-            if raw_packet_type == odmo_protocol::opcode::game::SEAL_REMOVE_LEADER && raw_payload_len == 0 {
-                info!("Routing no-payload packet 3234 as modern Encyclopedia load request.");
+            if raw_packet_type == odmo_protocol::opcode::game::SEAL_REMOVE_LEADER
+                && raw_payload_len == 0
+            {
+                info!("Routing no-payload packet 3234 as Encyclopedia load request.");
             } else {
                 info!(
                     "Routing encyclopedia load request packet={} payload_bytes={}",
-                    raw_packet_type,
-                    raw_payload_len
+                    raw_packet_type, raw_payload_len
                 );
             }
         }

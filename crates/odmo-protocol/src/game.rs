@@ -508,9 +508,9 @@ pub enum GameRequest {
     GuildAuthorityDats {
         target_name: String,
     },
-    /// Item-to-digimon exchange: spend materials to obtain a new partner.
+    /// `pDigimon::SpiritToDigimon` C→S — opcode 3239.
     /// `[i32 model_id][wstring name][i32 npc_id]`.
-    HatchSpiritEvolution {
+    SpiritToDigimon {
         model_id: i32,
         name: String,
         npc_id: i32,
@@ -592,10 +592,10 @@ pub enum GameRequest {
         charge_type: u8,
     },
     WarpGateDungeon,
-    /// Digimon-to-item exchange: delete a partner to obtain materials.
+    /// `pDigimon::DigimonToSpirit` C→S — opcode 3240.
     /// `[u8 slot][string validation][i32 npc_id]`. The validation string carries
     /// the account secondary secret and is checked before any mutation.
-    SpiritCraft {
+    DigimonToSpirit {
         slot: u8,
         validation: String,
         npc_id: i32,
@@ -1572,18 +1572,19 @@ impl RandomBoxPurchaseResponsePacket {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HatchSpiritEvolutionResultPacket {
+pub struct SpiritToDigimonResultPacket {
     pub digimon_id: u32,
     pub remaining_bits: i64,
     pub consumed_items: Vec<(u8, u32)>,
 }
 
-impl HatchSpiritEvolutionResultPacket {
-    /// Encode the item-to-digimon result: `[u32 digimon_id][i64 remaining_bits]`
+impl SpiritToDigimonResultPacket {
+    /// Encode the spirit-item-to-digimon result:
+    /// `[u32 digimon_id][i64 remaining_bits]`
     /// followed by consumed-item blocks (`[u8 count][u32 item_id]`) terminated by
     /// a zero count byte.
     pub fn encode(&self) -> Vec<u8> {
-        let mut writer = PacketWriter::new(game::HATCH_SPIRIT_EVOLUTION);
+        let mut writer = PacketWriter::new(game::SPIRIT_TO_DIGIMON);
         writer.write_u32(self.digimon_id);
         writer.write_i64(self.remaining_bits);
         for (amount, item_id) in &self.consumed_items {
@@ -1596,19 +1597,19 @@ impl HatchSpiritEvolutionResultPacket {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpiritCraftResultPacket {
+pub struct DigimonToSpiritResultPacket {
     pub slot: u8,
     pub remaining_bits: i64,
     pub consumed_items: Vec<(u8, u32)>,
     pub gained_items: Vec<(u8, u32)>,
 }
 
-impl SpiritCraftResultPacket {
-    /// Encode the digimon-to-item result: `[u8 deleted_slot][i64 remaining_bits]`
+impl DigimonToSpiritResultPacket {
+    /// Encode the digimon-to-spirit result: `[u8 deleted_slot][i64 remaining_bits]`
     /// followed by a zero-terminated consumed-item block list and then a
     /// zero-terminated gained-item block list (each block `[u8 count][u32 item_id]`).
     pub fn encode(&self) -> Vec<u8> {
-        let mut writer = PacketWriter::new(game::SPIRIT_CRAFT);
+        let mut writer = PacketWriter::new(game::DIGIMON_TO_SPIRIT);
         writer.write_u8(self.slot);
         writer.write_i64(self.remaining_bits);
         for (amount, item_id) in &self.consumed_items {
@@ -4489,8 +4490,8 @@ impl TryFrom<RawPacket> for GameRequest {
             }
             game::SEAL_REMOVE_LEADER => {
                 if reader.remaining_len() == 0 {
-                    // The modern client reuses opcode 3234 with an empty payload
-                    // for EncyclopediaOpen, while SealMaster unset carries a u16.
+                    // Opcode 3234 uses the empty-payload form for EncyclopediaOpen,
+                    // while SealMaster unset carries a u16.
                     Ok(Self::EncyclopediaLoad)
                 } else {
                     let _card_code = reader.read_u16()?;
@@ -4757,11 +4758,11 @@ impl TryFrom<RawPacket> for GameRequest {
                 let target_name = reader.read_string()?;
                 Ok(Self::GuildAuthorityDats { target_name })
             }
-            game::HATCH_SPIRIT_EVOLUTION => {
+            game::SPIRIT_TO_DIGIMON => {
                 let model_id = reader.read_i32()?;
                 let name = reader.read_wide_string()?;
                 let npc_id = reader.read_i32()?;
-                Ok(Self::HatchSpiritEvolution {
+                Ok(Self::SpiritToDigimon {
                     model_id,
                     name,
                     npc_id,
@@ -4892,11 +4893,11 @@ impl TryFrom<RawPacket> for GameRequest {
                 Ok(Self::TimeChargeResult { charge_type })
             }
             game::WARP_GATE_DUNGEON => Ok(Self::WarpGateDungeon),
-            game::SPIRIT_CRAFT => {
+            game::DIGIMON_TO_SPIRIT => {
                 let slot = reader.read_u8()?;
                 let validation = reader.read_string()?;
                 let npc_id = reader.read_i32()?;
-                Ok(Self::SpiritCraft {
+                Ok(Self::DigimonToSpirit {
                     slot,
                     validation,
                     npc_id,
@@ -5865,15 +5866,15 @@ mod tests {
     }
 
     #[test]
-    fn hatch_spirit_evolution_result_packet_uses_expected_opcode() {
-        let packet = HatchSpiritEvolutionResultPacket {
+    fn spirit_to_digimon_result_packet_uses_expected_opcode() {
+        let packet = SpiritToDigimonResultPacket {
             digimon_id: 31_004,
             remaining_bits: 450,
             consumed_items: vec![(1, 81_001), (1, 81_002)],
         }
         .encode();
         let raw = PacketReader::from_frame(&packet).expect("frame should decode");
-        assert_eq!(raw.packet_type, game::HATCH_SPIRIT_EVOLUTION);
+        assert_eq!(raw.packet_type, game::SPIRIT_TO_DIGIMON);
         // [u32 id][i64 bits] + two 5-byte consumed blocks + [u8 0] = 23 bytes.
         assert_eq!(raw.payload.len(), 23);
         let mut payload = PacketReader::new(raw.payload);
@@ -5887,15 +5888,15 @@ mod tests {
     }
 
     #[test]
-    fn hatch_spirit_evolution_result_empty_list_round_trips() {
-        let packet = HatchSpiritEvolutionResultPacket {
+    fn spirit_to_digimon_result_empty_list_round_trips() {
+        let packet = SpiritToDigimonResultPacket {
             digimon_id: 31_004,
             remaining_bits: 450,
             consumed_items: Vec::new(),
         }
         .encode();
         let raw = PacketReader::from_frame(&packet).expect("frame should decode");
-        assert_eq!(raw.packet_type, game::HATCH_SPIRIT_EVOLUTION);
+        assert_eq!(raw.packet_type, game::SPIRIT_TO_DIGIMON);
         // [u32 id][i64 bits] + [u8 0] terminator = 13 bytes.
         assert_eq!(raw.payload.len(), 13);
         let mut payload = PacketReader::new(raw.payload);
@@ -5905,15 +5906,15 @@ mod tests {
     }
 
     #[test]
-    fn hatch_spirit_evolution_result_single_entry_round_trips() {
-        let packet = HatchSpiritEvolutionResultPacket {
+    fn spirit_to_digimon_result_single_entry_round_trips() {
+        let packet = SpiritToDigimonResultPacket {
             digimon_id: 31_004,
             remaining_bits: 450,
             consumed_items: vec![(2, 81_001)],
         }
         .encode();
         let raw = PacketReader::from_frame(&packet).expect("frame should decode");
-        assert_eq!(raw.packet_type, game::HATCH_SPIRIT_EVOLUTION);
+        assert_eq!(raw.packet_type, game::SPIRIT_TO_DIGIMON);
         // [u32 id][i64 bits] + one 5-byte consumed block + [u8 0] = 18 bytes.
         assert_eq!(raw.payload.len(), 18);
         let mut payload = PacketReader::new(raw.payload);
@@ -5925,8 +5926,8 @@ mod tests {
     }
 
     #[test]
-    fn spirit_craft_result_packet_uses_expected_opcode() {
-        let packet = SpiritCraftResultPacket {
+    fn digimon_to_spirit_result_packet_uses_expected_opcode() {
+        let packet = DigimonToSpiritResultPacket {
             slot: 2,
             remaining_bits: 250,
             consumed_items: vec![(1, 81_001)],
@@ -5934,7 +5935,7 @@ mod tests {
         }
         .encode();
         let raw = PacketReader::from_frame(&packet).expect("frame should decode");
-        assert_eq!(raw.packet_type, game::SPIRIT_CRAFT);
+        assert_eq!(raw.packet_type, game::DIGIMON_TO_SPIRIT);
         // [u8 slot][i64 bits] + one 5-byte consumed block + [u8 0]
         // + one 5-byte gained block + [u8 0] = 21 bytes.
         assert_eq!(raw.payload.len(), 21);
@@ -5950,8 +5951,8 @@ mod tests {
     }
 
     #[test]
-    fn spirit_craft_result_empty_lists_round_trip() {
-        let packet = SpiritCraftResultPacket {
+    fn digimon_to_spirit_result_empty_lists_round_trip() {
+        let packet = DigimonToSpiritResultPacket {
             slot: 2,
             remaining_bits: 250,
             consumed_items: Vec::new(),
@@ -5959,7 +5960,7 @@ mod tests {
         }
         .encode();
         let raw = PacketReader::from_frame(&packet).expect("frame should decode");
-        assert_eq!(raw.packet_type, game::SPIRIT_CRAFT);
+        assert_eq!(raw.packet_type, game::DIGIMON_TO_SPIRIT);
         // [u8 slot][i64 bits] + [u8 0] consumed terminator + [u8 0] gained
         // terminator = 11 bytes.
         assert_eq!(raw.payload.len(), 11);
@@ -6218,8 +6219,8 @@ mod tests {
     }
 
     #[test]
-    fn spirit_craft_request_decodes_modern_client_payload() {
-        let mut writer = PacketWriter::new(game::SPIRIT_CRAFT);
+    fn digimon_to_spirit_request_decodes_modern_client_payload() {
+        let mut writer = PacketWriter::new(game::DIGIMON_TO_SPIRIT);
         writer.write_u8(2);
         writer.write_string("4321");
         writer.write_i32(91001);
@@ -6228,7 +6229,7 @@ mod tests {
         let request = GameRequest::try_from(raw).expect("request should decode");
         assert_eq!(
             request,
-            GameRequest::SpiritCraft {
+            GameRequest::DigimonToSpirit {
                 slot: 2,
                 validation: "4321".to_string(),
                 npc_id: 91001,
@@ -6237,8 +6238,8 @@ mod tests {
     }
 
     #[test]
-    fn hatch_spirit_evolution_request_decodes_wide_string_name() {
-        let mut writer = PacketWriter::new(game::HATCH_SPIRIT_EVOLUTION);
+    fn spirit_to_digimon_request_decodes_wide_string_name() {
+        let mut writer = PacketWriter::new(game::SPIRIT_TO_DIGIMON);
         writer.write_i32(31_004);
         writer.write_wide_string("Agumon");
         writer.write_i32(91001);
@@ -6247,7 +6248,7 @@ mod tests {
         let request = GameRequest::try_from(raw).expect("request should decode");
         assert_eq!(
             request,
-            GameRequest::HatchSpiritEvolution {
+            GameRequest::SpiritToDigimon {
                 model_id: 31_004,
                 name: "Agumon".to_string(),
                 npc_id: 91001,

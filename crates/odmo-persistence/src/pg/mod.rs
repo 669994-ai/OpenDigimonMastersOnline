@@ -1,4 +1,5 @@
 mod account_repo;
+mod asset_repo;
 mod character_repo;
 mod combine_repo;
 mod digi_summon_repo;
@@ -44,6 +45,7 @@ impl PgRepository {
                 .fetch_optional(&self.pool)
                 .await?;
         if existing.is_some() {
+            self.seed_server_asset_catalogs().await?;
             self.seed_digi_summon_demo().await?;
             self.seed_extra_evolution_demo().await?;
             self.seed_combine_demo().await?;
@@ -279,6 +281,7 @@ impl PgRepository {
         .execute(&self.pool)
         .await?;
 
+        self.seed_server_asset_catalogs().await?;
         self.seed_digi_summon_demo().await?;
         self.seed_extra_evolution_demo().await?;
         self.seed_combine_demo().await?;
@@ -370,6 +373,37 @@ impl PgRepository {
         .bind("0123456789ABCDEF")
         .execute(&self.pool)
         .await?;
+
+        Ok(())
+    }
+
+    async fn seed_server_asset_catalogs(&self) -> anyhow::Result<()> {
+        let evolution_assets = crate::load_evolution_asset_catalog()?;
+        let item_assets = crate::load_item_asset_catalog()?;
+
+        for asset in evolution_assets {
+            let payload = serde_json::to_value(&asset)?;
+            sqlx::query(
+                "INSERT INTO evolution_assets (base_type, payload) VALUES ($1, $2) \
+                 ON CONFLICT (base_type) DO UPDATE SET payload = EXCLUDED.payload",
+            )
+            .bind(asset.base_type)
+            .bind(payload)
+            .execute(&self.pool)
+            .await?;
+        }
+
+        for asset in item_assets {
+            let payload = serde_json::to_value(&asset)?;
+            sqlx::query(
+                "INSERT INTO item_assets (item_id, payload) VALUES ($1, $2) \
+                 ON CONFLICT (item_id) DO UPDATE SET payload = EXCLUDED.payload",
+            )
+            .bind(asset.item_id)
+            .bind(payload)
+            .execute(&self.pool)
+            .await?;
+        }
 
         Ok(())
     }

@@ -4,9 +4,9 @@
 //! here. Every property runs at least `CASES` generated inputs.
 
 use odmo_protocol::game::{
-    CombineResultResponsePacket, CombineSyncResponsePacket, HatchSpiritEvolutionResultPacket,
+    CombineResultResponsePacket, CombineSyncResponsePacket, DigimonToSpiritResultPacket,
     RandomBoxListEntry, RandomBoxListResponsePacket, RandomBoxPurchaseResponsePacket,
-    SpiritCraftResultPacket, UnionHackModifyResponsePacket, UnionHackOpenResponsePacket,
+    SpiritToDigimonResultPacket, UnionHackModifyResponsePacket, UnionHackOpenResponsePacket,
     UnionHackSlot, UnionInitDataPacket,
 };
 use odmo_protocol::{
@@ -112,7 +112,7 @@ fn union_hack_slot_strategy() -> impl Strategy<Value = UnionHackSlot> {
     )
 }
 
-/// Strategy for an Extra Evolution name. The wide-string reader trims ASCII
+/// Strategy for a spirit-evolution partner name. The wide-string reader trims ASCII
 /// whitespace, so names exclude leading/trailing spaces; length stays within
 /// the `u8` code-unit count and uses printable ASCII so the UTF-16 round-trip
 /// is exact.
@@ -209,24 +209,24 @@ fn encode_request(req: &GameRequest) -> Vec<u8> {
             writer.finalize()
         }
         // [i32 model_id][wstring name][i32 npc_id].
-        GameRequest::HatchSpiritEvolution {
+        GameRequest::SpiritToDigimon {
             model_id,
             name,
             npc_id,
         } => {
-            let mut writer = PacketWriter::new(game::HATCH_SPIRIT_EVOLUTION);
+            let mut writer = PacketWriter::new(game::SPIRIT_TO_DIGIMON);
             writer.write_i32(*model_id);
             writer.write_wide_string(name);
             writer.write_i32(*npc_id);
             writer.finalize()
         }
         // [u8 slot][string validation][i32 npc_id].
-        GameRequest::SpiritCraft {
+        GameRequest::DigimonToSpirit {
             slot,
             validation,
             npc_id,
         } => {
-            let mut writer = PacketWriter::new(game::SPIRIT_CRAFT);
+            let mut writer = PacketWriter::new(game::DIGIMON_TO_SPIRIT);
             writer.write_u8(*slot);
             writer.write_string(validation);
             writer.write_i32(*npc_id);
@@ -301,14 +301,14 @@ fn covered_request_strategy() -> impl Strategy<Value = GameRequest> {
             }
         }),
         (any::<i32>(), extra_evolution_name_strategy(), any::<i32>()).prop_map(
-            |(model_id, name, npc_id)| GameRequest::HatchSpiritEvolution {
+            |(model_id, name, npc_id)| GameRequest::SpiritToDigimon {
                 model_id,
                 name,
                 npc_id,
             }
         ),
         (any::<u8>(), "[0-9A-Za-z]{0,16}", any::<i32>()).prop_map(|(slot, validation, npc_id)| {
-            GameRequest::SpiritCraft {
+            GameRequest::DigimonToSpirit {
                 slot,
                 validation,
                 npc_id,
@@ -370,8 +370,8 @@ fn request_opcode(req: &GameRequest) -> i16 {
         GameRequest::UnionCombineRewardClaim { .. } => game::UNION_COMBINE_REWARD,
         GameRequest::UnionHackOpenRequest => game::UNION_HACK_OPEN_REQUEST,
         GameRequest::UnionHackModify { .. } => game::UNION_HACK_MODIFY_REQUEST,
-        GameRequest::HatchSpiritEvolution { .. } => game::HATCH_SPIRIT_EVOLUTION,
-        GameRequest::SpiritCraft { .. } => game::SPIRIT_CRAFT,
+        GameRequest::SpiritToDigimon { .. } => game::SPIRIT_TO_DIGIMON,
+        GameRequest::DigimonToSpirit { .. } => game::DIGIMON_TO_SPIRIT,
         GameRequest::RandomBoxList { .. } => game::RANDOM_BOX_LIST,
         GameRequest::RandomBoxPurchase { .. } => game::RANDOM_BOX_PURCHASE,
         other => panic!("request_opcode: variant outside Property 18 coverage: {other:?}"),
@@ -461,13 +461,13 @@ fn covered_response_strategy() -> impl Strategy<Value = (Vec<u8>, i16)> {
     )
         .prop_map(|(digimon_id, remaining_bits, consumed_items)| {
             (
-                HatchSpiritEvolutionResultPacket {
+                SpiritToDigimonResultPacket {
                     digimon_id,
                     remaining_bits,
                     consumed_items,
                 }
                 .encode(),
-                game::HATCH_SPIRIT_EVOLUTION,
+                game::SPIRIT_TO_DIGIMON,
             )
         })
         .boxed();
@@ -480,14 +480,14 @@ fn covered_response_strategy() -> impl Strategy<Value = (Vec<u8>, i16)> {
     )
         .prop_map(|(slot, remaining_bits, consumed_items, gained_items)| {
             (
-                SpiritCraftResultPacket {
+                DigimonToSpiritResultPacket {
                     slot,
                     remaining_bits,
                     consumed_items,
                     gained_items,
                 }
                 .encode(),
-                game::SPIRIT_CRAFT,
+                game::DIGIMON_TO_SPIRIT,
             )
         })
         .boxed();
@@ -1015,10 +1015,10 @@ proptest! {
         prop_assert_eq!(decoded_materials, materials);
     }
 
-    /// Feature: babel-npc-summon-fusion, Property 13: Extra Evolution packets round-trip.
+    /// Feature: babel-npc-summon-fusion, Property 13: Spirit conversion packets round-trip.
     ///
-    /// The two Extra Evolution requests (3240 item-to-digimon, 3241
-    /// digimon-to-item) and their responses round-trip. Requests preserve every
+    /// The modern spirit requests (3239 spirit-to-digimon, 3240
+    /// digimon-to-spirit) and their responses round-trip. Requests preserve every
     /// field, including the wide-string name. Responses preserve the leading
     /// fields and every zero-terminated item block in order, followed by the
     /// terminating zero count byte(s).
@@ -1038,8 +1038,8 @@ proptest! {
         craft_consumed in prop::collection::vec(item_block_strategy(), 0..=8),
         craft_gained in prop::collection::vec(item_block_strategy(), 0..=8),
     ) {
-        // Item-to-digimon request (3240): [i32 model_id][wstring name][i32 npc_id].
-        let mut hatch_request = PacketWriter::new(game::HATCH_SPIRIT_EVOLUTION);
+        // Spirit-to-digimon request (3239): [i32 model_id][wstring name][i32 npc_id].
+        let mut hatch_request = PacketWriter::new(game::SPIRIT_TO_DIGIMON);
         hatch_request.write_i32(model_id);
         hatch_request.write_wide_string(&name);
         hatch_request.write_i32(hatch_npc_id);
@@ -1054,15 +1054,15 @@ proptest! {
         .expect("hatch request should parse");
         prop_assert_eq!(
             decoded_hatch,
-            GameRequest::HatchSpiritEvolution {
+            GameRequest::SpiritToDigimon {
                 model_id,
                 name: name.clone(),
                 npc_id: hatch_npc_id,
             }
         );
 
-        // Digimon-to-item request (3241): [u8 slot][string validation][i32 npc_id].
-        let mut craft_request = PacketWriter::new(game::SPIRIT_CRAFT);
+        // Digimon-to-spirit request (3240): [u8 slot][string validation][i32 npc_id].
+        let mut craft_request = PacketWriter::new(game::DIGIMON_TO_SPIRIT);
         craft_request.write_u8(slot);
         craft_request.write_string(&validation);
         craft_request.write_i32(craft_npc_id);
@@ -1077,23 +1077,23 @@ proptest! {
         .expect("craft request should parse");
         prop_assert_eq!(
             decoded_craft,
-            GameRequest::SpiritCraft {
+            GameRequest::DigimonToSpirit {
                 slot,
                 validation: validation.clone(),
                 npc_id: craft_npc_id,
             }
         );
 
-        // Item-to-digimon result (3240): [u32 digimon_id][i64 remaining_bits] then a
-        // zero-terminated consumed-item block list.
-        let hatch_frame = HatchSpiritEvolutionResultPacket {
+        // Spirit-to-digimon result (3239): [u32 digimon_id][i64 remaining_bits]
+        // then a zero-terminated consumed-item block list.
+        let hatch_frame = SpiritToDigimonResultPacket {
             digimon_id,
             remaining_bits: hatch_bits,
             consumed_items: hatch_consumed.clone(),
         }
         .encode();
         let hatch_raw = PacketReader::from_frame(&hatch_frame).expect("hatch result decodes");
-        prop_assert_eq!(hatch_raw.packet_type, game::HATCH_SPIRIT_EVOLUTION);
+        prop_assert_eq!(hatch_raw.packet_type, game::SPIRIT_TO_DIGIMON);
         let mut hatch_reader = PacketReader::new(hatch_raw.payload);
         prop_assert_eq!(hatch_reader.read_u32().expect("digimon_id"), digimon_id);
         prop_assert_eq!(hatch_reader.read_u64().expect("remaining_bits") as i64, hatch_bits);
@@ -1103,9 +1103,9 @@ proptest! {
         }
         prop_assert_eq!(hatch_reader.read_u8().expect("consumed terminator"), 0);
 
-        // Digimon-to-item result (3241): [u8 slot][i64 remaining_bits] then a
+        // Digimon-to-spirit result (3240): [u8 slot][i64 remaining_bits] then a
         // zero-terminated consumed list and a zero-terminated gained list.
-        let craft_frame = SpiritCraftResultPacket {
+        let craft_frame = DigimonToSpiritResultPacket {
             slot: craft_slot,
             remaining_bits: craft_bits,
             consumed_items: craft_consumed.clone(),
@@ -1113,7 +1113,7 @@ proptest! {
         }
         .encode();
         let craft_raw = PacketReader::from_frame(&craft_frame).expect("craft result decodes");
-        prop_assert_eq!(craft_raw.packet_type, game::SPIRIT_CRAFT);
+        prop_assert_eq!(craft_raw.packet_type, game::DIGIMON_TO_SPIRIT);
         let mut craft_reader = PacketReader::new(craft_raw.payload);
         prop_assert_eq!(craft_reader.read_u8().expect("slot"), craft_slot);
         prop_assert_eq!(craft_reader.read_u64().expect("remaining_bits") as i64, craft_bits);
@@ -1248,7 +1248,7 @@ proptest! {
     /// request value. This is the standard round-trip identity stated both ways:
     /// `decode ∘ encode` preserves the value and `encode ∘ decode` preserves the
     /// bytes. Coverage spans the summon (3651/3652), Digi combine (3661-3663),
-    /// Union combine (4301-4303), Extra Evolution (3240/3241), and random box
+    /// Union combine (4301-4303), Spirit conversion (3239/3240), and random box
     /// (16067/16068) request opcodes.
     #[test]
     fn covered_c2s_requests_round_trip(req in covered_request_strategy()) {

@@ -107,7 +107,8 @@ pub mod game {
     pub const PARTNER_SWITCH_RESPONSE: i16 = 1041;
     pub const PARTNER_DELETE: i16 = 1042;
     pub const PARTNER_DELETE_RESPONSE: i16 = 1042;
-    pub const EVOLUTION_ARMOR_UNLOCKED: i16 = 3239;
+    pub const CAPSULE_EVOLUTION_SLOT_RESULT: i16 = 3238;
+    pub const EVOLUTION_ARMOR_UNLOCKED: i16 = CAPSULE_EVOLUTION_SLOT_RESULT;
     pub const EVOLUTION_UNLOCK: i16 = 1055;
     pub const EVOLUTION_UNLOCK_RESPONSE: i16 = 1055;
     pub const RIDE_MODE_START: i16 = 1325;
@@ -250,7 +251,9 @@ pub mod game {
     pub const GUILD_AUTHORITY_MEMBER: i16 = 2116;
     pub const GUILD_AUTHORITY_NEW_MEMBER: i16 = 2115;
     pub const GUILD_AUTHORITY_DATS: i16 = 2117;
-    pub const HATCH_SPIRIT_EVOLUTION: i16 = 3240;
+    pub const SPIRIT_TO_DIGIMON: i16 = 3239;
+    pub const DIGIMON_TO_SPIRIT: i16 = 3240;
+    pub const UNKNOWN_DIGIMON_3241: i16 = 3241;
     pub const DIGI_SUMMON_PURCHASE: i16 = 3651;
     pub const DIGI_SUMMON_PURCHASE_RESPONSE: i16 = 3651;
     // Digivice combine and union combine flows, plus the random box draw.
@@ -282,7 +285,6 @@ pub mod game {
     pub const TRANSCENDENCE_SUCCESS: i16 = 16040;
     pub const TIME_CHARGE_RESULT: i16 = 16042;
     pub const WARP_GATE_DUNGEON: i16 = 4119;
-    pub const SPIRIT_CRAFT: i16 = 3241;
     pub const SKILL_UPDATE_COOLDOWN: i16 = 3246;
     pub const FRIENDLY_INFO: i16 = 3129;
 }

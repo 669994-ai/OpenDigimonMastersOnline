@@ -36,6 +36,7 @@ O projeto é desenvolvido pela comunidade **ODMO - Open Digimon Masters Online**
 | Persistência JSON | Implementada |
 | Caminho PostgreSQL | Implementado e em expansão |
 | Handoff em tempo real entre serviços | Implementado |
+| Catálogos de assets do servidor | Implementados |
 
 ### Preview visual
 
@@ -108,6 +109,9 @@ O projeto é desenvolvido pela comunidade **ODMO - Open Digimon Masters Online**
 #### Persistência
 
 - repositório JSON com criação e seed automática
+- seleção explícita de repositório:
+  - `ODMO_DATABASE_URL` para PostgreSQL
+  - `ODMO_DEV_MODE=1` para modo de desenvolvimento com JSON
 - busca de conta por nome e id
 - persistência de senha secundária
 - persistência de lista de servidores
@@ -115,6 +119,17 @@ O projeto é desenvolvido pela comunidade **ODMO - Open Digimon Masters Online**
 - listagem, busca, criação e exclusão de personagens
 - contratos para atualização de mapa, posição, posição do parceiro e inventário
 - caminho PostgreSQL já ligado aos serviços
+- migrations e seed demo automáticos no startup quando usa PostgreSQL
+- catálogos de regras do servidor sob `data/server-assets/`
+
+### Catálogos de assets do servidor
+
+Os dados de regra que o backend precisa validar ficam em catálogos próprios do projeto:
+
+- `data/server-assets/evolution_assets.json`
+- `data/server-assets/item_assets.json`
+
+O cliente continua lendo seus próprios packs em runtime. O servidor não depende de packs ou dumps do cliente para validar essas regras.
 
 Evidências principais:
 
@@ -182,12 +197,23 @@ cargo build
 
 ```powershell
 $env:ODMO_PORTAL_STATE_DIR = ".odmo-portal"
+$env:ODMO_DEV_MODE = "1"
 $env:ODMO_REPOSITORY_PATH = ".odmo-data\world.json"
 
 cargo run -p odmo-account-service
 cargo run -p odmo-character-service
 cargo run -p odmo-game-service
 ```
+
+```powershell
+$env:ODMO_DATABASE_URL = "postgres://user:password@localhost/odmo"
+
+cargo run -p odmo-account-service
+cargo run -p odmo-character-service
+cargo run -p odmo-game-service
+```
+
+Quando `ODMO_DATABASE_URL` está definido, os serviços aplicam as migrations e o seed demo automaticamente na inicialização.
 
 ### Licença
 

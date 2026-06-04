@@ -43,6 +43,7 @@ The project is developed by the **ODMO - Open Digimon Masters Online** community
 | JSON persistence | Implemented |
 | PostgreSQL path | Implemented and expanding |
 | Real-time service handoff | Implemented |
+| Server-owned asset catalogs | Implemented |
 
 ### Visual preview
 
@@ -80,6 +81,15 @@ That current stack is visible directly in the server code:
 - `odmo-account-service` — login/auth bootstrap
 - `odmo-character-service` — character flow and game handoff
 - `odmo-game-service` — initial world bootstrap
+
+### Server asset catalogs
+
+Rule data that the backend must validate lives in server-owned catalogs under:
+
+- `data/server-assets/evolution_assets.json`
+- `data/server-assets/item_assets.json`
+
+The client continues to read its own pack data independently. The server does not depend on the client's pack or dump files at runtime.
 
 ### Implemented functionality
 
@@ -189,6 +199,9 @@ Evidence: [crates/odmo-application/src/lib.rs](crates/odmo-application/src/lib.r
 Confirmed in the workspace:
 
 - JSON repository creation and seeding
+- explicit repository selection:
+  - `ODMO_DATABASE_URL` for PostgreSQL
+  - `ODMO_DEV_MODE=1` for JSON-backed development mode
 - account lookup by username and id
 - secondary password persistence
 - server list persistence
@@ -196,7 +209,8 @@ Confirmed in the workspace:
 - character listing, lookup, availability check, creation, and deletion in the JSON repository
 - character map, position, partner position, and inventory update hooks in the repository contract
 - PostgreSQL repository path already wired in the services
-- SQL migrations for accounts, servers, characters, and world data
+- automatic PostgreSQL migrations and demo seed on startup
+- SQL migrations for accounts, servers, characters, world data, and server-owned asset catalogs
 
 Evidence: [crates/odmo-persistence/src/lib.rs](crates/odmo-persistence/src/lib.rs), [crates/odmo-application/src/character.rs](crates/odmo-application/src/character.rs), [crates/odmo-application/src/game.rs](crates/odmo-application/src/game.rs)
 
@@ -274,6 +288,7 @@ cargo build
 
 ```powershell
 $env:ODMO_PORTAL_STATE_DIR = ".odmo-portal"
+$env:ODMO_DEV_MODE = "1"
 $env:ODMO_REPOSITORY_PATH = ".odmo-data\world.json"
 
 cargo run -p odmo-account-service
@@ -289,6 +304,8 @@ cargo run -p odmo-account-service
 cargo run -p odmo-character-service
 cargo run -p odmo-game-service
 ```
+
+When `ODMO_DATABASE_URL` is set, the services run the bundled SQL migrations and demo seed automatically at startup.
 
 ### Repository layout
 

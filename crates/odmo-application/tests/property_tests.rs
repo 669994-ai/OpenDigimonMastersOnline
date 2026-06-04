@@ -12,9 +12,10 @@ use odmo_application::{
     character::{CharacterAccountRepository, CharacterRepository},
     game::{
         DigiCombineRepository, DigiSummonRepository, DropCollectionResult,
-        ExtraEvolutionRepository, GameApplication, GameServiceConfig, GameSession,
-        MapDropRepository, MapMobRepository, NpcShopDefinition, NpcShopRepository,
-        PortalDefinition, PortalRepository, RandomBoxRepository, UnionCombineRepository,
+        EvolutionAssetRepository, ExtraEvolutionRepository, GameApplication, GameServiceConfig,
+        GameSession, ItemAssetRepository, MapDropRepository, MapMobRepository, NpcShopDefinition,
+        NpcShopRepository, PortalDefinition, PortalRepository, RandomBoxRepository,
+        UnionCombineRepository,
     },
 };
 use odmo_protocol::{GameRequest, PacketReader};
@@ -205,6 +206,18 @@ impl ExtraEvolutionRepository for CatalogRepository {
     }
 }
 
+impl EvolutionAssetRepository for CatalogRepository {
+    fn evolution_assets(&self) -> anyhow::Result<Vec<odmo_types::EvolutionAsset>> {
+        Ok(Vec::new())
+    }
+}
+
+impl ItemAssetRepository for CatalogRepository {
+    fn item_assets(&self) -> anyhow::Result<Vec<odmo_types::ItemAsset>> {
+        Ok(Vec::new())
+    }
+}
+
 // The combine handlers read these catalogs; the repository double serves a
 // controllable catalog so the combine property tests can seed ranks and
 // ceilings. Digi and Union share the same catalog type, so both ports return
@@ -340,6 +353,10 @@ impl CharacterRepository for CatalogRepository {
         _y: i32,
         _z: f32,
     ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn update_equipment(&self, _character_id: u64, _equipment: Vec<u8>) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -1387,8 +1404,8 @@ fn digimon_to_item_character(partner: PartnerSlotSnapshot) -> CharacterSummary {
 
 /// One of the five evolution rejection regimes. The item-to-digimon regimes
 /// (`NoFreeSlot`, `InsufficientBits`, `InsufficientMaterials`) drive
-/// `HatchSpiritEvolution`; the digimon-to-item regimes (`BadPassword`,
-/// `UnderLevel`) drive `SpiritCraft`. Every regime must reject before any
+/// `SpiritToDigimon`; the digimon-to-spirit regimes (`BadPassword`,
+/// `UnderLevel`) drive `DigimonToSpirit`. Every regime must reject before any
 /// persist, leaving roster, bits, and inventory untouched.
 #[derive(Debug, Clone)]
 enum EvolutionRejectScenario {
@@ -2591,7 +2608,7 @@ proptest! {
         let responses = app
             .handle_request(
                 &mut session,
-                GameRequest::HatchSpiritEvolution {
+                GameRequest::SpiritToDigimon {
                     model_id: scenario.model_id,
                     name: scenario.name.clone(),
                     npc_id: scenario.npc_id,
@@ -2684,10 +2701,10 @@ proptest! {
     /// Feature: babel-npc-summon-fusion, Property 15: Evolution rejection causes no roster or inventory mutation
     ///
     /// Every evolution rejection regime leaves the roster, bits, and inventory
-    /// untouched. Three item-to-digimon regimes drive `HatchSpiritEvolution` and
+    /// untouched. Three spirit-to-digimon regimes drive `SpiritToDigimon` and
     /// three reject before persist: `NoFreeSlot` (every slot occupied),
     /// `InsufficientBits` (`bits < price`), and `InsufficientMaterials` (a
-    /// required material absent). Two digimon-to-item regimes drive `SpiritCraft`
+    /// required material absent). Two digimon-to-spirit regimes drive `DigimonToSpirit`
     /// and reject before mutation: `BadPassword` (validation matches neither the
     /// email nor the secondary password) and `UnderLevel` (partner level below
     /// the recipe threshold, so no recipe matches).
@@ -2733,7 +2750,7 @@ proptest! {
                 let responses = app
                     .handle_request(
                         &mut session,
-                        GameRequest::HatchSpiritEvolution {
+                        GameRequest::SpiritToDigimon {
                             model_id,
                             name: "Spirit".to_string(),
                             npc_id: EVOLUTION_REJECT_NPC_ID,
@@ -2761,7 +2778,7 @@ proptest! {
                 let responses = app
                     .handle_request(
                         &mut session,
-                        GameRequest::SpiritCraft {
+                        GameRequest::DigimonToSpirit {
                             slot,
                             validation,
                             npc_id: EVOLUTION_REJECT_NPC_ID,
@@ -2789,7 +2806,7 @@ proptest! {
                 let responses = app
                     .handle_request(
                         &mut session,
-                        GameRequest::SpiritCraft {
+                        GameRequest::DigimonToSpirit {
                             slot,
                             validation,
                             npc_id: EVOLUTION_REJECT_NPC_ID,
@@ -3341,14 +3358,14 @@ fn covered_request_strategy() -> impl Strategy<Value = GameRequest> {
     // String fields use printable ASCII; their contents never affect routing.
     let summon_and_box = prop_oneof![
         (any::<i32>(), "[ -~]{0,16}", any::<i32>()).prop_map(|(model_id, name, npc_id)| {
-            GameRequest::HatchSpiritEvolution {
+            GameRequest::SpiritToDigimon {
                 model_id,
                 name,
                 npc_id,
             }
         }),
         (any::<u8>(), "[ -~]{0,16}", any::<i32>()).prop_map(|(slot, validation, npc_id)| {
-            GameRequest::SpiritCraft {
+            GameRequest::DigimonToSpirit {
                 slot,
                 validation,
                 npc_id,
