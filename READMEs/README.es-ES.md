@@ -119,7 +119,7 @@ El proyecto es desarrollado por la comunidad **ODMO - Open Digimon Masters Onlin
 - listado, búsqueda, creación y eliminación de personajes
 - contratos para actualización de mapa, posición, posición del compañero e inventario
 - ruta PostgreSQL ya conectada a los servicios
-- migrations y seed demo automáticos en el arranque cuando se usa PostgreSQL
+- migrations y preparación automática de los catálogos del servidor al iniciar cuando se usa PostgreSQL
 - catálogos de reglas del servidor bajo `data/server-assets/`
 
 ### Catálogos de assets del servidor

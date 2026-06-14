@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use odmo_application::game::{DigiCombineRepository, RandomBoxRepository, UnionCombineRepository};
-use odmo_persistence::JsonRepository;
+use odmo_persistence::{DEMO_CATALOG_ITEM_A, DEMO_CATALOG_ITEM_B, JsonRepository};
 use odmo_persistence::pg::PgRepository;
 use odmo_types::{DigiCombineCatalog, RandomBoxReward, UnionCombineCatalog};
 
@@ -48,12 +48,15 @@ fn json_digi_combine_catalog_returns_seeded_catalog() {
     assert_eq!(catalog.rank_rows[1].rewards[0].item_id, 5102);
 
     assert_eq!(catalog.item_list.len(), 2);
-    assert_eq!(catalog.item_list[0].item_id, 81001);
+    assert_eq!(catalog.item_list[0].item_id, DEMO_CATALOG_ITEM_A);
     assert_eq!(catalog.item_list[0].group_id, 1);
 
     assert_eq!(catalog.item_groups.len(), 1);
     assert_eq!(catalog.item_groups[0].group_id, 1);
-    assert_eq!(catalog.item_groups[0].members, vec![81001, 81002]);
+    assert_eq!(
+        catalog.item_groups[0].members,
+        vec![DEMO_CATALOG_ITEM_A, DEMO_CATALOG_ITEM_B]
+    );
 
     assert_eq!(catalog.ceil_groups.len(), 1);
     assert_eq!(catalog.ceil_groups[0].ceiling_type, 1);

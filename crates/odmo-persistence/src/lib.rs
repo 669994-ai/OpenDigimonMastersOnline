@@ -36,6 +36,9 @@ fn map_key(map_id: i16, channel: u8) -> String {
 
 const EVOLUTION_ASSET_CATALOG_PATH: &str = "data/server-assets/evolution_assets.json";
 const ITEM_ASSET_CATALOG_PATH: &str = "data/server-assets/item_assets.json";
+pub const DEMO_CATALOG_ITEM_A: i32 = 3;
+pub const DEMO_CATALOG_ITEM_B: i32 = 4;
+pub const DEMO_CATALOG_ITEM_C: i32 = 5;
 
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -173,7 +176,9 @@ pub enum PersistenceBackend {
 /// 2. `ODMO_DEV_MODE=1` → JSON file (development)
 /// 3. Neither set → error
 ///
-/// For PostgreSQL, runs migrations and seeds demo data automatically.
+/// For PostgreSQL, runs migrations and prepares the server-owned baseline
+/// catalogs automatically. Demo world/account seeds are opt-in via
+/// `ODMO_SEED_DEMO=1`.
 pub async fn initialize_backend() -> anyhow::Result<PersistenceBackend> {
     if let Ok(database_url) = std::env::var("ODMO_DATABASE_URL") {
         tracing::info!("using PostgreSQL persistence");
@@ -181,7 +186,14 @@ pub async fn initialize_backend() -> anyhow::Result<PersistenceBackend> {
             .await
             .context("failed to connect to PostgreSQL")?;
         pg.migrate().await.context("failed to run migrations")?;
-        pg.seed_demo().await.context("failed to seed demo data")?;
+        pg.prepare_runtime()
+            .await
+            .context("failed to prepare PostgreSQL runtime state")?;
+        if demo_seed_enabled() {
+            pg.seed_demo_world()
+                .await
+                .context("failed to seed PostgreSQL demo data")?;
+        }
         Ok(PersistenceBackend::Pg(Arc::new(pg)))
     } else if std::env::var("ODMO_DEV_MODE").is_ok() {
         tracing::warn!("using JSON file persistence (dev mode — not for production)");
@@ -198,6 +210,13 @@ pub async fn initialize_backend() -> anyhow::Result<PersistenceBackend> {
              or ODMO_DEV_MODE=1 for JSON file (development)."
         )
     }
+}
+
+fn demo_seed_enabled() -> bool {
+    std::env::var("ODMO_SEED_DEMO")
+        .ok()
+        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
 }
 
 impl PersistenceBackend {
@@ -1465,11 +1484,11 @@ impl WorldSnapshot {
                     .to_string(),
                 tickets: vec![
                     DigiSummonTicket {
-                        item_id: 81001,
+                        item_id: DEMO_CATALOG_ITEM_A,
                         cost: 1,
                     },
                     DigiSummonTicket {
-                        item_id: 81002,
+                        item_id: DEMO_CATALOG_ITEM_B,
                         cost: 10,
                     },
                 ],
@@ -1581,17 +1600,17 @@ fn demo_combine_catalog() -> DigiCombineCatalog {
         ],
         item_list: vec![
             DigiCombineItem {
-                item_id: 81001,
+                item_id: DEMO_CATALOG_ITEM_A,
                 group_id: 1,
             },
             DigiCombineItem {
-                item_id: 81002,
+                item_id: DEMO_CATALOG_ITEM_B,
                 group_id: 1,
             },
         ],
         item_groups: vec![DigiCombineGroup {
             group_id: 1,
-            members: vec![81001, 81002],
+            members: vec![DEMO_CATALOG_ITEM_A, DEMO_CATALOG_ITEM_B],
         }],
         ceil_groups: vec![DigiCombineCeil {
             ceiling_type: 1,

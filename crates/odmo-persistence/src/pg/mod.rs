@@ -39,16 +39,26 @@ impl PgRepository {
         Ok(())
     }
 
-    pub async fn seed_demo(&self) -> anyhow::Result<()> {
+    pub async fn prepare_runtime(&self) -> anyhow::Result<()> {
+        self.seed_server_asset_catalogs().await?;
+        self.upsert_resource_hash(configured_resource_hash_hex()).await?;
+        Ok(())
+    }
+
+    pub async fn seed_demo_world(&self) -> anyhow::Result<()> {
         let existing: Option<(i64,)> =
             sqlx::query_as("SELECT id FROM accounts WHERE username = 'admin'")
                 .fetch_optional(&self.pool)
                 .await?;
         if existing.is_some() {
-            self.seed_server_asset_catalogs().await?;
             self.seed_digi_summon_demo().await?;
             self.seed_extra_evolution_demo().await?;
             self.seed_combine_demo().await?;
+            self.upsert_resource_hash(
+                configured_resource_hash_hex()
+                    .or_else(|| Some("0123456789ABCDEF".to_string())),
+            )
+            .await?;
             return Ok(());
         }
 
@@ -281,7 +291,6 @@ impl PgRepository {
         .execute(&self.pool)
         .await?;
 
-        self.seed_server_asset_catalogs().await?;
         self.seed_digi_summon_demo().await?;
         self.seed_extra_evolution_demo().await?;
         self.seed_combine_demo().await?;
@@ -365,21 +374,38 @@ impl PgRepository {
         .execute(&self.pool)
         .await?;
 
-        // Resource hash
-        sqlx::query(
-            "INSERT INTO server_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING",
+        self.upsert_resource_hash(
+            configured_resource_hash_hex()
+                .or_else(|| Some("0123456789ABCDEF".to_string())),
         )
-        .bind("resource_hash_hex")
-        .bind("0123456789ABCDEF")
-        .execute(&self.pool)
         .await?;
 
         Ok(())
     }
 
     async fn seed_server_asset_catalogs(&self) -> anyhow::Result<()> {
+        let evolution_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM evolution_assets")
+                .fetch_one(&self.pool)
+                .await?;
+        let item_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM item_assets")
+            .fetch_one(&self.pool)
+            .await?;
+
+        if evolution_count > 0 && item_count > 0 {
+            return Ok(());
+        }
+
         let evolution_assets = crate::load_evolution_asset_catalog()?;
         let item_assets = crate::load_item_asset_catalog()?;
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM evolution_assets")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM item_assets")
+            .execute(&mut *tx)
+            .await?;
 
         for asset in evolution_assets {
             let payload = serde_json::to_value(&asset)?;
@@ -389,7 +415,7 @@ impl PgRepository {
             )
             .bind(asset.base_type)
             .bind(payload)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
         }
 
@@ -401,9 +427,11 @@ impl PgRepository {
             )
             .bind(asset.item_id)
             .bind(payload)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
         }
+
+        tx.commit().await?;
 
         Ok(())
     }
@@ -442,9 +470,9 @@ impl PgRepository {
             "INSERT INTO digi_summon_tickets (product_row_id, item_id, cost) VALUES ($1,$2,$3), ($1,$4,$5)",
         )
         .bind(product_row.0)
-        .bind(81001i32)
+        .bind(crate::DEMO_CATALOG_ITEM_A)
         .bind(1i32)
-        .bind(81002i32)
+        .bind(crate::DEMO_CATALOG_ITEM_B)
         .bind(10i32)
         .execute(&self.pool)
         .await?;
@@ -510,10 +538,10 @@ impl PgRepository {
         )
         .bind(item_to_digimon_row.0)
         .bind(1i16)
-        .bind(81001i32)
+        .bind(crate::DEMO_CATALOG_ITEM_A)
         .bind(1i32)
         .bind(2i16)
-        .bind(81002i32)
+        .bind(crate::DEMO_CATALOG_ITEM_B)
         .bind(1i32)
         .execute(&self.pool)
         .await?;
@@ -525,7 +553,7 @@ impl PgRepository {
         )
         .bind(npc_row.0)
         .bind(2i16)
-        .bind(81003i32)
+        .bind(crate::DEMO_CATALOG_ITEM_C)
         .bind(1i16)
         .bind(10i32)
         .bind(250i64)
@@ -542,7 +570,7 @@ impl PgRepository {
         .bind(31002i32)
         .bind(1i32)
         .bind(2i16)
-        .bind(81001i32)
+        .bind(crate::DEMO_CATALOG_ITEM_A)
         .bind(1i32)
         .execute(&self.pool)
         .await?;
@@ -592,9 +620,9 @@ impl PgRepository {
                  VALUES ($1,$2,$3), ($1,$4,$5)",
             )
             .bind(variant)
-            .bind(81001i32)
+            .bind(crate::DEMO_CATALOG_ITEM_A)
             .bind(1i32)
-            .bind(81002i32)
+            .bind(crate::DEMO_CATALOG_ITEM_B)
             .bind(1i32)
             .execute(&self.pool)
             .await?;
@@ -611,8 +639,8 @@ impl PgRepository {
                 "INSERT INTO combine_group_members (group_row_id, member_id) VALUES ($1,$2), ($1,$3)",
             )
             .bind(group_row.0)
-            .bind(81001i32)
-            .bind(81002i32)
+            .bind(crate::DEMO_CATALOG_ITEM_A)
+            .bind(crate::DEMO_CATALOG_ITEM_B)
             .execute(&self.pool)
             .await?;
 
@@ -655,4 +683,28 @@ impl PgRepository {
             handle.block_on(f)
         })
     }
+
+    async fn upsert_resource_hash(&self, hash_hex: Option<String>) -> anyhow::Result<()> {
+        let Some(hash_hex) = hash_hex.filter(|value| !value.trim().is_empty()) else {
+            return Ok(());
+        };
+
+        sqlx::query(
+            "INSERT INTO server_config (key, value) VALUES ($1, $2) \
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        )
+        .bind("resource_hash_hex")
+        .bind(hash_hex)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+}
+
+fn configured_resource_hash_hex() -> Option<String> {
+    std::env::var("ODMO_RESOURCE_HASH_HEX")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }

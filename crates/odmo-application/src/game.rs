@@ -9735,8 +9735,10 @@ mod tests {
         fn update_location(&self, _character_id: u64, _map_id: i16, _channel: u8) {}
     }
 
-    /// A small combine catalog the in-crate tests roll against: one ceiling tier
-    /// with a single ceiling-map entry and a guaranteed reward pool.
+    const TEST_SECONDARY_PASSWORD: &str = "4321";
+    const TEST_SUMMON_TICKET_ITEM_ID: i32 = 81_001;
+    const TEST_RIDE_UNLOCK_ITEM_ID: i32 = 81_002;
+
     fn demo_combine_catalog() -> odmo_types::DigiCombineCatalog {
         odmo_types::DigiCombineCatalog {
             rank_rows: vec![odmo_types::DigiCombineRank {
@@ -9749,12 +9751,12 @@ mod tests {
                 }],
             }],
             item_list: vec![odmo_types::DigiCombineItem {
-                item_id: 81001,
+                item_id: TEST_SUMMON_TICKET_ITEM_ID,
                 group_id: 1,
             }],
             item_groups: vec![odmo_types::DigiCombineGroup {
                 group_id: 1,
-                members: vec![81001],
+                members: vec![TEST_SUMMON_TICKET_ITEM_ID],
             }],
             ceil_groups: vec![odmo_types::DigiCombineCeil {
                 ceiling_type: 1,
@@ -9767,7 +9769,6 @@ mod tests {
         }
     }
 
-    /// A small weighted reward pool the in-crate tests roll a random box against.
     fn demo_random_box_rewards() -> Vec<odmo_types::RandomBoxReward> {
         vec![
             odmo_types::RandomBoxReward {
@@ -9834,8 +9835,8 @@ mod tests {
                                 bits: 0,
                                 size: 30,
                                 items: vec![
-                                    odmo_types::ItemRecord::new(81001, 3),
-                                    odmo_types::ItemRecord::new(81002, 2),
+                                    odmo_types::ItemRecord::new(TEST_SUMMON_TICKET_ITEM_ID, 3),
+                                    odmo_types::ItemRecord::new(TEST_RIDE_UNLOCK_ITEM_ID, 2),
                                     odmo_types::ItemRecord::default(),
                                 ],
                             },
@@ -10052,7 +10053,7 @@ mod tests {
                             password_hash: "admin".to_string(),
                             email: "admin@odmo.local".to_string(),
                             access_level: AccessLevel::Administrator,
-                            secondary_password: Some("4321".to_string()),
+                            secondary_password: Some(TEST_SECONDARY_PASSWORD.to_string()),
                             suspension: None,
                         },
                     ),
@@ -10064,7 +10065,7 @@ mod tests {
                             password_hash: "gm".to_string(),
                             email: "gm@odmo.local".to_string(),
                             access_level: AccessLevel::GameMaster,
-                            secondary_password: Some("4321".to_string()),
+                            secondary_password: Some(TEST_SECONDARY_PASSWORD.to_string()),
                             suspension: None,
                         },
                     ),
@@ -10076,7 +10077,7 @@ mod tests {
                             password_hash: "alt".to_string(),
                             email: "alt@odmo.local".to_string(),
                             access_level: AccessLevel::Player,
-                            secondary_password: Some("4321".to_string()),
+                            secondary_password: Some(TEST_SECONDARY_PASSWORD.to_string()),
                             suspension: None,
                         },
                     ),
@@ -10167,7 +10168,7 @@ mod tests {
                     name: "Sample DigiSummon Box".to_string(),
                     description: "Demo DigiSummon product used by tests.".to_string(),
                     tickets: vec![odmo_types::DigiSummonTicket {
-                        item_id: 81001,
+                        item_id: TEST_SUMMON_TICKET_ITEM_ID,
                         cost: 1,
                     }],
                     rewards: vec![odmo_types::DigiSummonReward {
@@ -10219,7 +10220,7 @@ mod tests {
                 }],
                 item_assets: vec![
                     ItemAsset {
-                        item_id: 81001,
+                        item_id: TEST_SUMMON_TICKET_ITEM_ID,
                         name: "Sample Burst Opener".to_string(),
                         item_type: 61,
                         section: 6100,
@@ -10228,7 +10229,7 @@ mod tests {
                         ..Default::default()
                     },
                     ItemAsset {
-                        item_id: 81002,
+                        item_id: TEST_RIDE_UNLOCK_ITEM_ID,
                         name: "Sample Ride Opener".to_string(),
                         item_type: 62,
                         section: 6220,
@@ -12310,7 +12311,7 @@ mod tests {
             .character_by_id(100)
             .expect("lookup")
             .expect("character should exist");
-        assert_eq!(stored.inventory.items[0].item_id, 81001);
+        assert_eq!(stored.inventory.items[0].item_id, TEST_SUMMON_TICKET_ITEM_ID);
         assert_eq!(stored.inventory.items[0].amount, 2);
         assert!(
             stored
@@ -12335,7 +12336,7 @@ mod tests {
             name: "FullInventoryBox".to_string(),
             description: String::new(),
             tickets: vec![odmo_types::DigiSummonTicket {
-                item_id: 81001,
+                item_id: TEST_SUMMON_TICKET_ITEM_ID,
                 cost: 1,
             }],
             rewards: vec![odmo_types::DigiSummonReward {
@@ -12352,7 +12353,8 @@ mod tests {
             let mut characters = repo.characters.write().expect("repo poisoned");
             let character = characters.get_mut(&100).expect("demo character");
             character.inventory.size = 1;
-            character.inventory.items = vec![odmo_types::ItemRecord::new(81001, 2)];
+            character.inventory.items =
+                vec![odmo_types::ItemRecord::new(TEST_SUMMON_TICKET_ITEM_ID, 2)];
         }
         let repo = Arc::new(repo);
         let app = GameApplication::new(
@@ -12386,7 +12388,7 @@ mod tests {
             .character_by_id(100)
             .expect("lookup")
             .expect("character should exist");
-        assert_eq!(stored.inventory.items[0].item_id, 81001);
+        assert_eq!(stored.inventory.items[0].item_id, TEST_SUMMON_TICKET_ITEM_ID);
         assert_eq!(stored.inventory.items[0].amount, 2);
         assert!(
             stored
@@ -12445,7 +12447,7 @@ mod tests {
                 .inventory
                 .items
                 .iter()
-                .any(|item| item.item_id == 81001 && item.amount == 2),
+                .any(|item| item.item_id == TEST_SUMMON_TICKET_ITEM_ID && item.amount == 2),
             "main material should be consumed once"
         );
         assert!(
@@ -12453,7 +12455,7 @@ mod tests {
                 .inventory
                 .items
                 .iter()
-                .any(|item| item.item_id == 81002 && item.amount == 1),
+                .any(|item| item.item_id == TEST_RIDE_UNLOCK_ITEM_ID && item.amount == 1),
             "sub material should be consumed once"
         );
         assert!(
@@ -12489,7 +12491,7 @@ mod tests {
                 &mut session,
                 GameRequest::DigimonToSpirit {
                     slot: 2,
-                    validation: "4321".to_string(),
+                    validation: TEST_SECONDARY_PASSWORD.to_string(),
                     npc_id: 91001,
                 },
             )

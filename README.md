@@ -305,7 +305,7 @@ cargo run -p odmo-character-service
 cargo run -p odmo-game-service
 ```
 
-When `ODMO_DATABASE_URL` is set, the services run the bundled SQL migrations and demo seed automatically at startup.
+When `ODMO_DATABASE_URL` is set, the services run the bundled SQL migrations and prepare the server-owned runtime catalogs automatically at startup. Demo data is opt-in via `ODMO_SEED_DEMO=1`.
 
 ### Repository layout
 

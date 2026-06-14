@@ -657,6 +657,8 @@ mod tests {
         DEFAULT_PARTNER_MODEL_ID, DEFAULT_TAMER_MODEL_ID, TransferTicket,
     };
 
+    const TEST_SECONDARY_PASSWORD: &str = "4321";
+
     fn unique_test_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("odmo-{name}-{}", uuid::Uuid::new_v4()))
     }
@@ -957,7 +959,7 @@ mod tests {
                             password_hash: "gm".to_string(),
                             email: "gm@odmo.local".to_string(),
                             access_level: AccessLevel::GameMaster,
-                            secondary_password: Some("4321".to_string()),
+                            secondary_password: Some(TEST_SECONDARY_PASSWORD.to_string()),
                             suspension: None,
                         },
                     ),

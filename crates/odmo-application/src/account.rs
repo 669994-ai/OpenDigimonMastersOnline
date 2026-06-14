@@ -361,6 +361,9 @@ mod tests {
     use odmo_protocol::PacketReader;
     use odmo_types::AccessLevel;
 
+    const TEST_SECONDARY_PASSWORD: &str = "4321";
+    const TEST_RESOURCE_HASH_HEX: &str = "0123456789ABCDEF";
+
     fn unique_test_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("odmo-{name}-{}", uuid::Uuid::new_v4()))
     }
@@ -395,7 +398,7 @@ mod tests {
                     password_hash: "gm".to_string(),
                     email: "gm@odmo.local".to_string(),
                     access_level: AccessLevel::GameMaster,
-                    secondary_password: Some("4321".to_string()),
+                    secondary_password: Some(TEST_SECONDARY_PASSWORD.to_string()),
                     suspension: None,
                 },
             );
@@ -435,7 +438,7 @@ mod tests {
                         character_count: 0,
                     },
                 ],
-                resource_hash_hex: Some("0123456789ABCDEF".to_string()),
+                resource_hash_hex: Some(TEST_RESOURCE_HASH_HEX.to_string()),
             }
         }
     }
@@ -625,7 +628,7 @@ mod tests {
                 &mut session,
                 AccountRequest::SecondaryPasswordCheck {
                     check_mode: SecondaryPasswordCheck::Check,
-                    password: Some("4321".to_string()),
+                    password: Some(TEST_SECONDARY_PASSWORD.to_string()),
                 },
             )
             .expect("secondary password should succeed");
