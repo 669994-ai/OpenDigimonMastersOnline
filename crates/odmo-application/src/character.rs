@@ -102,6 +102,13 @@ pub trait CharacterRepository: Send + Sync {
         inventory: odmo_types::InventorySnapshot,
     ) -> anyhow::Result<()>;
     fn update_equipment(&self, character_id: u64, equipment: Vec<u8>) -> anyhow::Result<()>;
+    fn update_digivice(
+        &self,
+        _character_id: u64,
+        _digivice: odmo_types::DigiviceSnapshot,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
     fn update_extra_inventory(
         &self,
         character_id: u64,
@@ -222,6 +229,7 @@ pub trait CharacterRepository: Send + Sync {
         _character_id: u64,
         _current_hp: i32,
         _current_ds: i32,
+        _current_xgauge: i32,
     ) -> anyhow::Result<()> {
         Ok(())
     }

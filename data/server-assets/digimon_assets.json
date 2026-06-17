@@ -1,0 +1,4302 @@
+[
+  {
+    "digimon_id": 12133,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 12134,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 12135,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 12136,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 12137,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 13005,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 13006,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 13008,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 13018,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 13067,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 13121,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 14026,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 14031,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 15034,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 15043,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 15124,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 16041,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 16042,
+    "base_level": 80,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 16043,
+    "base_level": 80,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 16051,
+    "base_level": 80,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 16053,
+    "base_level": 99,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 16054,
+    "base_level": 80,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 16055,
+    "base_level": 99,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 16056,
+    "base_level": 99,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 16057,
+    "base_level": 1,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 17000,
+    "base_level": 1,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 17001,
+    "base_level": 1,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 17002,
+    "base_level": 1,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 17003,
+    "base_level": 1,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 17004,
+    "base_level": 1,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 17005,
+    "base_level": 1,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 21133,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 21134,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 21135,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 21136,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 21137,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 21138,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 25001,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 25002,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25003,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25004,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25005,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25006,
+    "base_level": 25,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 25007,
+    "base_level": 25,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 25008,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25009,
+    "base_level": 25,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 25010,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25011,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25012,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25014,
+    "base_level": 25,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25015,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25016,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25017,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25018,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25019,
+    "base_level": 41,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25020,
+    "base_level": 41,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25021,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25022,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25023,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 25024,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25025,
+    "base_level": 1,
+    "evolution_type": 17
+  },
+  {
+    "digimon_id": 25501,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25504,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25505,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25506,
+    "base_level": 25,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25507,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25509,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25510,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25511,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25512,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25513,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25514,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25515,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25516,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25517,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25518,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25519,
+    "base_level": 25,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 25520,
+    "base_level": 25,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 25521,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 25522,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25523,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25524,
+    "base_level": 25,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25525,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 25526,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25527,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 25528,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 31000,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31001,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31002,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31003,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31004,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31005,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31006,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31007,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31008,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31009,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31010,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31011,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31012,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31013,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31014,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31015,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31016,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31017,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31018,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31019,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31020,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31021,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31022,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31023,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31024,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31025,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31026,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31027,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31028,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31029,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31030,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31031,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31032,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31033,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31034,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31035,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31036,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31037,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31038,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31039,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31040,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31041,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31042,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31043,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31044,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31045,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31048,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31049,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31050,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31051,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31052,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31066,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31067,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31068,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31069,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31121,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31138,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31142,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31143,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31144,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31145,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31146,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 31147,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 32008,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 32014,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 32019,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 32021,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 32034,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 32036,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 32041,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 32067,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33001,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33002,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33003,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33004,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33005,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33036,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33067,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33068,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33069,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33070,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33071,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33072,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33073,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33074,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33075,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33076,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33077,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33078,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33079,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33080,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33081,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33082,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33083,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33084,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33085,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 33086,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35028,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35050,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35138,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35139,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35142,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35143,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35144,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35145,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35146,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35147,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35148,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35149,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35150,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35151,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35153,
+    "base_level": 4,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 35155,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35156,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35157,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 35159,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 40197,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41004,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41005,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41006,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41007,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41009,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41010,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41011,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41012,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41013,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41014,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41015,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41016,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41017,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41019,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41020,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41021,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41022,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41023,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41024,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41025,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41026,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41027,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41028,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41029,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41030,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41031,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41032,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41033,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41034,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41035,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41036,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41037,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41038,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41039,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41040,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41041,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41042,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41043,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41044,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41045,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41046,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41047,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41048,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41049,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41050,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41051,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41052,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41053,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41054,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41055,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41056,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41057,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41058,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41059,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41060,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41061,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41063,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41068,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41069,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41071,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41074,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41075,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41088,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41126,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41132,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41136,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41137,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41139,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41140,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41143,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41146,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41159,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41165,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41166,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41167,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41170,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41171,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41172,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41173,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41174,
+    "base_level": 11,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 41175,
+    "base_level": 11,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 41176,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41177,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 41178,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 43001,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 43002,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 43003,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 43004,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 43005,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45050,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45139,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45141,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45142,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45150,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45151,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45152,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45153,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45154,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45155,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45156,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45157,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45159,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45160,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45161,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45163,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45164,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45165,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45166,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45167,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45168,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45169,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45170,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45171,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45172,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45173,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45174,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45178,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45179,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45180,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45181,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45182,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45183,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45184,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45185,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45188,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45189,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45190,
+    "base_level": 1,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 45193,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 51007,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51008,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51009,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51010,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51011,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51012,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51013,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51014,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51015,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51016,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51017,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51018,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51019,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51020,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51021,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51022,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51023,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51024,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51025,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51026,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51027,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51028,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51029,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51030,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51031,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51032,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51033,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51034,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51035,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51036,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51037,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51038,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51039,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51040,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51041,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51042,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51043,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51044,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51045,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51046,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51047,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51048,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51049,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51050,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51051,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51052,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51053,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51054,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51055,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51056,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51057,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51058,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51059,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51060,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51061,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51062,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51063,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51064,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51065,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51068,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51069,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51070,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51071,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51072,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51074,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51079,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51082,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 51083,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51084,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51085,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51089,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51090,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51091,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 51092,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51093,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51094,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51095,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51096,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51097,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51098,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51099,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 51100,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51101,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51102,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51103,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51104,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 51105,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 51106,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51107,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51108,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 51109,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 51110,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51111,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 51112,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 51113,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51114,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51115,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51116,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51117,
+    "base_level": 25,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 51118,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51123,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51124,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51125,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51128,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51129,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51130,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51131,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51137,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51148,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51149,
+    "base_level": 26,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51150,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51151,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51152,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51153,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51154,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51155,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51156,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51157,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51158,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 51163,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52047,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52149,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52150,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52151,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52152,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52153,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52154,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52155,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52156,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52157,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52160,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 52161,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53001,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53002,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53003,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53004,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53005,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53006,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53007,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53008,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53009,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53010,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53011,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53013,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53015,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 53017,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 60280,
+    "base_level": 11,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61011,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61012,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61013,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61014,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61015,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61016,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61017,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61018,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61019,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61020,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61021,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61022,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61023,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61024,
+    "base_level": 65,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61025,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61026,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61027,
+    "base_level": 55,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61028,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61029,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61030,
+    "base_level": 65,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61031,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61032,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61033,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61034,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61035,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61036,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61037,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61038,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61039,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61040,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61041,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61042,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61043,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61044,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61045,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61046,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61047,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61048,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61049,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61050,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61051,
+    "base_level": 65,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61052,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61053,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61054,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61055,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61056,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61057,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61058,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61059,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61060,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61061,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61062,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61063,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61064,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61065,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61066,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61067,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61068,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61069,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61070,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61074,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61079,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61087,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61088,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61137,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61145,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61146,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61148,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61149,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61150,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61151,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61153,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61154,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61155,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61156,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 61157,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62019,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62037,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62065,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62074,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62075,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62076,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62077,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62078,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62079,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62080,
+    "base_level": 11,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62081,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 62082,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63001,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63002,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63003,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63004,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63005,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63006,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63007,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63008,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63009,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63010,
+    "base_level": 11,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63011,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 63012,
+    "base_level": 1,
+    "evolution_type": 17
+  },
+  {
+    "digimon_id": 63013,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63014,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63015,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63016,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63017,
+    "base_level": 41,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 63018,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63019,
+    "base_level": 41,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 63020,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63021,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63023,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63027,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 63028,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 67001,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 67002,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 67003,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 67005,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 67011,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 67012,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 69002,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 69003,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 69006,
+    "base_level": 55,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 69007,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 69009,
+    "base_level": 70,
+    "evolution_type": 18
+  },
+  {
+    "digimon_id": 71015,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71016,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71017,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71018,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71019,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 71020,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 71021,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 71022,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71023,
+    "base_level": 65,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 71024,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71025,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71026,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71027,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71028,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71029,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71030,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71031,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71032,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71033,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71034,
+    "base_level": 71,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71035,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71037,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71038,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71039,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71040,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71041,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71042,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71043,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71044,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71045,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71047,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71048,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71049,
+    "base_level": 75,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71050,
+    "base_level": 75,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71051,
+    "base_level": 75,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71071,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71072,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71073,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71074,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71075,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71076,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71077,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71078,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71079,
+    "base_level": 50,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71080,
+    "base_level": 51,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71081,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71082,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 71083,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 71084,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 71085,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 71086,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71087,
+    "base_level": 51,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71088,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71089,
+    "base_level": 55,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71090,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71091,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71092,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71093,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71094,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71095,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71096,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71097,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71098,
+    "base_level": 31,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71099,
+    "base_level": 41,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71100,
+    "base_level": 55,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71101,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71102,
+    "base_level": 1,
+    "evolution_type": 17
+  },
+  {
+    "digimon_id": 71103,
+    "base_level": 1,
+    "evolution_type": 17
+  },
+  {
+    "digimon_id": 71104,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71105,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71107,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71108,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71109,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71110,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71111,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71112,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71113,
+    "base_level": 70,
+    "evolution_type": 17
+  },
+  {
+    "digimon_id": 71114,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71115,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71116,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71117,
+    "base_level": 51,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71118,
+    "base_level": 65,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71119,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71120,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71121,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71122,
+    "base_level": 31,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71123,
+    "base_level": 41,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71124,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71125,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71126,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71127,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71128,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71129,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71130,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71131,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 71132,
+    "base_level": 65,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 71133,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 72001,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 72002,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 75000,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75001,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75002,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75003,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75004,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75005,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75006,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75007,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75008,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75009,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75010,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75011,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75012,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75013,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75014,
+    "base_level": 35,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 75020,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75021,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75022,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75023,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75024,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75025,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75026,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75027,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75028,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75029,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75030,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75031,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75032,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75033,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75034,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75035,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75036,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75037,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75038,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75039,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75040,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75041,
+    "base_level": 1,
+    "evolution_type": 10
+  },
+  {
+    "digimon_id": 75042,
+    "base_level": 1,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 75100,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 75101,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 75102,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 75103,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 75104,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 75105,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 75106,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 75107,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 75108,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 75109,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 75300,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 75301,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 75302,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 75303,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 75304,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 75305,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 75306,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 75307,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 75308,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 75309,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 75500,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 75501,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 75502,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 75503,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 75504,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 75505,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 75506,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 75507,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 75508,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 75509,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 75700,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75701,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75702,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75703,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75704,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75705,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75706,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75707,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75708,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75709,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75710,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75711,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75712,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75713,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75714,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75715,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75716,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75717,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75718,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75719,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75720,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75721,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75722,
+    "base_level": 41,
+    "evolution_type": 15
+  },
+  {
+    "digimon_id": 75900,
+    "base_level": 70,
+    "evolution_type": 16
+  },
+  {
+    "digimon_id": 75901,
+    "base_level": 70,
+    "evolution_type": 15
+  },
+  {
+    "digimon_id": 75902,
+    "base_level": 70,
+    "evolution_type": 16
+  },
+  {
+    "digimon_id": 75903,
+    "base_level": 70,
+    "evolution_type": 15
+  },
+  {
+    "digimon_id": 75904,
+    "base_level": 70,
+    "evolution_type": 15
+  },
+  {
+    "digimon_id": 75905,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 75906,
+    "base_level": 70,
+    "evolution_type": 15
+  },
+  {
+    "digimon_id": 75907,
+    "base_level": 65,
+    "evolution_type": 15
+  },
+  {
+    "digimon_id": 75908,
+    "base_level": 70,
+    "evolution_type": 16
+  },
+  {
+    "digimon_id": 75909,
+    "base_level": 70,
+    "evolution_type": 15
+  },
+  {
+    "digimon_id": 75910,
+    "base_level": 70,
+    "evolution_type": 16
+  },
+  {
+    "digimon_id": 75911,
+    "base_level": 70,
+    "evolution_type": 15
+  },
+  {
+    "digimon_id": 75912,
+    "base_level": 70,
+    "evolution_type": 15
+  },
+  {
+    "digimon_id": 76001,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 76002,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 76003,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 76004,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 76005,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 76006,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 76007,
+    "base_level": 1,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 76008,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 76009,
+    "base_level": 4,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 76010,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 76011,
+    "base_level": 11,
+    "evolution_type": 4
+  },
+  {
+    "digimon_id": 76012,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 76013,
+    "base_level": 25,
+    "evolution_type": 5
+  },
+  {
+    "digimon_id": 76014,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 76015,
+    "base_level": 41,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 76016,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 76017,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 76018,
+    "base_level": 4,
+    "evolution_type": 11
+  },
+  {
+    "digimon_id": 76019,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 76020,
+    "base_level": 11,
+    "evolution_type": 12
+  },
+  {
+    "digimon_id": 76021,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 76022,
+    "base_level": 25,
+    "evolution_type": 13
+  },
+  {
+    "digimon_id": 76023,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 76024,
+    "base_level": 41,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 76025,
+    "base_level": 70,
+    "evolution_type": 16
+  },
+  {
+    "digimon_id": 77001,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 77002,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 77003,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 77004,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 77005,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 77006,
+    "base_level": 70,
+    "evolution_type": 16
+  },
+  {
+    "digimon_id": 77007,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 77008,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 77009,
+    "base_level": 70,
+    "evolution_type": 16
+  },
+  {
+    "digimon_id": 77010,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 77011,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 77017,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 77020,
+    "base_level": 70,
+    "evolution_type": 14
+  },
+  {
+    "digimon_id": 77021,
+    "base_level": 70,
+    "evolution_type": 7
+  },
+  {
+    "digimon_id": 77022,
+    "base_level": 70,
+    "evolution_type": 19
+  },
+  {
+    "digimon_id": 77030,
+    "base_level": 70,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 79003,
+    "base_level": 70,
+    "evolution_type": 18
+  },
+  {
+    "digimon_id": 79004,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 79007,
+    "base_level": 70,
+    "evolution_type": 8
+  },
+  {
+    "digimon_id": 80000,
+    "base_level": 70,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 80001,
+    "base_level": 70,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 80002,
+    "base_level": 70,
+    "evolution_type": 9
+  },
+  {
+    "digimon_id": 80003,
+    "base_level": 11,
+    "evolution_type": 3
+  },
+  {
+    "digimon_id": 90180,
+    "base_level": 1,
+    "evolution_type": 6
+  },
+  {
+    "digimon_id": 93821,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 93822,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 93910,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 94097,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 96017,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 96018,
+    "base_level": 4,
+    "evolution_type": 2
+  },
+  {
+    "digimon_id": 96019,
+    "base_level": 4,
+    "evolution_type": 2
+  }
+]

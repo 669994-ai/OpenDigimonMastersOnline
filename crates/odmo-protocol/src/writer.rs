@@ -76,6 +76,15 @@ impl PacketWriter {
         }
     }
 
+    /// Write a modern variable-length string: `[u16 byte-length][UTF-8 bytes]`, no
+    /// terminator. The byte length is capped at 512 to match the client's read bound.
+    pub fn write_modern_utf8_string(&mut self, value: &str) {
+        let bytes = value.as_bytes();
+        let len = bytes.len().min(512);
+        self.write_u16(len as u16);
+        self.buffer.extend_from_slice(&bytes[..len]);
+    }
+
     /// Write a length-prefixed UTF-16LE string: `[u8 code-unit count][units...][u16 0]`.
     /// This is the wide analogue of `write_string`, used for variable-length names.
     pub fn write_wide_string(&mut self, value: &str) {

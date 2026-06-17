@@ -1,0 +1,17 @@
+{
+  "source": "modern-pack03-via-dmopacktoolkit",
+  "import_method": "extract-pack03-and-decode-digimonlistdata",
+  "toolkit": "DmoPackToolkit",
+  "pack_files": [
+    {
+      "name": "Pack03.hf",
+      "sha256": "8c2c3116928019b9c869bb5e90f73a47f5a5f505ed76e4d621e86e3ff74e954f"
+    },
+    {
+      "name": "Pack03.pf",
+      "sha256": "a22bb35f6c38d44c713c38afe53edcb140c026feabc717b829cded3fb089ce9f"
+    }
+  ],
+  "digimon_payload_path": "pack03-decoded\\data/bin/table/DigimonListData.payload.bin",
+  "digimon_payload_sha256": "af70ba0c13917bf5090330e0e66ed55a8befc0a18a014a30e3f31cc8f3cac543"
+}

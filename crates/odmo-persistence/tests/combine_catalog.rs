@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use odmo_application::game::{DigiCombineRepository, RandomBoxRepository, UnionCombineRepository};
-use odmo_persistence::{DEMO_CATALOG_ITEM_A, DEMO_CATALOG_ITEM_B, JsonRepository};
 use odmo_persistence::pg::PgRepository;
+use odmo_persistence::{DEMO_CATALOG_ITEM_A, DEMO_CATALOG_ITEM_B, JsonRepository};
 use odmo_types::{DigiCombineCatalog, RandomBoxReward, UnionCombineCatalog};
 
 /// Build a `JsonRepository` over a unique temp path so each test seeds a fresh

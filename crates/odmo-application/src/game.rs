@@ -14,7 +14,7 @@ use odmo_protocol::{
     ArenaRankingDailyLoadPacket, ArenaRankingDailyUpdatePointsPacket, ArenaRankingInfoPacket,
     AvailableChannelsPacket, BurningEventPacket, CashShopCoinsPacket, CastSkillPacket,
     ChangeTamerModelPacket, DailyCheckEventInfoPacket, DailyCheckEventInfoRow,
-    DailyCheckEventItemResultPacket, DigiSummonPurchaseResponsePacket,
+    DailyCheckEventItemResultPacket, DetailStatPair, DigiSummonPurchaseResponsePacket,
     DigiSummonSyncResponsePacket, DigimonEvolutionFailPacket, DigimonEvolutionSuccessPacket,
     DigimonToSpiritResultPacket, DigimonWalkPacket, DungeonArenaNextStagePacket,
     EncyclopediaDeckBuffUsePacket, EncyclopediaLoadPacket, EncyclopediaReceiveRewardItemPacket,
@@ -169,6 +169,51 @@ fn matches_tamer_target_handler(
 ) -> bool {
     character.general_handler == target_handler
         || client_projected_tamer_uid(character.general_handler) == target_handler
+}
+
+/// Enchant rows for the partner-detail grid in the fixed render order
+/// `AT, CT, BL, HP, EV`, each as a `{kind, value}` pair.
+fn other_tamer_detail_enchants(character: &odmo_types::CharacterSummary) -> Vec<DetailStatPair> {
+    [
+        character.partner_clone_at_value,
+        character.partner_clone_ct_value,
+        character.partner_clone_bl_value,
+        character.partner_clone_hp_value,
+        character.partner_clone_ev_value,
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(kind, value)| DetailStatPair {
+        key: kind as u32,
+        value: u32::from(value),
+    })
+    .collect()
+}
+
+/// Skill rows for the active evolution, as `{skill_id, level}` pairs. The slot
+/// index is the skill id until a skill-asset table is wired in.
+fn other_tamer_detail_skills(character: &odmo_types::CharacterSummary) -> Vec<DetailStatPair> {
+    character
+        .partner_slots
+        .iter()
+        .find(|slot| slot.slot == character.partner_current_slot)
+        .and_then(|slot| {
+            slot.evolutions
+                .iter()
+                .find(|evo| evo.evolution_type == character.partner_current_type)
+                .or_else(|| slot.evolutions.first())
+        })
+        .map(|evo| {
+            evo.skill_levels
+                .iter()
+                .enumerate()
+                .map(|(idx, &level)| DetailStatPair {
+                    key: idx as u32,
+                    value: u32::from(level),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 impl GuildRuntimeState {
@@ -357,6 +402,10 @@ pub trait EvolutionAssetRepository: Send + Sync {
     fn evolution_assets(&self) -> anyhow::Result<Vec<odmo_types::EvolutionAsset>>;
 }
 
+pub trait DigimonAssetRepository: Send + Sync {
+    fn digimon_assets(&self) -> anyhow::Result<Vec<odmo_types::DigimonAsset>>;
+}
+
 pub trait DigiCombineRepository: Send + Sync {
     fn digi_combine_catalog(&self) -> anyhow::Result<DigiCombineCatalog>;
 }
@@ -381,6 +430,7 @@ pub trait GameRepository:
     + ExtraEvolutionRepository
     + ItemAssetRepository
     + EvolutionAssetRepository
+    + DigimonAssetRepository
     + DigiCombineRepository
     + UnionCombineRepository
     + RandomBoxRepository
@@ -398,6 +448,7 @@ impl<T> GameRepository for T where
         + ExtraEvolutionRepository
         + ItemAssetRepository
         + EvolutionAssetRepository
+        + DigimonAssetRepository
         + DigiCombineRepository
         + UnionCombineRepository
         + RandomBoxRepository
@@ -752,6 +803,9 @@ impl GameApplication {
 
                 const TAB_INVENTORY: u16 = 0;
                 const TAB_EQUIPMENT: u16 = 1000;
+                const TAB_TSKILL: u16 = 3000;
+                const TAB_CHIPSET: u16 = 4000;
+                const TAB_DIGIVICE: u16 = 5000;
                 const TAB_WAREHOUSE: u16 = 2000;
                 const TAB_SHARESTASH: u16 = 9000;
                 fn tab_class(sid: u16) -> u16 {
@@ -765,6 +819,20 @@ impl GameApplication {
                 let dst_tab = tab_class(destination_slot);
                 let src_idx = tab_index(origin_slot);
                 let dst_idx = tab_index(destination_slot);
+                let item_assets = if matches!(src_tab, TAB_DIGIVICE | TAB_CHIPSET | TAB_TSKILL)
+                    || matches!(dst_tab, TAB_DIGIVICE | TAB_CHIPSET | TAB_TSKILL)
+                {
+                    Some(
+                        self.repository
+                            .item_assets()
+                            .map_err(|error| GameFlowError::Storage(error.to_string()))?,
+                    )
+                } else {
+                    None
+                };
+
+                const CHIPSET_ITEM_TYPE: i32 = 52;
+                const DIGIVICE_ITEM_TYPE: i32 = 53;
 
                 // Validate equipment moves
                 if dst_tab == TAB_EQUIPMENT {
@@ -852,6 +920,204 @@ impl GameApplication {
                     }
                 }
 
+                fn inventory_item_to_digivice_item(
+                    item: &ItemRecord,
+                ) -> odmo_types::DigiviceItemSnapshot {
+                    let mut record = item.record.clone();
+                    record.truncate(60);
+                    record.resize(60, 0);
+                    let mut snapshot = odmo_types::DigiviceItemSnapshot {
+                        item_id: item.item_id,
+                        amount: item.amount,
+                        record,
+                    };
+                    snapshot.sync_record();
+                    snapshot
+                }
+
+                fn digivice_item_to_inventory_item(
+                    item: &odmo_types::DigiviceItemSnapshot,
+                ) -> ItemRecord {
+                    let mut record = item.record.clone();
+                    record.resize(69, 0);
+                    let mut snapshot = ItemRecord {
+                        item_id: item.item_id,
+                        amount: item.amount,
+                        record,
+                    };
+                    snapshot.sync_record();
+                    snapshot
+                }
+
+                fn swap_inventory_with_digivice_slot(
+                    inventory: &mut odmo_types::InventorySnapshot,
+                    inventory_idx: usize,
+                    slot: &mut odmo_types::DigiviceItemSnapshot,
+                ) -> bool {
+                    if inventory_idx >= inventory.items.len() {
+                        return false;
+                    }
+
+                    let inventory_item = inventory.items[inventory_idx].clone();
+                    if inventory_item.item_id <= 0 && slot.item_id <= 0 {
+                        return false;
+                    }
+
+                    let previous_slot_item = digivice_item_to_inventory_item(slot);
+                    if inventory_item.item_id > 0 {
+                        *slot = inventory_item_to_digivice_item(&inventory_item);
+                    } else {
+                        *slot = odmo_types::DigiviceItemSnapshot::default();
+                    }
+
+                    if previous_slot_item.item_id > 0 {
+                        inventory.items[inventory_idx] = previous_slot_item;
+                    } else {
+                        inventory.items[inventory_idx] = ItemRecord::default();
+                    }
+                    true
+                }
+
+                fn count_enabled_digivice_slots(
+                    slots: &[odmo_types::DigiviceItemSnapshot],
+                    start_idx: usize,
+                ) -> usize {
+                    slots[start_idx..]
+                        .iter()
+                        .filter(|slot| slot.item_id > 0 && slot.amount > 0)
+                        .count()
+                }
+
+                fn digivice_capacity_from_item(
+                    assets: &[odmo_types::ItemAsset],
+                    item_id: i32,
+                ) -> Option<(usize, usize)> {
+                    if item_id <= 0 {
+                        return Some((0, 0));
+                    }
+                    let asset = assets.iter().find(|asset| asset.item_id == item_id)?;
+                    if asset.item_type != DIGIVICE_ITEM_TYPE {
+                        return None;
+                    }
+                    Some((
+                        usize::from(asset.digivice_chipset_slots),
+                        usize::from(asset.digivice_skill_slots),
+                    ))
+                }
+
+                if matches!(src_tab, TAB_DIGIVICE) || matches!(dst_tab, TAB_DIGIVICE) {
+                    let assets = item_assets.as_deref().unwrap_or(&[]);
+                    let replacement_item_id = match (src_tab, dst_tab) {
+                        (TAB_INVENTORY, TAB_DIGIVICE) => character
+                            .inventory
+                            .items
+                            .get(src_idx)
+                            .map(|item| item.item_id)
+                            .unwrap_or_default(),
+                        (TAB_DIGIVICE, TAB_INVENTORY) => character
+                            .inventory
+                            .items
+                            .get(dst_idx)
+                            .map(|item| item.item_id)
+                            .unwrap_or_default(),
+                        _ => 0,
+                    };
+
+                    let Some((chipset_capacity, skill_capacity)) =
+                        digivice_capacity_from_item(assets, replacement_item_id)
+                    else {
+                        return Ok(vec![
+                            ItemMoveFailPacket {
+                                origin_slot,
+                                destination_slot,
+                            }
+                            .encode(),
+                        ]);
+                    };
+
+                    if count_enabled_digivice_slots(
+                        &character.digivice.chipsets,
+                        chipset_capacity.min(character.digivice.chipsets.len()),
+                    ) > 0
+                        || count_enabled_digivice_slots(
+                            &character.digivice.tamer_skills,
+                            skill_capacity.min(character.digivice.tamer_skills.len()),
+                        ) > 0
+                    {
+                        return Ok(vec![
+                            ItemMoveFailPacket {
+                                origin_slot,
+                                destination_slot,
+                            }
+                            .encode(),
+                        ]);
+                    }
+                }
+
+                let current_digivice_capacity = if matches!(src_tab, TAB_CHIPSET | TAB_TSKILL)
+                    || matches!(dst_tab, TAB_CHIPSET | TAB_TSKILL)
+                {
+                    digivice_capacity_from_item(
+                        item_assets.as_deref().unwrap_or(&[]),
+                        character.digivice.equipped_item.item_id,
+                    )
+                    .unwrap_or((0, 0))
+                } else {
+                    (0, 0)
+                };
+
+                if matches!(src_tab, TAB_CHIPSET) || matches!(dst_tab, TAB_CHIPSET) {
+                    if src_idx >= current_digivice_capacity.0
+                        || dst_idx >= current_digivice_capacity.0
+                    {
+                        return Ok(vec![
+                            ItemMoveFailPacket {
+                                origin_slot,
+                                destination_slot,
+                            }
+                            .encode(),
+                        ]);
+                    }
+                    if src_tab == TAB_INVENTORY {
+                        let item_id = character
+                            .inventory
+                            .items
+                            .get(src_idx)
+                            .map(|item| item.item_id)
+                            .unwrap_or_default();
+                        let is_chipset = item_assets
+                            .as_deref()
+                            .unwrap_or(&[])
+                            .iter()
+                            .find(|asset| asset.item_id == item_id)
+                            .map(|asset| asset.item_type == CHIPSET_ITEM_TYPE)
+                            .unwrap_or(false);
+                        if !is_chipset {
+                            return Ok(vec![
+                                ItemMoveFailPacket {
+                                    origin_slot,
+                                    destination_slot,
+                                }
+                                .encode(),
+                            ]);
+                        }
+                    }
+                }
+
+                if matches!(src_tab, TAB_TSKILL) || matches!(dst_tab, TAB_TSKILL) {
+                    if src_idx >= current_digivice_capacity.1
+                        || dst_idx >= current_digivice_capacity.1
+                    {
+                        return Ok(vec![
+                            ItemMoveFailPacket {
+                                origin_slot,
+                                destination_slot,
+                            }
+                            .encode(),
+                        ]);
+                    }
+                }
+
                 let success = match (src_tab, dst_tab) {
                     (TAB_INVENTORY, TAB_INVENTORY) => {
                         let len = character.inventory.items.len();
@@ -931,6 +1197,89 @@ impl GameApplication {
                             } else {
                                 false // Inventory full
                             }
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_INVENTORY, TAB_DIGIVICE) | (TAB_DIGIVICE, TAB_INVENTORY) => {
+                        let digivice_idx = if src_tab == TAB_DIGIVICE {
+                            src_idx
+                        } else {
+                            dst_idx
+                        };
+                        let inventory_idx = if src_tab == TAB_INVENTORY {
+                            src_idx
+                        } else {
+                            dst_idx
+                        };
+                        if digivice_idx == 0 {
+                            swap_inventory_with_digivice_slot(
+                                &mut character.inventory,
+                                inventory_idx,
+                                &mut character.digivice.equipped_item,
+                            )
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_INVENTORY, TAB_CHIPSET) => {
+                        if dst_idx < character.digivice.chipsets.len() {
+                            swap_inventory_with_digivice_slot(
+                                &mut character.inventory,
+                                src_idx,
+                                &mut character.digivice.chipsets[dst_idx],
+                            )
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_CHIPSET, TAB_INVENTORY) => {
+                        if src_idx < character.digivice.chipsets.len() {
+                            swap_inventory_with_digivice_slot(
+                                &mut character.inventory,
+                                dst_idx,
+                                &mut character.digivice.chipsets[src_idx],
+                            )
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_CHIPSET, TAB_CHIPSET) => {
+                        let len = character.digivice.chipsets.len();
+                        if src_idx < len && dst_idx < len {
+                            character.digivice.chipsets.swap(src_idx, dst_idx);
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_INVENTORY, TAB_TSKILL) => {
+                        if dst_idx < character.digivice.tamer_skills.len() {
+                            swap_inventory_with_digivice_slot(
+                                &mut character.inventory,
+                                src_idx,
+                                &mut character.digivice.tamer_skills[dst_idx],
+                            )
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_TSKILL, TAB_INVENTORY) => {
+                        if src_idx < character.digivice.tamer_skills.len() {
+                            swap_inventory_with_digivice_slot(
+                                &mut character.inventory,
+                                dst_idx,
+                                &mut character.digivice.tamer_skills[src_idx],
+                            )
+                        } else {
+                            false
+                        }
+                    }
+                    (TAB_TSKILL, TAB_TSKILL) => {
+                        let len = character.digivice.tamer_skills.len();
+                        if src_idx < len && dst_idx < len {
+                            character.digivice.tamer_skills.swap(src_idx, dst_idx);
+                            true
                         } else {
                             false
                         }
@@ -1021,6 +1370,13 @@ impl GameApplication {
                     self.repository
                         .update_equipment(character_id, character.equipment.clone())
                         .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+                    if matches!(src_tab, TAB_DIGIVICE | TAB_CHIPSET | TAB_TSKILL)
+                        || matches!(dst_tab, TAB_DIGIVICE | TAB_CHIPSET | TAB_TSKILL)
+                    {
+                        self.repository
+                            .update_digivice(character_id, character.digivice.clone())
+                            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+                    }
                     self.repository
                         .update_warehouse(character_id, character.warehouse.clone())
                         .map_err(|error| GameFlowError::Storage(error.to_string()))?;
@@ -5492,7 +5848,12 @@ impl GameApplication {
         let restored_hp = (character.hp / 2).max(1);
         let restored_ds = character.ds.max(0);
         self.repository
-            .update_tamer_resources(character_id, restored_hp, restored_ds)
+            .update_tamer_resources(
+                character_id,
+                restored_hp,
+                restored_ds,
+                character.current_xgauge,
+            )
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
 
         // Refresh the partner HP too so the tamer is not a permanent ghost.
@@ -6440,6 +6801,14 @@ impl GameApplication {
             .repository
             .evolution_assets()
             .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        let item_assets = self
+            .repository
+            .item_assets()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        let digimon_assets = self
+            .repository
+            .digimon_assets()
+            .map_err(|error| GameFlowError::Storage(error.to_string()))?;
         let Some(active_slot_index) = character
             .partner_slots
             .iter()
@@ -6476,9 +6845,127 @@ impl GameApplication {
         if target_type <= 0 {
             return Ok(vec![DigimonEvolutionFailPacket.encode()]);
         }
+        let Some(target_line) = asset.lines.iter().find(|line| line.type_id == target_type) else {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        };
+        let Some(target_snapshot) = character.partner_slots[active_slot_index]
+            .evolutions
+            .iter()
+            .find(|evolution| evolution.evolution_type == target_type)
+        else {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        };
+        if target_line.enabled == 0 {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        }
+        if evolution_requires_opened_slot(target_line) && (target_snapshot.unlocked & 0x01) == 0 {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        }
+        if target_line.unlock_quest_id > 0
+            && !quest_completed(&character.quest_progress, target_line.unlock_quest_id)
+        {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        }
+        if target_line.unlock_level > 0 && character.partner_level < target_line.unlock_level {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        }
+
+        let mut inventory_dirty = false;
+        if target_line.required_item > 0 && target_line.required_amount > 0 {
+            if !consume_items_by_id(
+                &mut character.inventory,
+                target_line.required_item,
+                target_line.required_amount,
+            ) {
+                return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+            }
+            inventory_dirty = true;
+        }
+
+        if target_line.required_intimacy > 0
+            && character.partner_fs < i32::from(target_line.required_intimacy)
+        {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        }
+
+        if target_line.open_qualification == 3 && character.xai.is_none() {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        }
+
+        let mut digivice_dirty = false;
+        if target_line.evolution_tree == 2 {
+            let Some(lowest_partner_level) = resolve_jogress_partner_level(
+                &character.partner_slots,
+                character.partner_current_slot,
+                target_line,
+            ) else {
+                return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+            };
+
+            if i32::from(character.partner_level) > lowest_partner_level {
+                return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+            }
+
+            if !validate_and_consume_jogress_chipset(
+                &item_assets,
+                &mut character.digivice,
+                target_line,
+            ) {
+                return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+            }
+            digivice_dirty = target_line.jogress_consumable_chipset_type > 0;
+        }
+
+        let Some(cost) = evolution_resource_cost(
+            &digimon_assets,
+            active_slot_type,
+            target_type,
+            i32::from(character.partner_level),
+            target_line.required_ds,
+        ) else {
+            return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+        };
+        let mut resources_dirty = false;
+        match cost {
+            EvolutionResourceCost::Ds(required_ds) if required_ds > 0 => {
+                if character.current_ds < required_ds {
+                    return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+                }
+                character.current_ds -= required_ds;
+                resources_dirty = true;
+            }
+            EvolutionResourceCost::XGauge(required_xgauge) if required_xgauge > 0 => {
+                if character.current_xgauge < required_xgauge {
+                    return Ok(vec![DigimonEvolutionFailPacket.encode()]);
+                }
+                character.current_xgauge -= required_xgauge;
+                resources_dirty = true;
+            }
+            EvolutionResourceCost::Ds(_) | EvolutionResourceCost::XGauge(_) => {}
+        }
 
         character.partner_slots[active_slot_index].digimon_type = target_type;
         character.partner_current_type = target_type;
+        if resources_dirty {
+            self.repository
+                .update_tamer_resources(
+                    character_id,
+                    character.current_hp,
+                    character.current_ds,
+                    character.current_xgauge,
+                )
+                .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        }
+        if inventory_dirty {
+            self.repository
+                .update_inventory(character_id, character.inventory.clone())
+                .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        }
+        if digivice_dirty {
+            self.repository
+                .update_digivice(character_id, character.digivice.clone())
+                .map_err(|error| GameFlowError::Storage(error.to_string()))?;
+        }
         self.repository
             .update_partner_roster(
                 character_id,
@@ -6666,6 +7153,18 @@ impl GameApplication {
         else {
             return Ok(Vec::new());
         };
+
+        if target_line.jogress_quest_check > 0
+            && quest_in_progress(&character.quest_progress, target_line.jogress_quest_check)
+        {
+            return Ok(Vec::new());
+        }
+
+        if target_line.unlock_quest_id > 0
+            && !quest_completed(&character.quest_progress, target_line.unlock_quest_id)
+        {
+            return Ok(Vec::new());
+        }
 
         let required_section = target_line.unlock_item_section;
         let required_amount = target_line.unlock_item_section_amount.max(1);
@@ -7637,73 +8136,29 @@ impl GameApplication {
             });
 
         let packet = if let Some(character) = target {
-            OtherTamerDetailInfoPacket {
-                valid: true,
-                target_handler,
-                tamer_name: character.name.clone(),
-                guild_name: character
-                    .guild
-                    .as_ref()
-                    .map(|guild| guild.name.clone())
-                    .unwrap_or_default(),
-                current_title: i32::from(character.current_title),
-                tamer_model: character.model,
-                tamer_level: i32::from(character.level),
-                tamer_size: i32::from(character.size),
-                tamer_hp: character.current_hp,
-                tamer_ds: character.current_ds,
-                tamer_at: character.at,
-                tamer_de: character.de,
-                tamer_ms: character.ms,
-                partner_name: character.partner_name.clone(),
-                partner_model: character.partner_model,
-                partner_type: character.partner_current_type,
-                partner_level: i32::from(character.partner_level),
-                partner_size: i32::from(character.partner_size),
-                partner_hp: character.partner_current_hp,
-                partner_ds: character.partner_current_ds,
-                partner_at: character.partner_at,
-                partner_de: character.partner_de,
-                partner_as: character.partner_as,
-                partner_ht: character.partner_ht,
-                partner_ct: character.partner_cc,
-                partner_bl: character.partner_bl,
-                partner_ev: character.partner_ev,
-                partner_clone_level: i32::from(character.partner_clone_level),
-                status: String::from("Detail info synchronized."),
-            }
+            let mut packet = OtherTamerDetailInfoPacket::empty(target_handler);
+            packet.tamer_name = character.name.clone();
+            packet.guild_name = character
+                .guild
+                .as_ref()
+                .map(|guild| guild.name.clone())
+                .unwrap_or_default();
+            // Tamer scalar block: level, size, hp, ds, then the combat-stat group.
+            packet.stats[0] = i32::from(character.level);
+            packet.stats[1] = i32::from(character.size);
+            packet.stats[2] = character.current_hp;
+            packet.stats[3] = character.current_ds;
+            packet.stats[4] = character.at;
+            packet.stats[5] = character.de;
+            packet.stats[6] = character.ms;
+            // Embedded partner block.
+            packet.digimon.model = character.partner_model as u32;
+            packet.digimon.name = character.partner_name.clone();
+            packet.digimon.skills = other_tamer_detail_skills(&character);
+            packet.digimon.enchants = other_tamer_detail_enchants(&character);
+            packet
         } else {
-            OtherTamerDetailInfoPacket {
-                valid: false,
-                target_handler,
-                tamer_name: String::new(),
-                guild_name: String::new(),
-                current_title: 0,
-                tamer_model: 0,
-                tamer_level: 0,
-                tamer_size: 0,
-                tamer_hp: 0,
-                tamer_ds: 0,
-                tamer_at: 0,
-                tamer_de: 0,
-                tamer_ms: 0,
-                partner_name: String::new(),
-                partner_model: 0,
-                partner_type: 0,
-                partner_level: 0,
-                partner_size: 0,
-                partner_hp: 0,
-                partner_ds: 0,
-                partner_at: 0,
-                partner_de: 0,
-                partner_as: 0,
-                partner_ht: 0,
-                partner_ct: 0,
-                partner_bl: 0,
-                partner_ev: 0,
-                partner_clone_level: 0,
-                status: String::from("Target not visible for DetailInfo."),
-            }
+            OtherTamerDetailInfoPacket::empty(target_handler)
         };
 
         Ok(vec![packet.encode()])
@@ -9209,6 +9664,16 @@ fn quest_completed(progress: &odmo_types::QuestProgressSnapshot, quest_id: i32) 
     (progress.completed_data[array_index] & (1 << bit_position)) != 0
 }
 
+fn quest_in_progress(progress: &odmo_types::QuestProgressSnapshot, quest_id: i32) -> bool {
+    if let Ok(quest_id) = i16::try_from(quest_id) {
+        return progress
+            .in_progress
+            .iter()
+            .any(|quest| quest.quest_id == quest_id);
+    }
+    false
+}
+
 /// Set the bit in the legacy completed-quest bitmap.
 fn set_quest_completed(progress: &mut odmo_types::QuestProgressSnapshot, quest_id: i32) {
     if quest_id <= 0 {
@@ -9460,6 +9925,240 @@ fn consume_inventory_item_at(
     Some(consumed)
 }
 
+fn consume_items_by_id(
+    inventory: &mut odmo_types::InventorySnapshot,
+    item_id: i32,
+    mut total_amount: i32,
+) -> bool {
+    if item_id <= 0 || total_amount <= 0 {
+        return false;
+    }
+
+    let original = inventory.clone();
+    let mut slot_index = 0usize;
+    while total_amount > 0 && slot_index < inventory.items.len() {
+        let Some(item) = inventory.items.get(slot_index).cloned() else {
+            break;
+        };
+        if item.item_id != item_id || item.amount <= 0 {
+            slot_index += 1;
+            continue;
+        }
+
+        let consume_amount = item.amount.min(total_amount);
+        if consume_inventory_item_at(inventory, slot_index, consume_amount).is_none() {
+            *inventory = original;
+            return false;
+        }
+        total_amount -= consume_amount;
+        slot_index += 1;
+    }
+
+    if total_amount == 0 {
+        true
+    } else {
+        *inventory = original;
+        false
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EvolutionResourceCost {
+    Ds(i32),
+    XGauge(i32),
+}
+
+fn resolve_jogress_partner_level(
+    partner_slots: &[odmo_types::PartnerSlotSnapshot],
+    active_slot: u8,
+    target_line: &odmo_types::EvolutionLineAsset,
+) -> Option<i32> {
+    if target_line.jogress_need_digimon_types.is_empty() {
+        return None;
+    }
+
+    let mut used_indices = Vec::new();
+    let mut lowest_level: Option<i32> = None;
+
+    for &required_base_type in &target_line.jogress_need_digimon_types {
+        let mut match_index = None;
+        let mut match_level = i32::MAX;
+        for (index, slot) in partner_slots.iter().enumerate() {
+            if slot.slot == active_slot || used_indices.contains(&index) {
+                continue;
+            }
+
+            let slot_base_type = if slot.model > 0 {
+                slot.model
+            } else {
+                slot.digimon_type
+            };
+            if slot_base_type != required_base_type {
+                continue;
+            }
+
+            let has_open_target = slot
+                .evolutions
+                .iter()
+                .find(|evolution| evolution.evolution_type == target_line.type_id)
+                .is_some_and(|evolution| (evolution.unlocked & 0x01) != 0);
+            if !has_open_target {
+                continue;
+            }
+
+            let level = i32::from(slot.level);
+            if level < match_level {
+                match_level = level;
+                match_index = Some(index);
+            }
+        }
+
+        let Some(index) = match_index else {
+            return None;
+        };
+        used_indices.push(index);
+        lowest_level = Some(lowest_level.map_or(match_level, |current| current.min(match_level)));
+    }
+
+    lowest_level
+}
+
+fn evolution_requires_opened_slot(target_line: &odmo_types::EvolutionLineAsset) -> bool {
+    target_line.unlock_item_section > 0
+        || target_line.jogress_chipset_type > 0
+        || target_line.evolution_tree == 2
+}
+
+fn validate_and_consume_jogress_chipset(
+    item_assets: &[odmo_types::ItemAsset],
+    digivice: &mut odmo_types::DigiviceSnapshot,
+    target_line: &odmo_types::EvolutionLineAsset,
+) -> bool {
+    if target_line.jogress_chipset_type <= 0 {
+        return true;
+    }
+
+    let mut has_any_jogress_chipset = false;
+    for slot in &digivice.chipsets {
+        if slot.item_id <= 0 {
+            continue;
+        }
+        let Some(asset) = item_assets
+            .iter()
+            .find(|asset| asset.item_id == slot.item_id)
+        else {
+            continue;
+        };
+        if asset.item_type != target_line.jogress_chipset_type {
+            continue;
+        }
+        if asset.section % 100 != 0 {
+            has_any_jogress_chipset = true;
+            break;
+        }
+    }
+    if !has_any_jogress_chipset {
+        return false;
+    }
+
+    if let Some(index) = digivice.chipsets.iter().position(|slot| {
+        if slot.item_id <= 0 {
+            return false;
+        }
+        item_assets
+            .iter()
+            .find(|asset| asset.item_id == slot.item_id)
+            .is_some_and(|asset| {
+                asset.item_type == target_line.jogress_chipset_type
+                    && asset.section == target_line.jogress_period_chipset_type
+            })
+    }) {
+        return digivice.chipsets[index].amount > 0;
+    }
+
+    let Some(index) = digivice.chipsets.iter().position(|slot| {
+        if slot.item_id <= 0 {
+            return false;
+        }
+        item_assets
+            .iter()
+            .find(|asset| asset.item_id == slot.item_id)
+            .is_some_and(|asset| {
+                asset.item_type == target_line.jogress_chipset_type
+                    && asset.section == target_line.jogress_consumable_chipset_type
+            })
+    }) else {
+        return false;
+    };
+
+    let required_amount = target_line.jogress_chipset_amount.max(1);
+    if digivice.chipsets[index].amount < required_amount {
+        return false;
+    }
+
+    digivice.chipsets[index].amount -= required_amount;
+    digivice.chipsets[index].sync_record();
+    if digivice.chipsets[index].amount == 0 {
+        digivice.chipsets[index] = odmo_types::DigiviceItemSnapshot::default();
+    }
+    true
+}
+
+fn evolution_resource_cost(
+    digimon_assets: &[odmo_types::DigimonAsset],
+    current_type: i32,
+    target_type: i32,
+    source_level: i32,
+    required_ds_override: i32,
+) -> Option<EvolutionResourceCost> {
+    if required_ds_override > 1 {
+        return Some(EvolutionResourceCost::Ds(required_ds_override));
+    }
+
+    let source = digimon_assets
+        .iter()
+        .find(|asset| asset.digimon_id == current_type)?;
+    let target = digimon_assets
+        .iter()
+        .find(|asset| asset.digimon_id == target_type)?;
+    let next_step = target.evolution_type;
+    let curr_step = source.evolution_type;
+
+    if next_step == 9 {
+        return Some(EvolutionResourceCost::Ds(
+            (((5 * 5) - (curr_step * curr_step) - 5)
+                * ((target.base_level - source_level + 110) / 5))
+                + 20,
+        ));
+    }
+
+    if (11..=16).contains(&next_step) {
+        let step_delta = (next_step - curr_step).abs();
+        let consume_xgauge = 20 + step_delta * ((30 + target.base_level) / 5);
+        return Some(EvolutionResourceCost::XGauge(consume_xgauge));
+    }
+
+    if next_step == 8 {
+        let step_value = (next_step * next_step - curr_step * curr_step).abs() - 5;
+        return Some(EvolutionResourceCost::Ds(
+            (step_value * (source_level / 5)) + 20,
+        ));
+    }
+
+    if next_step == 10 && curr_step == 8 {
+        return Some(EvolutionResourceCost::Ds(0));
+    }
+
+    if next_step == 17 {
+        return Some(EvolutionResourceCost::XGauge(0));
+    }
+
+    let step_value = (next_step * next_step - curr_step * curr_step) - 5;
+    Some(EvolutionResourceCost::Ds(
+        (step_value * ((target.base_level - source_level + 110) / 5)) + 20,
+    ))
+}
+
 fn add_stackable_inventory_item(
     inventory: &mut odmo_types::InventorySnapshot,
     item_id: i32,
@@ -9659,10 +10358,10 @@ mod tests {
         CharacterSummary, DEFAULT_ALT_PARTNER_MODEL_ID, DEFAULT_ALT_TAMER_MODEL_ID,
         DEFAULT_GM_PARTNER_MODEL_ID, DEFAULT_GM_TAMER_MODEL_ID, DEFAULT_PARTNER_MODEL_ID,
         DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID,
-        DailyRewardStatus, DropSummary, EvolutionAsset, EvolutionLineAsset, EvolutionStageAsset,
-        ExtraEvolutionNpc, GameSessionTicket, GuildHistoricEntry, GuildMemberSnapshot,
-        GuildSnapshot, ItemAsset, MobSummary, RelationEntry, SealListSnapshot, SealRecord,
-        XaiSnapshot,
+        DailyRewardStatus, DigimonAsset, DropSummary, EvolutionAsset, EvolutionLineAsset,
+        EvolutionStageAsset, ExtraEvolutionNpc, GameSessionTicket, GuildHistoricEntry,
+        GuildMemberSnapshot, GuildSnapshot, ItemAsset, MobSummary, RelationEntry, SealListSnapshot,
+        SealRecord, XaiSnapshot,
     };
 
     #[derive(Debug)]
@@ -9675,6 +10374,7 @@ mod tests {
         extra_evolution_npcs: Vec<ExtraEvolutionNpc>,
         item_assets: Vec<ItemAsset>,
         evolution_assets: Vec<EvolutionAsset>,
+        digimon_assets: Vec<DigimonAsset>,
         digi_combine_catalog: odmo_types::DigiCombineCatalog,
         union_combine_catalog: odmo_types::UnionCombineCatalog,
         random_box_rewards: Vec<odmo_types::RandomBoxReward>,
@@ -9818,6 +10518,21 @@ mod tests {
                 },
             ],
         }]
+    }
+
+    fn demo_digimon_assets() -> Vec<DigimonAsset> {
+        vec![
+            DigimonAsset {
+                digimon_id: DEFAULT_PARTNER_MODEL_ID,
+                base_level: 1,
+                evolution_type: 3,
+            },
+            DigimonAsset {
+                digimon_id: 31_011,
+                base_level: 11,
+                evolution_type: 4,
+            },
+        ]
     }
 
     impl InMemoryCharacterRepository {
@@ -10239,6 +10954,7 @@ mod tests {
                     },
                 ],
                 evolution_assets: demo_evolution_assets(),
+                digimon_assets: demo_digimon_assets(),
                 digi_combine_catalog: demo_combine_catalog(),
                 union_combine_catalog: demo_combine_catalog(),
                 random_box_rewards: demo_random_box_rewards(),
@@ -10410,26 +11126,39 @@ mod tests {
             }
             Ok(())
         }
+        fn update_digivice(
+            &self,
+            character_id: u64,
+            digivice: odmo_types::DigiviceSnapshot,
+        ) -> anyhow::Result<()> {
+            let mut digivice = digivice;
+            digivice.normalize();
+            let mut characters = self.characters.write().expect("repo poisoned");
+            if let Some(character) = characters.get_mut(&character_id) {
+                character.digivice = digivice;
+            }
+            Ok(())
+        }
         fn update_extra_inventory(
             &self,
             _character_id: u64,
             _extra_inventory: odmo_types::InventorySnapshot,
         ) -> anyhow::Result<()> {
-            unreachable!()
+            Ok(())
         }
         fn update_warehouse(
             &self,
             _character_id: u64,
             _warehouse: odmo_types::InventorySnapshot,
         ) -> anyhow::Result<()> {
-            unreachable!()
+            Ok(())
         }
         fn update_account_warehouse(
             &self,
             _character_id: u64,
             _account_warehouse: odmo_types::InventorySnapshot,
         ) -> anyhow::Result<()> {
-            unreachable!()
+            Ok(())
         }
         fn update_character_map_region(
             &self,
@@ -10446,6 +11175,22 @@ mod tests {
             Ok(())
         }
         fn update_partner_type(&self, _character_id: u64, _new_type: i32) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn update_tamer_resources(
+            &self,
+            character_id: u64,
+            current_hp: i32,
+            current_ds: i32,
+            current_xgauge: i32,
+        ) -> anyhow::Result<()> {
+            let mut guard = self.characters.write().expect("repo poisoned");
+            let character = guard
+                .get_mut(&character_id)
+                .expect("character should exist for resource update");
+            character.current_hp = current_hp.clamp(0, character.hp);
+            character.current_ds = current_ds.clamp(0, character.ds);
+            character.current_xgauge = current_xgauge.max(0);
             Ok(())
         }
         fn update_inventory_bits(&self, character_id: u64, bits: i64) -> anyhow::Result<()> {
@@ -10571,6 +11316,12 @@ mod tests {
     impl ItemAssetRepository for InMemoryCharacterRepository {
         fn item_assets(&self) -> anyhow::Result<Vec<ItemAsset>> {
             Ok(self.item_assets.clone())
+        }
+    }
+
+    impl DigimonAssetRepository for InMemoryCharacterRepository {
+        fn digimon_assets(&self) -> anyhow::Result<Vec<DigimonAsset>> {
+            Ok(self.digimon_assets.clone())
         }
     }
 
@@ -12091,6 +12842,50 @@ mod tests {
     }
 
     #[test]
+    fn partner_evolution_consumes_required_item_and_tamer_ds() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets[0].lines[1].required_item = TEST_RIDE_UNLOCK_ITEM_ID;
+        repo.evolution_assets[0].lines[1].required_amount = 1;
+        let before = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        let before_ds = before.current_ds;
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-evolution-consume-resources"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::PartnerEvolution {
+                    digimon_handler: 21_000,
+                    evolution_slot: 4,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.partner_current_type, 31_011);
+        assert_eq!(stored.inventory.items[1].amount, 1);
+        assert_eq!(
+            stored.current_ds,
+            before_ds - repo.evolution_assets[0].lines[1].required_ds
+        );
+    }
+
+    #[test]
     fn partner_evolution_fails_with_wrong_handler() {
         let repo = Arc::new(InMemoryCharacterRepository::demo());
         let app = GameApplication::new(
@@ -12117,6 +12912,836 @@ mod tests {
         assert_eq!(
             raw.packet_type,
             odmo_protocol::opcode::game::EVOLUTION_FAILURE
+        );
+    }
+
+    #[test]
+    fn partner_evolution_fails_without_enough_ds() {
+        let repo = InMemoryCharacterRepository::demo();
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .expect("character")
+            .current_ds = 10;
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-evolution-not-enough-ds"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::PartnerEvolution {
+                    digimon_handler: 21_000,
+                    evolution_slot: 4,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::EVOLUTION_FAILURE
+        );
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.partner_current_type, DEFAULT_PARTNER_MODEL_ID);
+        assert_eq!(stored.current_ds, 10);
+    }
+
+    #[test]
+    fn partner_evolution_fails_when_required_slot_is_closed() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets[0].lines[1].unlock_item_section = 6100;
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .expect("character")
+            .partner_slots[0]
+            .evolutions[1]
+            .unlocked = 0;
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-evolution-slot-closed"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::PartnerEvolution {
+                    digimon_handler: 21_000,
+                    evolution_slot: 4,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::EVOLUTION_FAILURE
+        );
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.partner_current_type, DEFAULT_PARTNER_MODEL_ID);
+    }
+
+    #[test]
+    fn partner_evolution_fails_without_completed_open_quest() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets[0].lines[1].unlock_quest_id = 321;
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-evolution-open-quest"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::PartnerEvolution {
+                    digimon_handler: 21_000,
+                    evolution_slot: 4,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::EVOLUTION_FAILURE
+        );
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.partner_current_type, DEFAULT_PARTNER_MODEL_ID);
+    }
+
+    #[test]
+    fn partner_evolution_fails_when_unlock_level_is_not_met() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets[0].lines[1].unlock_level = 99;
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-evolution-open-level"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::PartnerEvolution {
+                    digimon_handler: 21_000,
+                    evolution_slot: 4,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::EVOLUTION_FAILURE
+        );
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.partner_current_type, DEFAULT_PARTNER_MODEL_ID);
+    }
+
+    #[test]
+    fn partner_evolution_fails_without_required_intimacy() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets[0].lines[1].required_intimacy = 150;
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .expect("character")
+            .partner_fs = 100;
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-evolution-intimacy"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::PartnerEvolution {
+                    digimon_handler: 21_000,
+                    evolution_slot: 4,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::EVOLUTION_FAILURE
+        );
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.partner_current_type, DEFAULT_PARTNER_MODEL_ID);
+    }
+
+    #[test]
+    fn partner_evolution_fails_when_jogress_partner_is_lower_level() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets = vec![EvolutionAsset {
+            base_type: DEFAULT_PARTNER_MODEL_ID,
+            lines: vec![
+                EvolutionLineAsset {
+                    type_id: DEFAULT_PARTNER_MODEL_ID,
+                    enabled: 1,
+                    stages: vec![EvolutionStageAsset {
+                        target_type: 41_000,
+                        value: 4 | (1 << 16),
+                    }],
+                    ..EvolutionLineAsset::default()
+                },
+                EvolutionLineAsset {
+                    type_id: 41_000,
+                    enabled: 1,
+                    required_ds: 2,
+                    evolution_tree: 2,
+                    jogress_need_digimon_types: vec![32_001],
+                    ..EvolutionLineAsset::default()
+                },
+            ],
+        }];
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .map(|character| {
+                character.partner_level = 20;
+                character.partner_slots = vec![
+                    odmo_types::PartnerSlotSnapshot {
+                        slot: 1,
+                        digimon_type: DEFAULT_PARTNER_MODEL_ID,
+                        model: DEFAULT_PARTNER_MODEL_ID,
+                        level: 20,
+                        evolutions: vec![
+                            odmo_types::PartnerEvolutionSnapshot {
+                                evolution_type: DEFAULT_PARTNER_MODEL_ID,
+                                unlocked: 1,
+                                ..odmo_types::PartnerEvolutionSnapshot::default()
+                            },
+                            odmo_types::PartnerEvolutionSnapshot {
+                                evolution_type: 41_000,
+                                unlocked: 1,
+                                ..odmo_types::PartnerEvolutionSnapshot::default()
+                            },
+                        ],
+                        ..odmo_types::PartnerSlotSnapshot::default()
+                    },
+                    odmo_types::PartnerSlotSnapshot {
+                        slot: 2,
+                        digimon_type: 32_001,
+                        model: 32_001,
+                        level: 15,
+                        evolutions: vec![odmo_types::PartnerEvolutionSnapshot {
+                            evolution_type: 41_000,
+                            unlocked: 1,
+                            ..odmo_types::PartnerEvolutionSnapshot::default()
+                        }],
+                        ..odmo_types::PartnerSlotSnapshot::default()
+                    },
+                ];
+            })
+            .expect("character");
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-evolution-jogress-level"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::PartnerEvolution {
+                    digimon_handler: 21_000,
+                    evolution_slot: 4,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::EVOLUTION_FAILURE
+        );
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.partner_current_type, DEFAULT_PARTNER_MODEL_ID);
+    }
+
+    #[test]
+    fn partner_evolution_fails_without_required_jogress_chipset() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets = vec![EvolutionAsset {
+            base_type: DEFAULT_PARTNER_MODEL_ID,
+            lines: vec![
+                EvolutionLineAsset {
+                    type_id: DEFAULT_PARTNER_MODEL_ID,
+                    enabled: 1,
+                    stages: vec![EvolutionStageAsset {
+                        target_type: 41_000,
+                        value: 4 | (1 << 16),
+                    }],
+                    ..EvolutionLineAsset::default()
+                },
+                EvolutionLineAsset {
+                    type_id: 41_000,
+                    enabled: 1,
+                    required_ds: 2,
+                    evolution_tree: 2,
+                    jogress_chipset_type: 52,
+                    jogress_consumable_chipset_type: 5_202,
+                    jogress_period_chipset_type: 5_201,
+                    jogress_chipset_amount: 1,
+                    jogress_need_digimon_types: vec![32_001],
+                    ..EvolutionLineAsset::default()
+                },
+            ],
+        }];
+        repo.item_assets.push(ItemAsset {
+            item_id: 90_001,
+            name: "Jogress Consumable Chipset".to_string(),
+            item_type: 52,
+            section: 5_202,
+            combined_section: 5_202,
+            overlap: 99,
+            ..Default::default()
+        });
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .map(|character| {
+                character.partner_level = 20;
+                character.partner_slots = vec![
+                    odmo_types::PartnerSlotSnapshot {
+                        slot: 1,
+                        digimon_type: DEFAULT_PARTNER_MODEL_ID,
+                        model: DEFAULT_PARTNER_MODEL_ID,
+                        level: 20,
+                        evolutions: vec![
+                            odmo_types::PartnerEvolutionSnapshot {
+                                evolution_type: DEFAULT_PARTNER_MODEL_ID,
+                                unlocked: 1,
+                                ..odmo_types::PartnerEvolutionSnapshot::default()
+                            },
+                            odmo_types::PartnerEvolutionSnapshot {
+                                evolution_type: 41_000,
+                                unlocked: 1,
+                                ..odmo_types::PartnerEvolutionSnapshot::default()
+                            },
+                        ],
+                        ..odmo_types::PartnerSlotSnapshot::default()
+                    },
+                    odmo_types::PartnerSlotSnapshot {
+                        slot: 2,
+                        digimon_type: 32_001,
+                        model: 32_001,
+                        level: 20,
+                        evolutions: vec![odmo_types::PartnerEvolutionSnapshot {
+                            evolution_type: 41_000,
+                            unlocked: 1,
+                            ..odmo_types::PartnerEvolutionSnapshot::default()
+                        }],
+                        ..odmo_types::PartnerSlotSnapshot::default()
+                    },
+                ];
+            })
+            .expect("character");
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-evolution-jogress-chipset-missing"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::PartnerEvolution {
+                    digimon_handler: 21_000,
+                    evolution_slot: 4,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::EVOLUTION_FAILURE
+        );
+    }
+
+    #[test]
+    fn partner_evolution_consumes_consumable_jogress_chipset() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets = vec![EvolutionAsset {
+            base_type: DEFAULT_PARTNER_MODEL_ID,
+            lines: vec![
+                EvolutionLineAsset {
+                    type_id: DEFAULT_PARTNER_MODEL_ID,
+                    enabled: 1,
+                    stages: vec![EvolutionStageAsset {
+                        target_type: 41_000,
+                        value: 4 | (1 << 16),
+                    }],
+                    ..EvolutionLineAsset::default()
+                },
+                EvolutionLineAsset {
+                    type_id: 41_000,
+                    enabled: 1,
+                    required_ds: 2,
+                    evolution_tree: 2,
+                    jogress_chipset_type: 52,
+                    jogress_consumable_chipset_type: 5_202,
+                    jogress_period_chipset_type: 5_201,
+                    jogress_chipset_amount: 2,
+                    jogress_need_digimon_types: vec![32_001],
+                    ..EvolutionLineAsset::default()
+                },
+            ],
+        }];
+        repo.item_assets.push(ItemAsset {
+            item_id: 90_001,
+            name: "Jogress Consumable Chipset".to_string(),
+            item_type: 52,
+            section: 5_202,
+            combined_section: 5_202,
+            overlap: 99,
+            ..Default::default()
+        });
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .map(|character| {
+                character.partner_level = 20;
+                character.partner_slots = vec![
+                    odmo_types::PartnerSlotSnapshot {
+                        slot: 1,
+                        digimon_type: DEFAULT_PARTNER_MODEL_ID,
+                        model: DEFAULT_PARTNER_MODEL_ID,
+                        level: 20,
+                        evolutions: vec![
+                            odmo_types::PartnerEvolutionSnapshot {
+                                evolution_type: DEFAULT_PARTNER_MODEL_ID,
+                                unlocked: 1,
+                                ..odmo_types::PartnerEvolutionSnapshot::default()
+                            },
+                            odmo_types::PartnerEvolutionSnapshot {
+                                evolution_type: 41_000,
+                                unlocked: 1,
+                                ..odmo_types::PartnerEvolutionSnapshot::default()
+                            },
+                        ],
+                        ..odmo_types::PartnerSlotSnapshot::default()
+                    },
+                    odmo_types::PartnerSlotSnapshot {
+                        slot: 2,
+                        digimon_type: 32_001,
+                        model: 32_001,
+                        level: 20,
+                        evolutions: vec![odmo_types::PartnerEvolutionSnapshot {
+                            evolution_type: 41_000,
+                            unlocked: 1,
+                            ..odmo_types::PartnerEvolutionSnapshot::default()
+                        }],
+                        ..odmo_types::PartnerSlotSnapshot::default()
+                    },
+                ];
+                character.digivice.chipsets[0] = odmo_types::DigiviceItemSnapshot {
+                    item_id: 90_001,
+                    amount: 3,
+                    record: vec![0; 60],
+                };
+                character.digivice.chipsets[0].sync_record();
+            })
+            .expect("character");
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("partner-evolution-jogress-chipset-consume"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::PartnerEvolution {
+                    digimon_handler: 21_000,
+                    evolution_slot: 4,
+                },
+            )
+            .expect("request should complete");
+
+        assert_eq!(responses.len(), 1);
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.partner_current_type, 41_000);
+        assert_eq!(stored.digivice.chipsets[0].amount, 1);
+    }
+
+    #[test]
+    fn move_item_chipset_to_inventory_updates_persisted_digivice() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.item_assets.push(ItemAsset {
+            item_id: 40_100,
+            item_type: 53,
+            digivice_chipset_slots: 2,
+            digivice_skill_slots: 0,
+            ..Default::default()
+        });
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .map(|character| {
+                character.inventory.items[0] = ItemRecord::default();
+                character.digivice.equipped_item = odmo_types::DigiviceItemSnapshot {
+                    item_id: 40_100,
+                    amount: 1,
+                    ..odmo_types::DigiviceItemSnapshot::default()
+                };
+                character.digivice.equipped_item.sync_record();
+                character.digivice.chipsets[0] = odmo_types::DigiviceItemSnapshot {
+                    item_id: 52_202,
+                    amount: 2,
+                    ..odmo_types::DigiviceItemSnapshot::default()
+                };
+                character.digivice.chipsets[0].sync_record();
+            })
+            .expect("character");
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("move-item-chipset-to-inventory"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::MoveItem {
+                    origin_slot: 4_000,
+                    destination_slot: 0,
+                },
+            )
+            .expect("move should succeed");
+
+        assert!(!responses.is_empty(), "move should emit responses");
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.digivice.chipsets[0].item_id, 0);
+        assert_eq!(stored.inventory.items[0].item_id, 52_202);
+        assert_eq!(stored.inventory.items[0].amount, 2);
+    }
+
+    #[test]
+    fn move_item_inventory_to_digivice_swaps_equipped_item() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.item_assets.push(ItemAsset {
+            item_id: 40_001,
+            item_type: 53,
+            digivice_chipset_slots: 2,
+            digivice_skill_slots: 2,
+            ..Default::default()
+        });
+        repo.item_assets.push(ItemAsset {
+            item_id: 40_002,
+            item_type: 53,
+            digivice_chipset_slots: 2,
+            digivice_skill_slots: 2,
+            ..Default::default()
+        });
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .map(|character| {
+                character.inventory.items[0] = ItemRecord::new(40_001, 1);
+                character.digivice.equipped_item = odmo_types::DigiviceItemSnapshot {
+                    item_id: 40_002,
+                    amount: 1,
+                    ..odmo_types::DigiviceItemSnapshot::default()
+                };
+                character.digivice.equipped_item.sync_record();
+            })
+            .expect("character");
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("move-item-inventory-to-digivice"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::MoveItem {
+                    origin_slot: 0,
+                    destination_slot: 5_000,
+                },
+            )
+            .expect("move should succeed");
+
+        assert!(!responses.is_empty(), "move should emit responses");
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.digivice.equipped_item.item_id, 40_001);
+        assert_eq!(stored.inventory.items[0].item_id, 40_002);
+    }
+
+    #[test]
+    fn move_item_inventory_to_digivice_fails_when_overflow_slots_remain() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.item_assets.push(ItemAsset {
+            item_id: 40_010,
+            item_type: 53,
+            digivice_chipset_slots: 1,
+            digivice_skill_slots: 0,
+            ..Default::default()
+        });
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .map(|character| {
+                character.inventory.items[0] = ItemRecord::new(40_010, 1);
+                character.digivice.chipsets[1] = odmo_types::DigiviceItemSnapshot {
+                    item_id: 52_999,
+                    amount: 1,
+                    ..odmo_types::DigiviceItemSnapshot::default()
+                };
+                character.digivice.chipsets[1].sync_record();
+            })
+            .expect("character");
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("move-item-digivice-overflow-fail"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::MoveItem {
+                    origin_slot: 0,
+                    destination_slot: 5_000,
+                },
+            )
+            .expect("move should return failure");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::MOVE_ITEM_FAILURE
+        );
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.digivice.equipped_item.item_id, 0);
+        assert_eq!(stored.inventory.items[0].item_id, 40_010);
+    }
+
+    #[test]
+    fn move_item_inventory_to_chipset_requires_chipset_item_type() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.item_assets.push(ItemAsset {
+            item_id: 40_100,
+            item_type: 53,
+            digivice_chipset_slots: 2,
+            digivice_skill_slots: 0,
+            ..Default::default()
+        });
+        repo.item_assets.push(ItemAsset {
+            item_id: 77_777,
+            item_type: 10,
+            ..Default::default()
+        });
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .map(|character| {
+                character.inventory.items[0] = ItemRecord::new(77_777, 1);
+                character.digivice.equipped_item = odmo_types::DigiviceItemSnapshot {
+                    item_id: 40_100,
+                    amount: 1,
+                    ..odmo_types::DigiviceItemSnapshot::default()
+                };
+                character.digivice.equipped_item.sync_record();
+            })
+            .expect("character");
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("move-item-chipset-invalid-type"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::MoveItem {
+                    origin_slot: 0,
+                    destination_slot: 4_000,
+                },
+            )
+            .expect("move should return failure");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::MOVE_ITEM_FAILURE
+        );
+    }
+
+    #[test]
+    fn move_item_inventory_to_chipset_rejects_closed_slot() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.item_assets.push(ItemAsset {
+            item_id: 40_101,
+            item_type: 53,
+            digivice_chipset_slots: 1,
+            digivice_skill_slots: 0,
+            ..Default::default()
+        });
+        repo.item_assets.push(ItemAsset {
+            item_id: 90_101,
+            item_type: 52,
+            ..Default::default()
+        });
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .map(|character| {
+                character.inventory.items[0] = ItemRecord::new(90_101, 1);
+                character.digivice.equipped_item = odmo_types::DigiviceItemSnapshot {
+                    item_id: 40_101,
+                    amount: 1,
+                    ..odmo_types::DigiviceItemSnapshot::default()
+                };
+                character.digivice.equipped_item.sync_record();
+            })
+            .expect("character");
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("move-item-chipset-closed-slot"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::MoveItem {
+                    origin_slot: 0,
+                    destination_slot: 4_001,
+                },
+            )
+            .expect("move should return failure");
+
+        assert_eq!(responses.len(), 1);
+        let raw = PacketReader::from_frame(&responses[0]).expect("frame");
+        assert_eq!(
+            raw.packet_type,
+            odmo_protocol::opcode::game::MOVE_ITEM_FAILURE
         );
     }
 
@@ -12158,6 +13783,147 @@ mod tests {
             responses.is_empty(),
             "modern slot-open should stay optimistic"
         );
+
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.inventory.items[0].amount, 2);
+        assert_eq!(stored.partner_slots[0].evolutions[1].unlocked & 0x01, 0x01);
+    }
+
+    #[test]
+    fn evolution_unlock_requires_completed_open_quest() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets[0].lines[1].unlock_item_section = 6100;
+        repo.evolution_assets[0].lines[1].unlock_item_section_amount = 1;
+        repo.evolution_assets[0].lines[1].unlock_quest_id = 321;
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .expect("character")
+            .partner_slots[0]
+            .evolutions[1]
+            .unlocked = 0;
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("evolution-unlock-open-quest"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::EvolutionUnlock {
+                    evolution_type: 1,
+                    inven_idx: None,
+                },
+            )
+            .expect("request should complete");
+
+        assert!(responses.is_empty());
+
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.inventory.items[0].amount, 3);
+        assert_eq!(stored.partner_slots[0].evolutions[1].unlocked & 0x01, 0);
+    }
+
+    #[test]
+    fn evolution_unlock_rejects_when_jogress_quest_is_in_progress() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets[0].lines[1].unlock_item_section = 6100;
+        repo.evolution_assets[0].lines[1].unlock_item_section_amount = 1;
+        repo.evolution_assets[0].lines[1].jogress_quest_check = 777;
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .map(|character| {
+                character.partner_slots[0].evolutions[1].unlocked = 0;
+                character
+                    .quest_progress
+                    .in_progress
+                    .push(odmo_types::InProgressQuest {
+                        quest_id: 777,
+                        goals: [0; 5],
+                    });
+            });
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("evolution-unlock-jogress-quest"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::EvolutionUnlock {
+                    evolution_type: 1,
+                    inven_idx: None,
+                },
+            )
+            .expect("request should complete");
+
+        assert!(responses.is_empty());
+
+        let stored = repo
+            .character_by_id(100)
+            .expect("load character")
+            .expect("character exists");
+        assert_eq!(stored.inventory.items[0].amount, 3);
+        assert_eq!(stored.partner_slots[0].evolutions[1].unlocked & 0x01, 0);
+    }
+
+    #[test]
+    fn evolution_unlock_does_not_gate_on_unlock_level() {
+        let mut repo = InMemoryCharacterRepository::demo();
+        repo.evolution_assets[0].lines[1].unlock_item_section = 6100;
+        repo.evolution_assets[0].lines[1].unlock_item_section_amount = 1;
+        repo.evolution_assets[0].lines[1].unlock_level = u8::MAX;
+        repo.characters
+            .write()
+            .expect("repo poisoned")
+            .get_mut(&100)
+            .expect("character")
+            .partner_slots[0]
+            .evolutions[1]
+            .unlocked = 0;
+        let repo = Arc::new(repo);
+
+        let app = GameApplication::new(
+            GameServiceConfig {
+                portal_state_dir: unique_test_dir("evolution-unlock-level-ignored"),
+            },
+            repo.clone(),
+        );
+
+        let mut session = GameSession::new(1);
+        session.character_id = Some(100);
+        let responses = app
+            .handle_request(
+                &mut session,
+                GameRequest::EvolutionUnlock {
+                    evolution_type: 1,
+                    inven_idx: None,
+                },
+            )
+            .expect("request should complete");
+
+        assert!(responses.is_empty());
 
         let stored = repo
             .character_by_id(100)
@@ -12311,7 +14077,10 @@ mod tests {
             .character_by_id(100)
             .expect("lookup")
             .expect("character should exist");
-        assert_eq!(stored.inventory.items[0].item_id, TEST_SUMMON_TICKET_ITEM_ID);
+        assert_eq!(
+            stored.inventory.items[0].item_id,
+            TEST_SUMMON_TICKET_ITEM_ID
+        );
         assert_eq!(stored.inventory.items[0].amount, 2);
         assert!(
             stored
@@ -12388,7 +14157,10 @@ mod tests {
             .character_by_id(100)
             .expect("lookup")
             .expect("character should exist");
-        assert_eq!(stored.inventory.items[0].item_id, TEST_SUMMON_TICKET_ITEM_ID);
+        assert_eq!(
+            stored.inventory.items[0].item_id,
+            TEST_SUMMON_TICKET_ITEM_ID
+        );
         assert_eq!(stored.inventory.items[0].amount, 2);
         assert!(
             stored

@@ -2289,72 +2289,204 @@ impl EncyclopediaDeckBuffUsePacket {
     }
 }
 
-/// `OtherTamerDetailInfo` response — custom local bridge for the modern DetailInfo family.
+/// A `{key, value}` pair as carried by the detail-info skill and enchant grids.
+/// Skills use `{skill_id, level}`; enchants use `{attribute_kind, value}`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DetailStatPair {
+    pub key: u32,
+    pub value: u32,
+}
+
+/// One equipped-item row in a tamer-detail equipment list (71 wire bytes).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DetailItemRecord {
+    pub item_id: u32,
+    pub slot: u16,
+    pub stack: u16,
+    pub flags: [u8; 4],
+    pub serial: u32,
+    pub bound: u16,
+    pub durability: u16,
+    pub grade: u8,
+    pub sockets: [u8; 16],
+    pub enchant: [u8; 16],
+    pub expire_low: u32,
+    pub expire_high: u32,
+    pub extra_a: u32,
+    pub extra_b: u32,
+    pub tag_a: u8,
+    pub tag_b: u8,
+}
+
+impl DetailItemRecord {
+    fn write(&self, writer: &mut PacketWriter) {
+        writer.write_u32(self.item_id);
+        writer.write_u16(self.slot);
+        writer.write_u16(self.stack);
+        writer.write_bytes(&self.flags);
+        writer.write_u32(self.serial);
+        writer.write_u16(self.bound);
+        writer.write_u16(self.durability);
+        writer.write_u8(self.grade);
+        writer.write_bytes(&self.sockets);
+        writer.write_bytes(&self.enchant);
+        writer.write_u32(self.expire_low);
+        writer.write_u32(self.expire_high);
+        writer.write_u32(self.extra_a);
+        writer.write_u32(self.extra_b);
+        writer.write_u8(self.tag_a);
+        writer.write_u8(self.tag_b);
+    }
+}
+
+/// Partner block embedded inside the other-tamer detail response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OtherTamerDetailDigimon {
+    pub model: u32,
+    pub name: String,
+    pub appearance: [u8; 72],
+    pub field_104: u16,
+    pub field_106: u16,
+    pub hatch_level: u8,
+    pub field_109: u16,
+    pub field_111: u32,
+    pub field_115: u32,
+    pub group_119: (u32, u16, u8),
+    pub group_126: (u32, u16, u8),
+    pub field_133: u16,
+    pub attribute_records: [(u64, u32, u16); 3],
+    pub group_177: (u32, u16),
+    pub block_183: [u8; 16],
+    pub field_199: u32,
+    pub group_203: (u32, u32),
+    pub skills: Vec<DetailStatPair>,
+    pub enchants: Vec<DetailStatPair>,
+}
+
+impl OtherTamerDetailDigimon {
+    pub fn empty() -> Self {
+        Self {
+            model: 0,
+            name: String::new(),
+            appearance: [0u8; 72],
+            field_104: 0,
+            field_106: 0,
+            hatch_level: 0,
+            field_109: 0,
+            field_111: 0,
+            field_115: 0,
+            group_119: (0, 0, 0),
+            group_126: (0, 0, 0),
+            field_133: 0,
+            attribute_records: [(0, 0, 0); 3],
+            group_177: (0, 0),
+            block_183: [0u8; 16],
+            field_199: 0,
+            group_203: (0, 0),
+            skills: Vec::new(),
+            enchants: Vec::new(),
+        }
+    }
+
+    fn write(&self, writer: &mut PacketWriter) {
+        writer.write_u32(self.model);
+        writer.write_modern_utf8_string(&self.name);
+        writer.write_bytes(&self.appearance);
+        writer.write_u16(self.field_104);
+        writer.write_u16(self.field_106);
+        writer.write_u8(self.hatch_level);
+        writer.write_u16(self.field_109);
+        writer.write_u32(self.field_111);
+        writer.write_u32(self.field_115);
+        writer.write_u32(self.group_119.0);
+        writer.write_u16(self.group_119.1);
+        writer.write_u8(self.group_119.2);
+        writer.write_u32(self.group_126.0);
+        writer.write_u16(self.group_126.1);
+        writer.write_u8(self.group_126.2);
+        writer.write_u16(self.field_133);
+        for (a, b, c) in self.attribute_records {
+            writer.write_u64(a);
+            writer.write_u32(b);
+            writer.write_u16(c);
+        }
+        writer.write_u32(self.group_177.0);
+        writer.write_u16(self.group_177.1);
+        writer.write_bytes(&self.block_183);
+        writer.write_u32(self.field_199);
+        writer.write_u32(self.group_203.0);
+        writer.write_u32(self.group_203.1);
+        writer.write_u16(self.skills.len() as u16);
+        for pair in &self.skills {
+            writer.write_u32(pair.key);
+            writer.write_u32(pair.value);
+        }
+        writer.write_u16(self.enchants.len() as u16);
+        for pair in &self.enchants {
+            writer.write_u32(pair.key);
+            writer.write_u32(pair.value);
+        }
+    }
+}
+
+/// `OtherTamerDetailInfo` response (opcode 16071) — the modern DetailInfo wire shape.
+///
+/// Layout: tamer name/guild fixed buffers, the 13-slot stat block, three equipment
+/// lists, the variable tamer name, the embedded partner block, and the trailing
+/// attribute block. `target_handler` lets the client match it to its request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OtherTamerDetailInfoPacket {
-    pub valid: bool,
     pub target_handler: u32,
     pub tamer_name: String,
     pub guild_name: String,
-    pub current_title: i32,
-    pub tamer_model: i32,
-    pub tamer_level: i32,
-    pub tamer_size: i32,
-    pub tamer_hp: i32,
-    pub tamer_ds: i32,
-    pub tamer_at: i32,
-    pub tamer_de: i32,
-    pub tamer_ms: i32,
-    pub partner_name: String,
-    pub partner_model: i32,
-    pub partner_type: i32,
-    pub partner_level: i32,
-    pub partner_size: i32,
-    pub partner_hp: i32,
-    pub partner_ds: i32,
-    pub partner_at: i32,
-    pub partner_de: i32,
-    pub partner_as: i32,
-    pub partner_ht: i32,
-    pub partner_ct: i32,
-    pub partner_bl: i32,
-    pub partner_ev: i32,
-    pub partner_clone_level: i32,
-    pub status: String,
+    pub stats: [i32; 13],
+    pub field_200: u16,
+    pub equipment: [Vec<DetailItemRecord>; 3],
+    pub field_238: i32,
+    pub digimon: OtherTamerDetailDigimon,
+    pub field_493: u16,
+    pub attributes: [i32; 19],
 }
 
 impl OtherTamerDetailInfoPacket {
+    pub fn empty(target_handler: u32) -> Self {
+        Self {
+            target_handler,
+            tamer_name: String::new(),
+            guild_name: String::new(),
+            stats: [0; 13],
+            field_200: 0,
+            equipment: [Vec::new(), Vec::new(), Vec::new()],
+            field_238: 0,
+            digimon: OtherTamerDetailDigimon::empty(),
+            field_493: 0,
+            attributes: [0; 19],
+        }
+    }
+
     pub fn encode(&self) -> Vec<u8> {
         let mut writer = PacketWriter::new(game::OTHER_TAMER_DETAIL_INFO_RESPONSE);
-        writer.write_u8(self.valid as u8);
         writer.write_u32(self.target_handler);
-        writer.write_string(&self.tamer_name);
-        writer.write_string(&self.guild_name);
-        writer.write_i32(self.current_title);
-        writer.write_i32(self.tamer_model);
-        writer.write_i32(self.tamer_level);
-        writer.write_i32(self.tamer_size);
-        writer.write_i32(self.tamer_hp);
-        writer.write_i32(self.tamer_ds);
-        writer.write_i32(self.tamer_at);
-        writer.write_i32(self.tamer_de);
-        writer.write_i32(self.tamer_ms);
-        writer.write_string(&self.partner_name);
-        writer.write_i32(self.partner_model);
-        writer.write_i32(self.partner_type);
-        writer.write_i32(self.partner_level);
-        writer.write_i32(self.partner_size);
-        writer.write_i32(self.partner_hp);
-        writer.write_i32(self.partner_ds);
-        writer.write_i32(self.partner_at);
-        writer.write_i32(self.partner_de);
-        writer.write_i32(self.partner_as);
-        writer.write_i32(self.partner_ht);
-        writer.write_i32(self.partner_ct);
-        writer.write_i32(self.partner_bl);
-        writer.write_i32(self.partner_ev);
-        writer.write_i32(self.partner_clone_level);
-        writer.write_string(&self.status);
+        // Fixed wide buffers retained alongside the variable name below.
+        writer.write_fixed_wide_string(&self.tamer_name, 36);
+        writer.write_fixed_wide_string(&self.guild_name, 36);
+        for value in self.stats {
+            writer.write_i32(value);
+        }
+        writer.write_u16(self.field_200);
+        for list in &self.equipment {
+            writer.write_u16(list.len() as u16);
+            for record in list {
+                record.write(&mut writer);
+            }
+        }
+        writer.write_i32(self.field_238);
+        writer.write_modern_utf8_string(&self.tamer_name);
+        self.digimon.write(&mut writer);
+        writer.write_u16(self.field_493);
+        for value in self.attributes {
+            writer.write_i32(value);
+        }
         writer.finalize()
     }
 }
@@ -5676,76 +5808,108 @@ mod tests {
         assert_eq!(raw.packet_type, game::PARTY_MEMBER_POSITION);
     }
 
+    fn read_fixed_wide(reader: &mut PacketReader, units: usize) -> String {
+        let bytes = reader.read_bytes(units * 2).expect("fixed wide block");
+        let codes: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .take_while(|&u| u != 0)
+            .collect();
+        String::from_utf16(&codes).expect("utf16")
+    }
+
+    fn read_modern_utf8(reader: &mut PacketReader) -> String {
+        let len = reader.read_u16().expect("utf8 len") as usize;
+        let bytes = reader.read_bytes(len).expect("utf8 bytes");
+        String::from_utf8(bytes).expect("utf8")
+    }
+
     #[test]
-    fn other_tamer_detail_info_packet_uses_i32_levels_and_clone_level() {
-        let packet = OtherTamerDetailInfoPacket {
-            valid: true,
-            target_handler: 33_480,
-            tamer_name: "SmokeTamer".to_string(),
-            guild_name: "Alpha".to_string(),
-            current_title: 12,
-            tamer_model: 31_001,
-            tamer_level: 70,
-            tamer_size: 130,
-            tamer_hp: 1200,
-            tamer_ds: 800,
-            tamer_at: 155,
-            tamer_de: 90,
-            tamer_ms: 410,
-            partner_name: "Agumon".to_string(),
-            partner_model: 51_001,
-            partner_type: 3,
-            partner_level: 65,
-            partner_size: 125,
-            partner_hp: 2200,
-            partner_ds: 1600,
-            partner_at: 320,
-            partner_de: 210,
-            partner_as: 430,
-            partner_ht: 17,
-            partner_ct: 25,
-            partner_bl: 9,
-            partner_ev: 12,
-            partner_clone_level: 8,
-            status: "Detail info synchronized.".to_string(),
-        }
-        .encode();
-        let raw = PacketReader::from_frame(&packet).expect("frame should decode");
+    fn other_tamer_detail_info_packet_matches_modern_wire_layout() {
+        let mut packet = OtherTamerDetailInfoPacket::empty(33_480);
+        packet.tamer_name = "SmokeTamer".to_string();
+        packet.guild_name = "Alpha".to_string();
+        packet.stats = [70, 130, 1200, 800, 155, 90, 410, 0, 0, 0, 0, 0, 0];
+        packet.equipment[0].push(DetailItemRecord {
+            item_id: 700_001,
+            slot: 5,
+            stack: 1,
+            flags: [1, 2, 3, 4],
+            serial: 0xDEAD,
+            bound: 7,
+            durability: 100,
+            grade: 3,
+            sockets: [0u8; 16],
+            enchant: [0u8; 16],
+            expire_low: 0,
+            expire_high: 0,
+            extra_a: 9,
+            extra_b: 10,
+            tag_a: 1,
+            tag_b: 2,
+        });
+        packet.digimon.model = 51_001;
+        packet.digimon.name = "Agumon".to_string();
+        packet.digimon.hatch_level = 4;
+        packet.digimon.skills = vec![
+            DetailStatPair { key: 0, value: 3 },
+            DetailStatPair { key: 1, value: 2 },
+        ];
+        packet.digimon.enchants = vec![
+            DetailStatPair { key: 0, value: 100 },
+            DetailStatPair { key: 1, value: 50 },
+        ];
+
+        let encoded = packet.encode();
+        let raw = PacketReader::from_frame(&encoded).expect("frame should decode");
         assert_eq!(raw.packet_type, game::OTHER_TAMER_DETAIL_INFO_RESPONSE);
 
         let mut reader = PacketReader::new(raw.payload);
-        assert_eq!(reader.read_u8().expect("valid"), 1);
         assert_eq!(reader.read_u32().expect("handler"), 33_480);
-        assert_eq!(reader.read_string().expect("tamer_name"), "SmokeTamer");
-        assert_eq!(reader.read_string().expect("guild_name"), "Alpha");
-        assert_eq!(reader.read_i32().expect("current_title"), 12);
-        assert_eq!(reader.read_i32().expect("tamer_model"), 31_001);
-        assert_eq!(reader.read_i32().expect("tamer_level"), 70);
-        assert_eq!(reader.read_i32().expect("tamer_size"), 130);
-        assert_eq!(reader.read_i32().expect("tamer_hp"), 1200);
-        assert_eq!(reader.read_i32().expect("tamer_ds"), 800);
-        assert_eq!(reader.read_i32().expect("tamer_at"), 155);
-        assert_eq!(reader.read_i32().expect("tamer_de"), 90);
-        assert_eq!(reader.read_i32().expect("tamer_ms"), 410);
-        assert_eq!(reader.read_string().expect("partner_name"), "Agumon");
-        assert_eq!(reader.read_i32().expect("partner_model"), 51_001);
-        assert_eq!(reader.read_i32().expect("partner_type"), 3);
-        assert_eq!(reader.read_i32().expect("partner_level"), 65);
-        assert_eq!(reader.read_i32().expect("partner_size"), 125);
-        assert_eq!(reader.read_i32().expect("partner_hp"), 2200);
-        assert_eq!(reader.read_i32().expect("partner_ds"), 1600);
-        assert_eq!(reader.read_i32().expect("partner_at"), 320);
-        assert_eq!(reader.read_i32().expect("partner_de"), 210);
-        assert_eq!(reader.read_i32().expect("partner_as"), 430);
-        assert_eq!(reader.read_i32().expect("partner_ht"), 17);
-        assert_eq!(reader.read_i32().expect("partner_ct"), 25);
-        assert_eq!(reader.read_i32().expect("partner_bl"), 9);
-        assert_eq!(reader.read_i32().expect("partner_ev"), 12);
-        assert_eq!(reader.read_i32().expect("partner_clone_level"), 8);
-        assert_eq!(
-            reader.read_string().expect("status"),
-            "Detail info synchronized."
-        );
+        assert_eq!(read_fixed_wide(&mut reader, 36), "SmokeTamer");
+        assert_eq!(read_fixed_wide(&mut reader, 36), "Alpha");
+        for expected in [70, 130, 1200, 800, 155, 90, 410, 0, 0, 0, 0, 0, 0] {
+            assert_eq!(reader.read_i32().expect("stat"), expected);
+        }
+        assert_eq!(reader.read_u16().expect("field_200"), 0);
+        // equipment list 0 holds one record; lists 1 and 2 are empty.
+        assert_eq!(reader.read_u16().expect("equip0 count"), 1);
+        assert_eq!(reader.read_u32().expect("item_id"), 700_001);
+        let _ = reader.read_bytes(71 - 4).expect("rest of item record");
+        assert_eq!(reader.read_u16().expect("equip1 count"), 0);
+        assert_eq!(reader.read_u16().expect("equip2 count"), 0);
+        assert_eq!(reader.read_i32().expect("field_238"), 0);
+        assert_eq!(read_modern_utf8(&mut reader), "SmokeTamer");
+        // embedded partner block
+        assert_eq!(reader.read_u32().expect("model"), 51_001);
+        assert_eq!(read_modern_utf8(&mut reader), "Agumon");
+        let _ = reader.read_bytes(72).expect("appearance");
+        assert_eq!(reader.read_u16().expect("d104"), 0);
+        assert_eq!(reader.read_u16().expect("d106"), 0);
+        assert_eq!(reader.read_u8().expect("hatch_level"), 4);
+        assert_eq!(reader.read_u16().expect("d109"), 0);
+        assert_eq!(reader.read_u32().expect("d111"), 0);
+        assert_eq!(reader.read_u32().expect("d115"), 0);
+        let _ = reader.read_bytes(7 + 7).expect("two 7-byte groups");
+        assert_eq!(reader.read_u16().expect("d133"), 0);
+        let _ = reader.read_bytes(14 * 3).expect("three 14-byte records");
+        let _ = reader.read_bytes(6).expect("6-byte group");
+        let _ = reader.read_bytes(20).expect("20-byte group");
+        let _ = reader.read_bytes(8).expect("8-byte group");
+        assert_eq!(reader.read_u16().expect("skill count"), 2);
+        assert_eq!(reader.read_u32().expect("skill0 key"), 0);
+        assert_eq!(reader.read_u32().expect("skill0 value"), 3);
+        assert_eq!(reader.read_u32().expect("skill1 key"), 1);
+        assert_eq!(reader.read_u32().expect("skill1 value"), 2);
+        assert_eq!(reader.read_u16().expect("enchant count"), 2);
+        assert_eq!(reader.read_u32().expect("enchant0 key"), 0);
+        assert_eq!(reader.read_u32().expect("enchant0 value"), 100);
+        assert_eq!(reader.read_u32().expect("enchant1 key"), 1);
+        assert_eq!(reader.read_u32().expect("enchant1 value"), 50);
+        assert_eq!(reader.read_u16().expect("field_493"), 0);
+        for _ in 0..19 {
+            assert_eq!(reader.read_i32().expect("attribute"), 0);
+        }
         assert_eq!(reader.remaining_len(), 0);
     }
 

@@ -5,8 +5,8 @@ use crate::get_npc_shops;
 
 impl NpcShopRepository for PgRepository {
     fn shop_by_npc(&self, npc_id: i32, map_id: i16) -> anyhow::Result<Option<NpcShopDefinition>> {
-        // For now, use the same hardcoded NPC shop definitions as JsonRepository.
-        // In a production setup, these would come from an `npc_shops` table loaded at startup.
+        // Reuse the workspace-owned NPC shop catalog until a dedicated PostgreSQL
+        // table is introduced for these definitions.
         let shops = get_npc_shops();
         Ok(shops
             .into_iter()

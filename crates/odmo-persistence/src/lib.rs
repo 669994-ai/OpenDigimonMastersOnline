@@ -13,7 +13,7 @@ use odmo_application::{
     account::AccountRepository,
     character::{CharacterAccountRepository, CharacterRepository},
     game::{
-        DigiCombineRepository, DigiSummonRepository, DropCollectionResult,
+        DigiCombineRepository, DigiSummonRepository, DigimonAssetRepository, DropCollectionResult,
         EvolutionAssetRepository, ExtraEvolutionRepository, GameRepository, ItemAssetRepository,
         MapDropRepository, MapMobRepository, NpcShopDefinition, NpcShopItem, NpcShopRepository,
         PortalDefinition, PortalRepository, RandomBoxRepository, UnionCombineRepository,
@@ -23,10 +23,11 @@ use odmo_types::{
     AccessLevel, Account, AccountId, AccountSuspension, CharacterSummary, CombineCeilingEntry,
     DEFAULT_GM_PARTNER_MODEL_ID, DEFAULT_GM_TAMER_MODEL_ID, DEFAULT_PARTNER_MODEL_ID,
     DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DEFAULT_TAMER_MODEL_ID,
-    DigiCombineCatalog, DigiCombineCeil, DigiCombineGroup, DigiCombineItem, DigiCombineRank,
-    DigiCombineReward, DigiSummonProduct, DigiSummonReward, DigiSummonTicket, DropSummary,
-    EvolutionAsset, ExtraEvolutionNpc, ItemAsset, ItemRecord, MobSummary,
-    PartnerSlotSnapshot, RandomBoxReward, ServerDescriptor, UnionCombineCatalog,
+    DetailEnchantEntry, DetailSkillEntry, DigiCombineCatalog, DigiCombineCeil, DigiCombineGroup,
+    DigiCombineItem, DigiCombineRank, DigiCombineReward, DigiSummonProduct, DigiSummonReward,
+    DigiSummonTicket, DigimonAsset, DropSummary, EvolutionAsset, ExtraEvolutionNpc, ItemAsset,
+    ItemRecord, MobSummary, PartnerSlotSnapshot, RandomBoxReward, ServerDescriptor,
+    UnionCombineCatalog,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +37,7 @@ fn map_key(map_id: i16, channel: u8) -> String {
 
 const EVOLUTION_ASSET_CATALOG_PATH: &str = "data/server-assets/evolution_assets.json";
 const ITEM_ASSET_CATALOG_PATH: &str = "data/server-assets/item_assets.json";
+const DIGIMON_ASSET_CATALOG_PATH: &str = "data/server-assets/digimon_assets.json";
 pub const DEMO_CATALOG_ITEM_A: i32 = 3;
 pub const DEMO_CATALOG_ITEM_B: i32 = 4;
 pub const DEMO_CATALOG_ITEM_C: i32 = 5;
@@ -73,6 +75,10 @@ pub(crate) fn load_evolution_asset_catalog() -> anyhow::Result<Vec<EvolutionAsse
 
 pub(crate) fn load_item_asset_catalog() -> anyhow::Result<Vec<ItemAsset>> {
     read_json_catalog(ITEM_ASSET_CATALOG_PATH)
+}
+
+pub(crate) fn load_digimon_asset_catalog() -> anyhow::Result<Vec<DigimonAsset>> {
+    read_json_catalog(DIGIMON_ASSET_CATALOG_PATH)
 }
 
 fn active_partner_snapshot(character: &CharacterSummary) -> PartnerSlotSnapshot {
@@ -116,7 +122,63 @@ fn active_partner_snapshot(character: &CharacterSummary) -> PartnerSlotSnapshot 
             .find(|slot| slot.slot == character.partner_current_slot)
             .map(|slot| slot.evolutions.clone())
             .unwrap_or_default(),
+        detail_skills: active_partner_detail_skills(character),
+        detail_enchants: active_partner_detail_enchants(character),
     }
+}
+
+/// Digiclone attribute rows for the partner-detail enchant grid, in the fixed
+/// order the detail view renders them: AT, CT, BL, HP, EV.
+fn active_partner_detail_enchants(character: &CharacterSummary) -> Vec<DetailEnchantEntry> {
+    vec![
+        DetailEnchantEntry {
+            kind: 0,
+            value: i32::from(character.partner_clone_at_value),
+        },
+        DetailEnchantEntry {
+            kind: 1,
+            value: i32::from(character.partner_clone_ct_value),
+        },
+        DetailEnchantEntry {
+            kind: 2,
+            value: i32::from(character.partner_clone_bl_value),
+        },
+        DetailEnchantEntry {
+            kind: 3,
+            value: i32::from(character.partner_clone_hp_value),
+        },
+        DetailEnchantEntry {
+            kind: 4,
+            value: i32::from(character.partner_clone_ev_value),
+        },
+    ]
+}
+
+/// Skill rows for the active evolution, shown in the partner-detail skill grid.
+/// Level comes from the evolution's per-slot skill levels; the slot index acts
+/// as the skill id until the skill-asset table is wired in.
+fn active_partner_detail_skills(character: &CharacterSummary) -> Vec<DetailSkillEntry> {
+    character
+        .partner_slots
+        .iter()
+        .find(|slot| slot.slot == character.partner_current_slot)
+        .and_then(|slot| {
+            slot.evolutions
+                .iter()
+                .find(|evo| evo.evolution_type == character.partner_current_type)
+                .or_else(|| slot.evolutions.first())
+        })
+        .map(|evo| {
+            evo.skill_levels
+                .iter()
+                .enumerate()
+                .map(|(idx, &level)| DetailSkillEntry {
+                    skill_id: idx as i32,
+                    value: i32::from(level),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn apply_partner_snapshot(character: &mut CharacterSummary, partner: &PartnerSlotSnapshot) {
@@ -215,7 +277,12 @@ pub async fn initialize_backend() -> anyhow::Result<PersistenceBackend> {
 fn demo_seed_enabled() -> bool {
     std::env::var("ODMO_SEED_DEMO")
         .ok()
-        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false)
 }
 
@@ -627,6 +694,24 @@ impl CharacterRepository for JsonRepository {
         Ok(())
     }
 
+    fn update_digivice(
+        &self,
+        character_id: u64,
+        digivice: odmo_types::DigiviceSnapshot,
+    ) -> anyhow::Result<()> {
+        let mut digivice = digivice;
+        digivice.normalize();
+        let mut state = self.state.write().expect("repository poisoned");
+        for characters in state.characters_by_account.values_mut() {
+            if let Some(ch) = characters.iter_mut().find(|c| c.id == character_id) {
+                ch.digivice = digivice;
+                self.persist(&state)?;
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
     fn update_extra_inventory(
         &self,
         character_id: u64,
@@ -788,10 +873,12 @@ impl CharacterRepository for JsonRepository {
         character_id: u64,
         current_hp: i32,
         current_ds: i32,
+        current_xgauge: i32,
     ) -> anyhow::Result<()> {
         self.mutate_character(character_id, |c| {
             c.current_hp = current_hp.clamp(0, c.hp);
             c.current_ds = current_ds.clamp(0, c.ds);
+            c.current_xgauge = current_xgauge.max(0);
         })
     }
 
@@ -1070,7 +1157,7 @@ impl MapDropRepository for JsonRepository {
 
 impl PortalRepository for JsonRepository {
     fn portal_by_id(&self, portal_id: i32) -> anyhow::Result<Option<PortalDefinition>> {
-        // Hardcoded portal definitions from the game's asset files
+        // Workspace-owned portal catalog derived from the game's validated rules.
         let portals = get_portal_definitions();
         Ok(portals.into_iter().find(|p| p.id == portal_id))
     }
@@ -1141,6 +1228,12 @@ impl EvolutionAssetRepository for JsonRepository {
 impl ItemAssetRepository for JsonRepository {
     fn item_assets(&self) -> anyhow::Result<Vec<ItemAsset>> {
         load_item_asset_catalog()
+    }
+}
+
+impl DigimonAssetRepository for JsonRepository {
+    fn digimon_assets(&self) -> anyhow::Result<Vec<DigimonAsset>> {
+        load_digimon_asset_catalog()
     }
 }
 

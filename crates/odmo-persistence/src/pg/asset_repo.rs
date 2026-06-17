@@ -1,5 +1,7 @@
-use odmo_application::game::{EvolutionAssetRepository, ItemAssetRepository};
-use odmo_types::{EvolutionAsset, ItemAsset};
+use odmo_application::game::{
+    DigimonAssetRepository, EvolutionAssetRepository, ItemAssetRepository,
+};
+use odmo_types::{DigimonAsset, EvolutionAsset, ItemAsset};
 
 use super::PgRepository;
 
@@ -28,6 +30,17 @@ impl EvolutionAssetRepository for PgRepository {
 impl ItemAssetRepository for PgRepository {
     fn item_assets(&self) -> anyhow::Result<Vec<ItemAsset>> {
         let rows = self.load_catalog_rows("SELECT payload FROM item_assets ORDER BY item_id")?;
+        rows.into_iter()
+            .map(serde_json::from_value)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
+    }
+}
+
+impl DigimonAssetRepository for PgRepository {
+    fn digimon_assets(&self) -> anyhow::Result<Vec<DigimonAsset>> {
+        let rows =
+            self.load_catalog_rows("SELECT payload FROM digimon_assets ORDER BY digimon_id")?;
         rows.into_iter()
             .map(serde_json::from_value)
             .collect::<Result<Vec<_>, _>>()

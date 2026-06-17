@@ -88,8 +88,17 @@ Rule data that the backend must validate lives in server-owned catalogs under:
 
 - `data/server-assets/evolution_assets.json`
 - `data/server-assets/item_assets.json`
+- `data/server-assets/item_assets.source.json`
+- `data/server-assets/digimon_assets.json`
+- `data/server-assets/digimon_assets.source.json`
 
 The client continues to read its own pack data independently. The server does not depend on the client's pack or dump files at runtime.
+
+When a server catalog must be refreshed from modern client data, the canonical input is the current pack set and a reproducible import step. In this workspace that means extracting the live `Pack03` files with `DmoPackToolkit`, decoding the modern BIN payloads, and then storing only the normalized server-owned result plus provenance manifests. The current refresh path derives `ItemData`, `CoolTime`, and `DigimonListData` from `Pack03`; the server never reads those pack files at runtime.
+
+If localized item names are not recoverable from the current pack-derived payloads alone, the importer carries forward the existing server-owned names from `data/server-assets/item_assets.json` instead of reintroducing a runtime or refresh dependency on loose reverse XML files.
+
+The non-canonical CSV/XML reverse helpers remain available only as explicit opt-in inputs for research or recovery work. The normal refresh path for server catalogs should start from the current `Pack03` files.
 
 ### Implemented functionality
 
@@ -299,7 +308,7 @@ cargo run -p odmo-game-service
 #### Run with PostgreSQL
 
 ```powershell
-$env:ODMO_DATABASE_URL = "postgres://user:password@localhost/odmo"
+$env:ODMO_DATABASE_URL = "postgres://<db-user>:<db-password>@<db-host>:5432/<db-name>"
 cargo run -p odmo-account-service
 cargo run -p odmo-character-service
 cargo run -p odmo-game-service

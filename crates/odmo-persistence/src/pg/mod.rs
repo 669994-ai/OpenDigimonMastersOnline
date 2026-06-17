@@ -41,7 +41,8 @@ impl PgRepository {
 
     pub async fn prepare_runtime(&self) -> anyhow::Result<()> {
         self.seed_server_asset_catalogs().await?;
-        self.upsert_resource_hash(configured_resource_hash_hex()).await?;
+        self.upsert_resource_hash(configured_resource_hash_hex())
+            .await?;
         Ok(())
     }
 
@@ -55,8 +56,7 @@ impl PgRepository {
             self.seed_extra_evolution_demo().await?;
             self.seed_combine_demo().await?;
             self.upsert_resource_hash(
-                configured_resource_hash_hex()
-                    .or_else(|| Some("0123456789ABCDEF".to_string())),
+                configured_resource_hash_hex().or_else(|| Some("0123456789ABCDEF".to_string())),
             )
             .await?;
             return Ok(());
@@ -375,8 +375,7 @@ impl PgRepository {
         .await?;
 
         self.upsert_resource_hash(
-            configured_resource_hash_hex()
-                .or_else(|| Some("0123456789ABCDEF".to_string())),
+            configured_resource_hash_hex().or_else(|| Some("0123456789ABCDEF".to_string())),
         )
         .await?;
 
@@ -384,26 +383,32 @@ impl PgRepository {
     }
 
     async fn seed_server_asset_catalogs(&self) -> anyhow::Result<()> {
-        let evolution_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM evolution_assets")
-                .fetch_one(&self.pool)
-                .await?;
+        let evolution_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM evolution_assets")
+            .fetch_one(&self.pool)
+            .await?;
         let item_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM item_assets")
             .fetch_one(&self.pool)
             .await?;
+        let digimon_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM digimon_assets")
+            .fetch_one(&self.pool)
+            .await?;
 
-        if evolution_count > 0 && item_count > 0 {
+        if evolution_count > 0 && item_count > 0 && digimon_count > 0 {
             return Ok(());
         }
 
         let evolution_assets = crate::load_evolution_asset_catalog()?;
         let item_assets = crate::load_item_asset_catalog()?;
+        let digimon_assets = crate::load_digimon_asset_catalog()?;
         let mut tx = self.pool.begin().await?;
 
         sqlx::query("DELETE FROM evolution_assets")
             .execute(&mut *tx)
             .await?;
         sqlx::query("DELETE FROM item_assets")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM digimon_assets")
             .execute(&mut *tx)
             .await?;
 
@@ -426,6 +431,18 @@ impl PgRepository {
                  ON CONFLICT (item_id) DO UPDATE SET payload = EXCLUDED.payload",
             )
             .bind(asset.item_id)
+            .bind(payload)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        for asset in digimon_assets {
+            let payload = serde_json::to_value(&asset)?;
+            sqlx::query(
+                "INSERT INTO digimon_assets (digimon_id, payload) VALUES ($1, $2) \
+                 ON CONFLICT (digimon_id) DO UPDATE SET payload = EXCLUDED.payload",
+            )
+            .bind(asset.digimon_id)
             .bind(payload)
             .execute(&mut *tx)
             .await?;

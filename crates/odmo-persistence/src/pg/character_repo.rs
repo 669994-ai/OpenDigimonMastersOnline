@@ -3,8 +3,8 @@ use odmo_application::character::{CharacterAccountRepository, CharacterRepositor
 use odmo_types::{
     Account, AccountId, ActiveBuffSnapshot, AttendanceStatus, ChannelAvailability,
     CharacterSummary, DEFAULT_START_MAP_ID, DEFAULT_START_X, DEFAULT_START_Y, DailyRewardStatus,
-    EncyclopediaSnapshot, GuildSnapshot, InventorySnapshot, PartnerSlotSnapshot, RelationEntry,
-    SealListSnapshot, UnionHackSlotRow, XaiSnapshot,
+    DigiviceItemSnapshot, DigiviceSnapshot, EncyclopediaSnapshot, GuildSnapshot, InventorySnapshot,
+    PartnerSlotSnapshot, RelationEntry, SealListSnapshot, UnionHackSlotRow, XaiSnapshot,
 };
 
 use super::PgRepository;
@@ -102,7 +102,7 @@ pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
         serde_json::from_value(row.map_regions).unwrap_or_else(|_| vec![0u8; 255]);
     let equipment: Vec<u8> =
         serde_json::from_value(row.equipment).unwrap_or_else(|_| vec![0u8; 16 * 69]);
-    let digivice: Vec<u8> = serde_json::from_value(row.digivice).unwrap_or_else(|_| vec![0u8; 60]);
+    let digivice = decode_digivice_snapshot(row.digivice);
     let daily_reward: DailyRewardStatus =
         serde_json::from_value(row.daily_reward).unwrap_or_default();
     let attendance: AttendanceStatus = serde_json::from_value(row.attendance).unwrap_or_default();
@@ -283,6 +283,27 @@ pub(crate) fn row_to_character(row: CharacterDb) -> CharacterSummary {
     }
 
     summary
+}
+
+fn decode_digivice_snapshot(value: serde_json::Value) -> DigiviceSnapshot {
+    if let Ok(snapshot) = serde_json::from_value::<DigiviceSnapshot>(value.clone()) {
+        let mut snapshot = snapshot;
+        snapshot.normalize();
+        return snapshot;
+    }
+
+    if let Ok(record) = serde_json::from_value::<Vec<u8>>(value) {
+        let mut snapshot = DigiviceSnapshot {
+            equipped_item: DigiviceItemSnapshot::from_record(record),
+            ..DigiviceSnapshot::default()
+        };
+        snapshot.normalize();
+        return snapshot;
+    }
+
+    let mut snapshot = DigiviceSnapshot::default();
+    snapshot.normalize();
+    snapshot
 }
 
 impl CharacterRepository for PgRepository {
@@ -636,6 +657,21 @@ impl CharacterRepository for PgRepository {
         })
     }
 
+    fn update_digivice(&self, character_id: u64, digivice: DigiviceSnapshot) -> anyhow::Result<()> {
+        let mut digivice = digivice;
+        digivice.normalize();
+        let digivice_json = serde_json::to_value(&digivice)?;
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            sqlx::query("UPDATE characters SET digivice = $1 WHERE id = $2")
+                .bind(&digivice_json)
+                .bind(character_id as i64)
+                .execute(&pool)
+                .await?;
+            Ok(())
+        })
+    }
+
     fn update_extra_inventory(
         &self,
         character_id: u64,
@@ -703,6 +739,27 @@ impl CharacterRepository for PgRepository {
     fn update_welcome_flag(&self, _account_id: AccountId, _welcome: bool) -> anyhow::Result<()> {
         // Welcome flag is not yet persisted in the accounts table
         Ok(())
+    }
+    fn update_tamer_resources(
+        &self,
+        character_id: u64,
+        current_hp: i32,
+        current_ds: i32,
+        current_xgauge: i32,
+    ) -> anyhow::Result<()> {
+        let pool = self.pool().clone();
+        self.block_on(async move {
+            sqlx::query(
+                "UPDATE characters SET current_hp = $1, current_ds = $2, xgauge = $3 WHERE id = $4",
+            )
+            .bind(current_hp)
+            .bind(current_ds)
+            .bind(current_xgauge.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16)
+            .bind(character_id as i64)
+            .execute(&pool)
+            .await?;
+            Ok(())
+        })
     }
     fn update_partner_type(&self, _character_id: u64, _new_type: i32) -> anyhow::Result<()> {
         // Partner type evolution not yet persisted in the characters table

@@ -128,8 +128,17 @@ Os dados de regra que o backend precisa validar ficam em catálogos próprios do
 
 - `data/server-assets/evolution_assets.json`
 - `data/server-assets/item_assets.json`
+- `data/server-assets/item_assets.source.json`
+- `data/server-assets/digimon_assets.json`
+- `data/server-assets/digimon_assets.source.json`
 
 O cliente continua lendo seus próprios packs em runtime. O servidor não depende de packs ou dumps do cliente para validar essas regras.
+
+Quando um catálogo do servidor precisa ser atualizado a partir de dados do cliente moderno, a entrada canônica são os packs atuais e um passo de importação reproduzível. Neste workspace isso significa extrair os arquivos vivos de `Pack03` com `DmoPackToolkit`, decodificar os payloads BIN modernos e persistir apenas o resultado normalizado do servidor com seus manifestos de proveniência. O fluxo atual deriva `ItemData`, `CoolTime` e `DigimonListData` de `Pack03`; o servidor nunca lê esses packs em runtime.
+
+Quando os payloads derivados do pack não trazem sozinhos os nomes localizados dos itens, o importador reaproveita os nomes já normalizados em `data/server-assets/item_assets.json` em vez de reintroduzir uma dependência de refresh ou runtime em arquivos XML soltos de reverse.
+
+Os helpers não canônicos baseados em CSV/XML continuam disponíveis apenas por opt-in explícito para pesquisa ou recuperação. O fluxo normal de atualização dos catálogos do servidor deve sempre começar pelos `Pack03` atuais.
 
 Evidências principais:
 
@@ -206,14 +215,14 @@ cargo run -p odmo-game-service
 ```
 
 ```powershell
-$env:ODMO_DATABASE_URL = "postgres://user:password@localhost/odmo"
+$env:ODMO_DATABASE_URL = "postgres://<usuario-db>:<senha-db>@<host-db>:5432/<nome-db>"
 
 cargo run -p odmo-account-service
 cargo run -p odmo-character-service
 cargo run -p odmo-game-service
 ```
 
-Quando `ODMO_DATABASE_URL` está definido, os serviços aplicam as migrations e o seed demo automaticamente na inicialização.
+Quando `ODMO_DATABASE_URL` está definido, os serviços aplicam as migrations incluídas e preparam automaticamente os catálogos de runtime que pertencem ao servidor. Os dados demo são opcionais via `ODMO_SEED_DEMO=1`.
 
 ### Licença
 

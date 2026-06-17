@@ -88,6 +88,83 @@ impl Default for ItemRecord {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+pub struct DigiviceItemSnapshot {
+    pub item_id: i32,
+    pub amount: i32,
+    pub record: Vec<u8>,
+}
+
+impl Default for DigiviceItemSnapshot {
+    fn default() -> Self {
+        Self {
+            item_id: 0,
+            amount: 0,
+            record: vec![0; 60],
+        }
+    }
+}
+
+impl DigiviceItemSnapshot {
+    /// Sync the packed 60-byte cItemData/cItemInfo record used by the modern
+    /// digivice state into the raw buffer.
+    pub fn sync_record(&mut self) {
+        if self.record.len() < 60 {
+            self.record.resize(60, 0);
+        }
+        let packed =
+            (self.item_id.max(0) as u32 & 0x1FFFF) | ((self.amount.max(0) as u32 & 0x7FFF) << 17);
+        self.record[0..4].copy_from_slice(&packed.to_le_bytes());
+    }
+
+    pub fn from_record(mut record: Vec<u8>) -> Self {
+        if record.len() < 60 {
+            record.resize(60, 0);
+        }
+        let packed = u32::from_le_bytes([record[0], record[1], record[2], record[3]]);
+        Self {
+            item_id: (packed & 0x1FFFF) as i32,
+            amount: ((packed >> 17) & 0x7FFF) as i32,
+            record,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DigiviceSnapshot {
+    pub equipped_item: DigiviceItemSnapshot,
+    pub chipsets: Vec<DigiviceItemSnapshot>,
+    pub tamer_skills: Vec<DigiviceItemSnapshot>,
+}
+
+impl Default for DigiviceSnapshot {
+    fn default() -> Self {
+        Self {
+            equipped_item: DigiviceItemSnapshot::default(),
+            chipsets: vec![DigiviceItemSnapshot::default(); 12],
+            tamer_skills: vec![DigiviceItemSnapshot::default(); 5],
+        }
+    }
+}
+
+impl DigiviceSnapshot {
+    pub fn normalize(&mut self) {
+        self.equipped_item.sync_record();
+        self.chipsets.resize_with(12, DigiviceItemSnapshot::default);
+        self.tamer_skills
+            .resize_with(5, DigiviceItemSnapshot::default);
+        for slot in &mut self.chipsets {
+            slot.sync_record();
+        }
+        for slot in &mut self.tamer_skills {
+            slot.sync_record();
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+#[derive(Default)]
 pub struct ItemAsset {
     pub item_id: i32,
     pub name: String,
@@ -111,41 +188,11 @@ pub struct ItemAsset {
     pub digicore_price: i32,
     pub event_price_id: i32,
     pub event_price_amount: i32,
+    pub digivice_skill_slots: u8,
+    pub digivice_chipset_slots: u8,
     pub usage_time_minutes: i32,
     pub do_not_use_type: i32,
     pub use_battle: i32,
-}
-
-impl Default for ItemAsset {
-    fn default() -> Self {
-        Self {
-            item_id: 0,
-            name: String::new(),
-            item_type: 0,
-            section: 0,
-            combined_section: 0,
-            overlap: 0,
-            use_time_group: 0,
-            use_time_seconds: 0,
-            quest_requirements: Vec::new(),
-            use_character: 0,
-            bound_type: 0,
-            use_time_type: 0,
-            skill_code: 0,
-            tamer_min_level: 0,
-            tamer_max_level: 0,
-            digimon_min_level: 0,
-            digimon_max_level: 0,
-            sell_price: 0,
-            scan_price: 0,
-            digicore_price: 0,
-            event_price_id: 0,
-            event_price_amount: 0,
-            usage_time_minutes: 0,
-            do_not_use_type: 0,
-            use_battle: 0,
-        }
-    }
 }
 
 impl ItemRecord {
@@ -433,22 +480,15 @@ impl Default for PartnerEvolutionSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct EvolutionStageAsset {
     pub target_type: i32,
     pub value: i32,
 }
 
-impl Default for EvolutionStageAsset {
-    fn default() -> Self {
-        Self {
-            target_type: 0,
-            value: 0,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct EvolutionLineAsset {
     pub type_id: i32,
     pub slot_level: u8,
@@ -476,51 +516,45 @@ pub struct EvolutionLineAsset {
     pub stages: Vec<EvolutionStageAsset>,
 }
 
-impl Default for EvolutionLineAsset {
-    fn default() -> Self {
-        Self {
-            type_id: 0,
-            slot_level: 0,
-            unlock_level: 0,
-            unlock_quest_id: 0,
-            unlock_item_section: 0,
-            unlock_item_section_amount: 0,
-            required_item: 0,
-            required_amount: 0,
-            required_ds: 0,
-            enabled: 0,
-            open_qualification: 0,
-            use_item_hint: 0,
-            required_intimacy: 0,
-            open_crest: 0,
-            evolution_tree: 0,
-            icon_pos_x: 0,
-            icon_pos_y: 0,
-            jogress_quest_check: 0,
-            jogress_chipset_type: 0,
-            jogress_consumable_chipset_type: 0,
-            jogress_chipset_amount: 0,
-            jogress_period_chipset_type: 0,
-            jogress_need_digimon_types: Vec::new(),
-            stages: Vec::new(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct EvolutionAsset {
     pub base_type: i32,
     pub lines: Vec<EvolutionLineAsset>,
 }
 
-impl Default for EvolutionAsset {
-    fn default() -> Self {
-        Self {
-            base_type: 0,
-            lines: Vec::new(),
-        }
-    }
+/// Minimal server-owned Digimon table slice needed for faithful evolution-cost
+/// and gating rules derived from the modern client.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+#[derive(Default)]
+pub struct DigimonAsset {
+    pub digimon_id: i32,
+    pub base_level: i32,
+    pub evolution_type: i32,
+}
+
+/// One skill row shown in the partner detail skill grid.
+///
+/// Carried in the tamer-detail snapshot as an `{id, value}` pair. `value` holds
+/// the current skill level (or mastery) for the slot; `skill_id` is 0 for an
+/// empty slot.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DetailSkillEntry {
+    pub skill_id: i32,
+    pub value: i32,
+}
+
+/// One enchant/attribute row shown in the partner detail enchant grid.
+///
+/// Carried in the tamer-detail snapshot as a `{kind, value}` pair.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DetailEnchantEntry {
+    pub kind: i32,
+    pub value: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -560,6 +594,10 @@ pub struct PartnerSlotSnapshot {
     pub clone_hp_level: u16,
     pub active_buffs: Vec<ActiveBuffSnapshot>,
     pub evolutions: Vec<PartnerEvolutionSnapshot>,
+    /// Skills shown in the partner-detail skill grid (detail view).
+    pub detail_skills: Vec<DetailSkillEntry>,
+    /// Enchant attributes shown in the partner-detail enchant grid.
+    pub detail_enchants: Vec<DetailEnchantEntry>,
 }
 
 impl Default for PartnerSlotSnapshot {
@@ -599,6 +637,8 @@ impl Default for PartnerSlotSnapshot {
             clone_hp_level: 0,
             active_buffs: Vec::new(),
             evolutions: Vec::new(),
+            detail_skills: Vec::new(),
+            detail_enchants: Vec::new(),
         }
     }
 }
@@ -735,7 +775,7 @@ pub struct CharacterSummary {
     pub archive_slots: i32,
     pub deck_buff_id: i32,
     pub equipment: Vec<u8>,
-    pub digivice: Vec<u8>,
+    pub digivice: DigiviceSnapshot,
     pub shop_name: String,
     pub size: i16,
     pub active_buffs: Vec<ActiveBuffSnapshot>,
@@ -891,7 +931,7 @@ impl Default for CharacterSummary {
             archive_slots: 7,
             deck_buff_id: 0,
             equipment: vec![0; 16 * 69],
-            digivice: vec![0; 60],
+            digivice: DigiviceSnapshot::default(),
             shop_name: String::new(),
             size: 12_000,
             active_buffs: Vec::new(),
@@ -1221,6 +1261,7 @@ impl Default for RandomBoxReward {
 /// further edits.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct UnionHackSlotRow {
     /// Catalog part id installed in the slot (mirrors `CSTable_Union`).
     pub part_id: i32,
@@ -1229,16 +1270,6 @@ pub struct UnionHackSlotRow {
     pub grade: i16,
     /// Whether the slot is currently locked.
     pub locked: bool,
-}
-
-impl Default for UnionHackSlotRow {
-    fn default() -> Self {
-        Self {
-            part_id: 0,
-            grade: 0,
-            locked: false,
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@ use odmo_application::{
     OnlineMapState,
     character::{CharacterAccountRepository, CharacterRepository},
     game::{
-        DigiCombineRepository, DigiSummonRepository, DropCollectionResult,
+        DigiCombineRepository, DigiSummonRepository, DigimonAssetRepository, DropCollectionResult,
         EvolutionAssetRepository, ExtraEvolutionRepository, GameApplication, GameServiceConfig,
         GameSession, ItemAssetRepository, MapDropRepository, MapMobRepository, NpcShopDefinition,
         NpcShopRepository, PortalDefinition, PortalRepository, RandomBoxRepository,
@@ -214,6 +214,12 @@ impl EvolutionAssetRepository for CatalogRepository {
 
 impl ItemAssetRepository for CatalogRepository {
     fn item_assets(&self) -> anyhow::Result<Vec<odmo_types::ItemAsset>> {
+        Ok(Vec::new())
+    }
+}
+
+impl DigimonAssetRepository for CatalogRepository {
+    fn digimon_assets(&self) -> anyhow::Result<Vec<odmo_types::DigimonAsset>> {
         Ok(Vec::new())
     }
 }

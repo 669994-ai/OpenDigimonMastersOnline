@@ -13,6 +13,8 @@ Shared Rust libraries that already power the current ODMO server workspace.
 
 - PostgreSQL migrations live under [odmo-persistence/migrations](odmo-persistence/migrations).
 - Server-owned rule catalogs for backend validation live under [../data/server-assets](../data/server-assets).
+- Modern-client-derived catalogs should be refreshed from the current packs through a reproducible importer, not from ad hoc extracted bins.
+- When pack-derived payloads do not carry localized item names, the importer reuses the existing server-owned names instead of depending on loose reverse XML files.
 - PostgreSQL runtime preparation loads migrations plus the server-owned rule catalogs automatically.
 - Demo/smoke world seeds are opt-in via `ODMO_SEED_DEMO=1`.
 - The optional login resource hash can be supplied via `ODMO_RESOURCE_HASH_HEX`.

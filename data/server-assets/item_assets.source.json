@@ -1,0 +1,20 @@
+{
+  "source": "modern-pack03-via-dmopacktoolkit",
+  "import_method": "extract-pack03-and-read-itemdata-payloads",
+  "toolkit": "DmoPackToolkit",
+  "pack_files": [
+    {
+      "name": "Pack03.hf",
+      "sha256": "8c2c3116928019b9c869bb5e90f73a47f5a5f505ed76e4d621e86e3ff74e954f"
+    },
+    {
+      "name": "Pack03.pf",
+      "sha256": "a22bb35f6c38d44c713c38afe53edcb140c026feabc717b829cded3fb089ce9f"
+    }
+  ],
+  "item_payload_path": "pack03-decoded\\data/bin/table/ItemData.payload.bin",
+  "item_payload_sha256": "43eef2e49f48bff382e2f81635c435b4c828c00e82b6d35a64db5e6f1965b590",
+  "cooltime_payload_path": "pack03-decoded\\data/bin/table/CoolTime.payload.bin",
+  "cooltime_payload_sha256": "bad70e75636755a25d18fadf1798e1597556142c2e6828285523ea537b2ba12d",
+  "item_name_source": "server-owned-catalog-carry-forward"
+}

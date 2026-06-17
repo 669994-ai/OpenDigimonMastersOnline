@@ -5,8 +5,8 @@ use crate::get_portal_definitions;
 
 impl PortalRepository for PgRepository {
     fn portal_by_id(&self, portal_id: i32) -> anyhow::Result<Option<PortalDefinition>> {
-        // For now, use the same hardcoded portal definitions as JsonRepository.
-        // In a production setup, these would come from a `portals` table loaded at startup.
+        // Reuse the workspace-owned portal catalog until a dedicated PostgreSQL
+        // table is introduced for these definitions.
         let portals = get_portal_definitions();
         Ok(portals.into_iter().find(|p| p.id == portal_id))
     }
